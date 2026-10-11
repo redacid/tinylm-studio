@@ -110,43 +110,64 @@ def now() -> str:
 
 class KnowledgeStore:
     def __init__(self, path: Path, embedder: Embedder):
-        import sqlite_vec
-
         path.parent.mkdir(parents=True, exist_ok=True)
+        self.path = path
         self.embedder = embedder
-        self.db = sqlite3.connect(path, check_same_thread=False)
-        self.db.row_factory = sqlite3.Row
-        self.db.enable_load_extension(True)
-        sqlite_vec.load(self.db)
-        self.db.enable_load_extension(False)
-        self.db.execute("PRAGMA foreign_keys = ON")
-        self.db.create_function("casefold", 1, str.casefold, deterministic=True)
+        self._local = threading.local()
+        # Write-ahead logging lets readers (the UI polling) work while a crawl or upload writes.
+        self.db.execute("PRAGMA journal_mode = WAL")
         self.db.executescript(SCHEMA)
         self._full_text()
-        self._lock = threading.Lock()
+        # Serializes writes inside this process; reentrant so helpers can take it again.
+        self._lock = threading.RLock()
         self._vectors_ready = False
+
+    @property
+    def db(self) -> sqlite3.Connection:
+        """This thread's connection: one sqlite3 connection must not be shared between threads
+        (the API, crawls and uploads all run in their own threads)."""
+        connection = getattr(self._local, "connection", None)
+        if connection is None:
+            connection = self._connect()
+            self._local.connection = connection
+        return connection
+
+    def _connect(self) -> sqlite3.Connection:
+        import sqlite_vec
+
+        # Wait for another writer (thread or process) instead of failing with "database is locked".
+        connection = sqlite3.connect(self.path, timeout=60)
+        connection.row_factory = sqlite3.Row
+        connection.enable_load_extension(True)
+        sqlite_vec.load(connection)
+        connection.enable_load_extension(False)
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute("PRAGMA busy_timeout = 60000")
+        connection.create_function("casefold", 1, str.casefold, deterministic=True)
+        return connection
 
     def _vectors(self) -> None:
         """Creates the vector table on first use, sized for the embedding model."""
         if self._vectors_ready:
             return
-        meta = dict(self.db.execute("SELECT key, value FROM meta").fetchall())
-        if "embedding_model" in meta and meta["embedding_model"] != self.embedder.name:
-            raise RuntimeError(
-                f"The knowledge base was built with {meta['embedding_model']}, "
-                f"not {self.embedder.name}. Use that model or start a new data folder."
+        with self._lock:
+            meta = dict(self.db.execute("SELECT key, value FROM meta").fetchall())
+            if "embedding_model" in meta and meta["embedding_model"] != self.embedder.name:
+                raise RuntimeError(
+                    f"The knowledge base was built with {meta['embedding_model']}, "
+                    f"not {self.embedder.name}. Use that model or start a new data folder."
+                )
+            dim = self.embedder.dim
+            self.db.execute(
+                "CREATE VIRTUAL TABLE IF NOT EXISTS chunk_vectors USING vec0("
+                "chunk_id INTEGER PRIMARY KEY, collection TEXT PARTITION KEY, "
+                f"embedding FLOAT[{dim}] distance_metric=cosine)"
             )
-        dim = self.embedder.dim
-        self.db.execute(
-            "CREATE VIRTUAL TABLE IF NOT EXISTS chunk_vectors USING vec0("
-            "chunk_id INTEGER PRIMARY KEY, collection TEXT PARTITION KEY, "
-            f"embedding FLOAT[{dim}] distance_metric=cosine)"
-        )
-        self.db.execute(
-            "INSERT OR IGNORE INTO meta VALUES ('embedding_model', ?)", (self.embedder.name,)
-        )
-        self.db.commit()
-        self._vectors_ready = True
+            self.db.execute(
+                "INSERT OR IGNORE INTO meta VALUES ('embedding_model', ?)", (self.embedder.name,)
+            )
+            self.db.commit()
+            self._vectors_ready = True
 
     def _full_text(self) -> None:
         """Creates the full-text index; a database made before it existed gets indexed once."""

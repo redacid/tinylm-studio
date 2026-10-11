@@ -1,6 +1,7 @@
 """Uploaded data: conversion, chunking, collections, search and grounded chat answers."""
 
 import sqlite3
+import threading
 
 import anthropic
 import numpy as np
@@ -10,8 +11,10 @@ import pytest
 from engine.chat import ChatRequest, Message
 from engine.rag.chunking import chunk_text
 from engine.rag.convert import UnsupportedFile, convert, strip_markup
+from engine.rag.embeddings import HashEmbedder
 from engine.rag.prompt import ground
 from engine.rag.store import Hit, KnowledgeStore, full_text_query
+from engine.web.sites import Website, WebsiteStore
 
 WITCHER = "The Witcher 3 is an open-world RPG. Geralt of Rivia hunts monsters for coin."
 SOULS = "Dark Souls bosses punish greed. Learn the attack rhythm and roll sideways."
@@ -218,3 +221,35 @@ def test_documents_are_paged_and_filtered(client):
     assert documents(query="ВІДЬМАК")["data"][0]["name"] == "Відьмак.md"
     assert documents(query="doom.example")["total"] == 1
     assert documents(query="review", limit=2)["total"] == 5
+
+
+def test_parallel_reads_and_writes(tmp_path):
+    """A crawl, an upload and the UI use the store from different threads, and a second
+    process (python -m engine crawl) may write to the same file."""
+    store = KnowledgeStore(tmp_path / "knowledge.db", HashEmbedder())
+    other_process = KnowledgeStore(tmp_path / "knowledge.db", HashEmbedder())
+    store.create_collection("games")
+    websites = WebsiteStore(store)
+    errors = []
+
+    def run(work, times):
+        for i in range(times):
+            try:
+                work(i)
+            except Exception as e:
+                errors.append(repr(e))
+
+    jobs = [
+        (lambda i: store.add_document("games", f"a{i}", f"Article {i} " * 50), 60),
+        (lambda i: other_process.add_document("games", f"b{i}", f"Page {i} " * 50), 60),
+        (lambda i: websites.add_website("games", Website(name=f"s{i}", urls=["http://x"])), 30),
+        (lambda i: (store.documents("games", limit=50), store.search("games", "Article")), 60),
+    ]
+    threads = [threading.Thread(target=run, args=job) for job in jobs]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert errors == []
+    assert store.count_documents("games") == 120
+    assert len(websites.websites("games")) == 30

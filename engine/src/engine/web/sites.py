@@ -63,9 +63,12 @@ FIELDS = ("name", "max_pages", "max_depth", "per_minute", "use_browser", "respec
 class WebsiteStore:
     def __init__(self, store: KnowledgeStore):
         self.store = store
-        self.db = store.db
         self._lock = store._lock
         self.db.executescript(SCHEMA)
+
+    @property
+    def db(self):
+        return self.store.db
 
     # Saved websites
 
