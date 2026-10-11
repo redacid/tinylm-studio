@@ -1,22 +1,93 @@
-"""Command-line entry point: python -m engine --port 8765."""
+"""Command-line entry point.
+
+python -m engine [serve] [--host H] [--port P]   run the API server (default)
+python -m engine download MODEL_ID               download a catalog model
+python -m engine models                          list catalog and installed models
+python -m engine bench [MODEL_ID ...]            benchmark installed models
+"""
 
 import argparse
-
-import uvicorn
+import sys
+import time
 
 from engine.config import Settings
-from engine.main import create_app
+
+
+def serve(settings: Settings, args: argparse.Namespace) -> None:
+    import uvicorn
+
+    from engine.main import create_app
+
+    settings.host, settings.port = args.host, args.port
+    uvicorn.run(create_app(settings), host=args.host, port=args.port, log_level="info")
+
+
+def download(settings: Settings, args: argparse.Namespace) -> None:
+    from engine.models.manager import ModelManager
+
+    manager = ModelManager(settings.models_dir, hf_token=settings.hf_token)
+    job = manager.download(args.model_id)
+    print(f"Downloading {args.model_id} into {settings.models_dir}…", flush=True)
+    while job.state == "downloading":
+        time.sleep(1)
+    if job.state == "error":
+        sys.exit(f"Download failed: {job.error}")
+    print("Done.")
+
+
+def models(settings: Settings, _: argparse.Namespace) -> None:
+    from engine.models.manager import ModelManager
+
+    manager = ModelManager(settings.models_dir)
+    for entry in manager.catalog():
+        mark = "installed" if entry["installed"] else ""
+        print(f"{entry['id']:<24} {entry['params']:>6}  {mark:<9}  {entry['description']}")
+    custom = set(manager.installed()) - {e["id"] for e in manager.catalog()}
+    for model_id in sorted(custom):
+        print(f"{model_id:<24} {'?':>6}  installed  (custom)")
+
+
+def bench(settings: Settings, args: argparse.Namespace) -> None:
+    from engine.bench import benchmark
+    from engine.models.manager import ModelManager
+
+    installed = ModelManager(settings.models_dir).installed()
+    model_ids = args.model_ids or installed
+    missing = [m for m in model_ids if m not in installed]
+    if missing or not model_ids:
+        sys.exit(
+            f"Not installed: {', '.join(missing) or 'no models'}. Run: make download MODEL=..."
+        )
+    report = benchmark(
+        settings.models_dir, model_ids, args.max_tokens, settings.workspace_dir / "benchmarks"
+    )
+    print(f"Report: {report}")
 
 
 def main() -> None:
     settings = Settings()
-    parser = argparse.ArgumentParser(description="Run the tinylm-studio engine.")
-    parser.add_argument("--host", default=settings.host)
-    parser.add_argument("--port", type=int, default=settings.port)
-    args = parser.parse_args()
+    parser = argparse.ArgumentParser(prog="python -m engine", description="tinylm-studio engine")
+    sub = parser.add_subparsers(dest="command")
 
-    settings.host, settings.port = args.host, args.port
-    uvicorn.run(create_app(settings), host=args.host, port=args.port, log_level="info")
+    p = sub.add_parser("serve", help="run the API server (default)")
+    for target in (parser, p):
+        target.add_argument("--host", default=settings.host)
+        target.add_argument("--port", type=int, default=settings.port)
+    p.set_defaults(func=serve)
+
+    p = sub.add_parser("download", help="download a catalog model")
+    p.add_argument("model_id")
+    p.set_defaults(func=download)
+
+    sub.add_parser("models", help="list catalog and installed models").set_defaults(func=models)
+
+    p = sub.add_parser("bench", help="benchmark installed models")
+    p.add_argument("model_ids", nargs="*")
+    p.add_argument("--max-tokens", type=int, default=128)
+    p.set_defaults(func=bench)
+
+    args = parser.parse_args()
+    getattr(args, "func", serve)(settings, args)
 
 
 if __name__ == "__main__":

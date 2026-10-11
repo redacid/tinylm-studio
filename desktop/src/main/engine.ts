@@ -74,7 +74,11 @@ export class Engine {
       }
       const port = await freePort();
       this.set({ phase: "starting", port });
-      this.child = spawn(python, ["-m", "engine", "--port", String(port)], { stdio: "inherit" });
+      this.child = spawn(python, ["-m", "engine", "--port", String(port)], {
+        stdio: "inherit",
+        // The renderer is loaded from file://; Chromium reports that origin as "null" or "file://".
+        env: { ...process.env, TINYLM_CORS_ORIGINS: '["null", "file://"]' },
+      });
       this.child.once("exit", (code) => {
         if (this.state.phase !== "stopped") this.set({ phase: "error", message: `Engine exited with code ${code}` });
       });

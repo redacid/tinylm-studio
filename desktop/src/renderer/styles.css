@@ -1,0 +1,53 @@
+:root {
+  --bg: #ffffff;
+  --fg: #1f2328;
+  --muted: #656d76;
+  --border: #d0d7de;
+  --accent: #0969da;
+  --user: #ddf4ff;
+  --assistant: #f6f8fa;
+  --ok: #1a7f37;
+  --bad: #cf222e;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117;
+    --fg: #e6edf3;
+    --muted: #8d96a0;
+    --border: #30363d;
+    --accent: #4493f8;
+    --user: #0c2d4a;
+    --assistant: #161b22;
+    --ok: #3fb950;
+    --bad: #f85149;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; font: 14px/1.5 system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+button, select, input, textarea { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; }
+button { cursor: pointer; }
+button:disabled { opacity: 0.5; cursor: default; }
+.app { display: flex; flex-direction: column; height: 100vh; }
+header { display: flex; align-items: center; gap: 16px; padding: 8px 16px; border-bottom: 1px solid var(--border); }
+nav { display: flex; gap: 4px; }
+nav button.active { border-color: var(--accent); color: var(--accent); }
+.status { margin-left: auto; color: var(--muted); }
+.status.ready { color: var(--ok); }
+.status.error { color: var(--bad); }
+main { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+.muted { color: var(--muted); font-size: 12px; }
+.error { color: var(--bad); }
+.empty { margin: auto; text-align: center; }
+.chat { display: flex; flex-direction: column; height: 100%; }
+.toolbar { display: flex; gap: 8px; padding: 8px 16px; }
+.toolbar .system { flex: 1; }
+.messages { flex: 1; overflow-y: auto; padding: 8px 16px; display: flex; flex-direction: column; gap: 8px; }
+.message { padding: 8px 12px; border-radius: 8px; white-space: pre-wrap; max-width: 80%; }
+.message.user { background: var(--user); align-self: flex-end; }
+.message.assistant { background: var(--assistant); align-self: flex-start; }
+.composer { display: flex; gap: 8px; padding: 8px 16px 16px; }
+.composer textarea { flex: 1; height: 64px; resize: none; }
+.models { padding: 16px; overflow-y: auto; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); vertical-align: top; }

@@ -190,13 +190,13 @@ Two top-level code folders, one language each, one HTTP contract between them.
 
 Each phase ends with something usable.
 
-### Phase 0 – Foundation
+### Phase 0 – Foundation (done)
 - Repository, README, AGENTS.md, CI (ruff + pytest, eslint + vitest).
 - Engine skeleton with `/health`, SQLite storage, workspace folder.
 - Electron shell that starts the engine and shows its status.
 - **Done when:** `make setup && make run` creates the engine environment, opens the app and shows "engine ready" on Debian-based Linux.
 
-### Phase 1 – Local chat with compatible APIs
+### Phase 1 – Local chat with compatible APIs (implemented; model benchmark pending on target hardware)
 - Inference runtime (transformers first) with a default small base model; model download manager.
 - OpenAI- and Anthropic-compatible endpoints with streaming.
 - Chat screen in the UI.

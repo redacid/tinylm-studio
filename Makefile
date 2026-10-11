@@ -12,6 +12,10 @@ PYTHON      := $(or $(TINYLM_PYTHON),$(TINYLM_VENV)/bin/python)
 
 HOST ?= 127.0.0.1
 PORT ?= 8765
+# Model id for `make download` / `make bench` (see `make models`).
+MODEL ?= qwen3-0.6b
+# Set ECHO=1 to offer the built-in "echo" model (no weights needed).
+ECHO ?=
 
 ENGINE_DIR  := engine
 DESKTOP_DIR := desktop
@@ -75,8 +79,8 @@ run: build-desktop ## Start the desktop app (it sets up and starts the engine it
 	cd $(DESKTOP_DIR) && npx electron .
 
 .PHONY: run-engine
-run-engine: ## Start only the engine on HOST:PORT
-	$(PYTHON) -m engine --host $(HOST) --port $(PORT)
+run-engine: ## Start only the engine on HOST:PORT (ECHO=1 adds the test "echo" model)
+	$(if $(ECHO),TINYLM_ENABLE_ECHO=true) $(PYTHON) -m engine serve --host $(HOST) --port $(PORT)
 
 .PHONY: health
 health: ## Query a running engine's health and system info
@@ -90,6 +94,20 @@ info: ## Show which Python environment and paths are in use
 	@echo "Data dir:     $(DATA_DIR)"
 	@$(PYTHON) -c "import engine; print('Engine:     ', engine.__version__)" 2>/dev/null \
 		|| echo "Engine:       not installed (run 'make setup-engine')"
+
+##@ Models
+
+.PHONY: models
+models: ## List catalog and installed models
+	$(PYTHON) -m engine models
+
+.PHONY: download
+download: ## Download a catalog model: make download MODEL=qwen3-0.6b
+	$(PYTHON) -m engine download $(MODEL)
+
+.PHONY: bench
+bench: ## Benchmark installed models (all, or MODEL=...); report goes to the workspace
+	$(PYTHON) -m engine bench $(if $(filter command line,$(origin MODEL)),$(MODEL))
 
 ##@ Cleanup
 

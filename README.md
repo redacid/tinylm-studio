@@ -19,13 +19,22 @@ make setup   # create the engine environment and install desktop dependencies
 make run     # start the desktop app (it starts the engine)
 ```
 
-Engine only:
+Download a model (Models tab in the app, or):
+
+```bash
+make download MODEL=qwen3-0.6b
+```
+
+Engine only, for API clients (see [docs/api.md](docs/api.md)):
 
 ```bash
 make setup-engine
 make run-engine PORT=8765
 make health
 ```
+
+The engine serves OpenAI-compatible (`/v1/chat/completions`) and Anthropic-compatible
+(`/v1/messages`) APIs.
 
 Run `make help` for all targets.
 
@@ -42,6 +51,9 @@ scripts/setup-engine.sh   # installs the engine into that environment
 ```
 
 `TINYLM_VENV` changes where the managed environment is created.
+
+`TINYLM_TORCH` picks the PyTorch build: `cpu` (default, small), `auto` (detect GPU),
+a CUDA version such as `cu128`, or `pypi`.
 
 ## Tests
 

@@ -17,7 +17,18 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 8765
     data_dir: Path = default_data_dir()
+    # When set, clients must send it as "Authorization: Bearer <key>" or "x-api-key: <key>".
+    api_key: str | None = None
+    # Offer the built-in "echo" model (no weights needed); for tests and UI development.
+    enable_echo: bool = False
+    # Browser origins allowed to call the API; the desktop app sets this for its renderer.
+    cors_origins: list[str] = []
+    hf_token: str | None = None
 
     @property
     def workspace_dir(self) -> Path:
         return self.data_dir / "workspace"
+
+    @property
+    def models_dir(self) -> Path:
+        return self.data_dir / "models"
