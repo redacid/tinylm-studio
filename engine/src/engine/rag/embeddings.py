@@ -25,9 +25,15 @@ class Embedder(Protocol):
 class SentenceTransformerEmbedder:
     """Loads the model on first use; downloads it from Hugging Face into cache_dir once."""
 
-    def __init__(self, name: str = DEFAULT_EMBEDDING_MODEL, cache_dir: Path | None = None):
+    def __init__(
+        self,
+        name: str = DEFAULT_EMBEDDING_MODEL,
+        cache_dir: Path | None = None,
+        hf_token: str | None = None,
+    ):
         self.name = name
         self.cache_dir = cache_dir
+        self.hf_token = hf_token
         self._model = None
         self._lock = threading.Lock()
         # E5 models were trained with these prefixes and lose accuracy without them.
@@ -39,8 +45,16 @@ class SentenceTransformerEmbedder:
             if self._model is None:
                 from sentence_transformers import SentenceTransformer
 
-                folder = str(self.cache_dir) if self.cache_dir else None
-                self._model = SentenceTransformer(self.name, device="cpu", cache_folder=folder)
+                options = {
+                    "device": "cpu",
+                    "cache_folder": str(self.cache_dir) if self.cache_dir else None,
+                }
+                try:
+                    # Once downloaded, load without asking the Hub for updates: faster, works
+                    # offline and avoids the "unauthenticated requests" warning.
+                    self._model = SentenceTransformer(self.name, local_files_only=True, **options)
+                except OSError:
+                    self._model = SentenceTransformer(self.name, token=self.hf_token, **options)
             return self._model
 
     @property

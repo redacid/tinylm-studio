@@ -132,7 +132,7 @@ Interactive docs: `http://127.0.0.1:8765/docs`.
 | `TINYLM_DATA_DIR` | `~/.local/share/tinylm-studio` | Models and workspace |
 | `TINYLM_HOST` / `TINYLM_PORT` | `127.0.0.1` / `8765` | Listen address |
 | `TINYLM_API_KEY` | none | Require an API key |
-| `TINYLM_HF_TOKEN` | none | Hugging Face token for gated models |
+| `TINYLM_HF_TOKEN` | none | Hugging Face token: needed for gated models, gives faster downloads (the standard `HF_TOKEN` also works) |
 | `TINYLM_ENABLE_ECHO` | `false` | Offer the `echo` test model |
 | `TINYLM_CORS_ORIGINS` | `[]` | Allowed browser origins (JSON list) |
 | `TINYLM_THREADS` | physical cores, at most 8 | CPU threads for inference |
