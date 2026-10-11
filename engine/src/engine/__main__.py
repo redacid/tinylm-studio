@@ -5,10 +5,12 @@ python -m engine download MODEL_ID               download a catalog model
 python -m engine models                          list catalog and installed models
 python -m engine bench [MODEL_ID ...]            benchmark installed models
 python -m engine ingest COLLECTION PATH ...      add files or folders to a collection
+python -m engine crawl COLLECTION URL ...        add pages of websites to a collection
 """
 
 import argparse
 import sys
+import threading
 import time
 
 from engine.config import Settings
@@ -94,6 +96,42 @@ def ingest(settings: Settings, args: argparse.Namespace) -> None:
         print(f"added    {path} ({state})", flush=True)
 
 
+def crawl(settings: Settings, args: argparse.Namespace) -> None:
+    from engine.main import crawler, open_knowledge
+    from engine.web.crawler import CrawlJob, CrawlOptions
+
+    store = open_knowledge(settings)
+    store.create_collection(args.collection)
+    options = CrawlOptions(
+        args.urls,
+        max_pages=args.max_pages,
+        max_depth=args.max_depth,
+        per_minute=args.per_minute or settings.crawl_per_minute,
+        use_browser=args.browser,
+        respect_robots=not args.ignore_robots,
+    )
+    job = CrawlJob(args.collection, options)
+    printed = 0
+    worker = threading.Thread(target=crawler(settings, store).run, args=(job,))
+    worker.start()
+    try:
+        while worker.is_alive():
+            worker.join(0.5)
+            new = min(job.notes - printed, len(job.log))
+            for line in job.log[len(job.log) - new :]:
+                print(line, flush=True)
+            printed = job.notes
+    except KeyboardInterrupt:
+        job.cancelled.set()
+        worker.join()
+    print(
+        f"{job.state}: {job.fetched} pages fetched, {job.indexed} added, "
+        f"{job.duplicates} already known, {job.skipped} skipped, {job.failed} failed"
+    )
+    if job.error:
+        sys.exit(job.error)
+
+
 def main() -> None:
     settings = Settings()
     parser = argparse.ArgumentParser(prog="python -m engine", description="tinylm-studio engine")
@@ -120,6 +158,16 @@ def main() -> None:
     p.add_argument("collection")
     p.add_argument("paths", nargs="+")
     p.set_defaults(func=ingest)
+
+    p = sub.add_parser("crawl", help="add pages of websites to a collection")
+    p.add_argument("collection")
+    p.add_argument("urls", nargs="+")
+    p.add_argument("--max-pages", type=int, default=50)
+    p.add_argument("--max-depth", type=int, default=2)
+    p.add_argument("--per-minute", type=float, help="requests per minute to each site")
+    p.add_argument("--browser", action="store_true", help="fetch through the browser at CDP_URL")
+    p.add_argument("--ignore-robots", action="store_true", help="do not follow robots.txt")
+    p.set_defaults(func=crawl)
 
     args = parser.parse_args()
     getattr(args, "func", serve)(settings, args)

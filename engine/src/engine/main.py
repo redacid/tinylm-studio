@@ -4,12 +4,13 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from engine import __version__
-from engine.api import admin, anthropic, knowledge, openai, system
+from engine.api import admin, anthropic, knowledge, openai, system, web
 from engine.api.deps import AuthError, is_anthropic
 from engine.config import Settings
 from engine.models.manager import ModelManager
 from engine.rag.embeddings import HashEmbedder, SentenceTransformerEmbedder
 from engine.rag.store import KnowledgeStore
+from engine.web.crawler import Crawler, CrawlManager
 
 
 def open_knowledge(settings: Settings) -> KnowledgeStore:
@@ -18,6 +19,10 @@ def open_knowledge(settings: Settings) -> KnowledgeStore:
     cache = settings.data_dir / "embeddings"
     embedder = SentenceTransformerEmbedder(settings.embedding_model, cache, settings.hf_token)
     return KnowledgeStore(settings.knowledge_db, embedder)
+
+
+def crawler(settings: Settings, store: KnowledgeStore) -> Crawler:
+    return Crawler(store, settings.proxy, settings.cdp_url, settings.user_agent)
 
 
 def create_app(
@@ -41,6 +46,7 @@ def create_app(
     )
 
     app.state.knowledge = knowledge_store or open_knowledge(settings)
+    app.state.crawls = CrawlManager(crawler(settings, app.state.knowledge))
 
     if settings.cors_origins:
         app.add_middleware(
@@ -63,4 +69,5 @@ def create_app(
     app.include_router(anthropic.router)
     app.include_router(admin.router)
     app.include_router(knowledge.router)
+    app.include_router(web.router)
     return app

@@ -33,6 +33,7 @@ collection in the chat to get answers that cite it:
 
 ```bash
 make ingest COLLECTION=games FILES=~/Documents/games
+make crawl COLLECTION=games URLS="https://example.com/reviews/"
 ```
 
 Engine only, for API clients (see [docs/api.md](docs/api.md)):

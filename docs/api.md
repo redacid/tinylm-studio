@@ -125,6 +125,35 @@ Interactive docs: `http://127.0.0.1:8765/docs`.
 - Whole folders can be added from the command line:
   `make ingest COLLECTION=games FILES=~/Documents/games` (or `python -m engine ingest games PATH...`).
 
+## Websites
+
+`POST /api/collections/{name}/crawl` (or `make crawl COLLECTION=games URLS="https://site/ ..."`,
+or the Data tab) adds pages of websites to a collection in the background:
+
+- Starts from the given addresses and follows links **within the same sites** up to `max_depth`
+  hops, until `max_pages` pages are fetched. Images, video, archives, scripts and styles are
+  never requested. Pages with little text (listings, navigation) are followed but not indexed;
+  web pages keep only their main text (menus and footers are dropped); PDFs are indexed too.
+- **Politeness:** at most `per_minute` requests to each site (default `TINYLM_CRAWL_PER_MINUTE`
+  = 20, with random jitter), robots.txt rules and `Crawl-delay` are followed (turn off with
+  `respect_robots: false` only for your own sites), and an HTTP 429/503 answer pauses that site
+  for its `Retry-After` time (60 s by default) before the page is retried.
+- **Proxy:** `TINYLM_PROXY` sends all crawler traffic through an HTTP (`http://user:pass@host:port`)
+  or SOCKS (`socks5://host:port`; `socks5h://` resolves names through the proxy) proxy.
+- **Browser (CDP):** with `use_browser: true` pages are opened in a running Chrome/Chromium over
+  the Chrome DevTools Protocol, so sites that build their content with JavaScript work, and the
+  site sees a real browser. Start one with
+  `chromium --remote-debugging-port=9222 --user-data-dir=$HOME/.cache/tinylm-browser` (add
+  `--proxy-server=socks5://host:port` to use a proxy there) and set `TINYLM_CDP_URL` if it is not
+  `http://127.0.0.1:9222`. robots.txt is still read over plain HTTP.
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/api/collections/{name}/crawl` | `{"urls": [...], "max_pages": 50, "max_depth": 2, "per_minute": 20, "use_browser": false, "respect_robots": true}` |
+| GET | `/api/crawls` | All crawls since the engine started |
+| GET | `/api/crawls/{id}` | Progress: `state`, `fetched`, `indexed`, `duplicates`, `skipped`, `failed`, `current`, `log` |
+| POST | `/api/crawls/{id}/cancel` | Stops a crawl after the current page |
+
 ## Settings
 
 | Variable | Default | Meaning |
@@ -139,3 +168,7 @@ Interactive docs: `http://127.0.0.1:8765/docs`.
 | `TINYLM_REPETITION_PENALTY` | `1.1` | Discourages repeated tokens; small models loop without it |
 | `TINYLM_EMBEDDING_MODEL` | `intfloat/multilingual-e5-small` | Embedding model for uploaded data; `hash` needs no download (tests, UI development) |
 | `TINYLM_RAG_TOP_K` | `4` | Chunks added to the prompt per question |
+| `TINYLM_PROXY` | none | HTTP or SOCKS proxy for website crawling |
+| `TINYLM_CDP_URL` | `http://127.0.0.1:9222` | Browser DevTools endpoint for crawling with a browser |
+| `TINYLM_CRAWL_PER_MINUTE` | `20` | Default requests per minute to each site |
+| `TINYLM_USER_AGENT` | `tinylm-studio/0.1 (local research crawler)` | User-Agent of plain HTTP requests |

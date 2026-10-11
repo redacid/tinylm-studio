@@ -1,5 +1,6 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Collection, DocumentInfo, EngineClient } from "./api";
+import { Websites } from "./Websites";
 
 export function Data({ client }: { client: EngineClient }) {
   const [collections, setCollections] = useState<Collection[]>([]);
@@ -22,10 +23,16 @@ export function Data({ client }: { client: EngineClient }) {
     refresh().catch(report);
   }, [refresh]);
 
-  useEffect(() => {
+  const refreshAll = useCallback(() => {
+    refresh().catch(report);
+  }, [refresh]);
+
+  const refreshDocuments = useCallback(() => {
     if (selected) client.documents(selected).then(setDocuments, report);
     else setDocuments([]);
-  }, [client, selected, collections]);
+  }, [client, selected]);
+
+  useEffect(refreshDocuments, [refreshDocuments, collections]);
 
   async function create(event: FormEvent) {
     event.preventDefault();
@@ -109,6 +116,7 @@ export function Data({ client }: { client: EngineClient }) {
             </div>
             <p className="muted">PDF, DOCX, PPTX, XLSX, CSV, HTML, Markdown, text and JSON files.</p>
             {log.length > 0 && <pre className="muted">{log.join("\n")}</pre>}
+            <Websites client={client} collection={selected} onIndexed={refreshAll} />
             <table>
               <thead>
                 <tr><th>Document</th><th>Size</th><th>Chunks</th><th /></tr>

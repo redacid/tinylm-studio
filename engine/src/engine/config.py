@@ -6,6 +6,7 @@ from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from engine.rag.embeddings import DEFAULT_EMBEDDING_MODEL
+from engine.web.fetch import DEFAULT_USER_AGENT
 
 
 def default_data_dir() -> Path:
@@ -35,6 +36,13 @@ class Settings(BaseSettings):
     embedding_model: str = DEFAULT_EMBEDDING_MODEL
     # How many chunks are added to the prompt when a chat request names a collection.
     rag_top_k: int = 4
+    # Website crawling. proxy: http://user:pass@host:port, socks5://host:port or socks5h://...
+    proxy: str | None = None
+    # Chrome DevTools endpoint of a running browser, used for sites that need JavaScript.
+    cdp_url: str = "http://127.0.0.1:9222"
+    # Default requests per minute to each site; keep it low to stay polite and avoid bans.
+    crawl_per_minute: float = 20
+    user_agent: str = DEFAULT_USER_AGENT
 
     @property
     def workspace_dir(self) -> Path:

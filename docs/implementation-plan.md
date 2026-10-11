@@ -207,9 +207,12 @@ runtime for Hugging Face-format models and for fine-tuning.
 - Benchmark 3–4 candidate base models on CPU for speed and quality in the target languages.
 - **Done when:** the official `openai` and `anthropic` Python SDKs pointed at `http://127.0.0.1:<port>` get streamed answers; chat works in the UI on CPU.
 
-### Phase 2 – Data upload and RAG (files done; web source next)
+### Phase 2 – Data upload and RAG (files and crawler done; search next)
 
-Done: file upload and folder import, multilingual-e5-small embeddings, sqlite-vec collections,
+Done: website crawler (same-site link following, per-site rate limit, robots.txt, Retry-After,
+HTTP/SOCKS proxy, browser over CDP). Next: search connector for finding sites.
+
+Done before: file upload and folder import, multilingual-e5-small embeddings, sqlite-vec collections,
 grounded answers with sources through both APIs, Data screen and cited answers in the chat.
 - Ingestion for TXT/MD, PDF, DOCX, HTML, CSV/XLSX, JSON (via `markitdown` + specific parsers); folder import; deduplication.
 - Web source: crawler for a user-supplied site list and a search connector (reference scenario).

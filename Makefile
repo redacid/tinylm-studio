@@ -125,6 +125,10 @@ bench: ## Benchmark installed models (all, or MODEL=...); report goes to the wor
 ingest: ## Add files or folders to a collection: make ingest COLLECTION=games FILES=~/docs
 	$(PYTHON) -m engine ingest $(COLLECTION) $(FILES)
 
+.PHONY: crawl
+crawl: ## Add website pages to a collection: make crawl COLLECTION=games URLS="https://..." [PAGES=50]
+	$(PYTHON) -m engine crawl $(COLLECTION) $(URLS) --max-pages $(or $(PAGES),50)
+
 ##@ Cleanup
 
 .PHONY: clean

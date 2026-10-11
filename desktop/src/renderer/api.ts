@@ -21,6 +21,29 @@ export type UploadResult = { name: string; chunks?: number; duplicate?: boolean;
 
 export type Source = { index: number; document: string; source: string; text: string; score: number };
 
+export type CrawlSettings = {
+  urls: string[];
+  max_pages: number;
+  max_depth: number;
+  per_minute: number;
+  use_browser: boolean;
+};
+
+export type CrawlJob = {
+  id: string;
+  collection: string;
+  state: "running" | "done" | "cancelled" | "error";
+  fetched: number;
+  indexed: number;
+  duplicates: number;
+  skipped: number;
+  failed: number;
+  current: string | null;
+  log: string[];
+  error: string | null;
+  options: CrawlSettings;
+};
+
 /** Per-answer figures reported by the engine (same names as llama.cpp server's `timings`). */
 export type Timings = {
   load_ms: number;
@@ -98,6 +121,22 @@ export class EngineClient {
     await this.send(`/api/collections/${encodeURIComponent(collection)}/documents/${id}`, {
       method: "DELETE",
     });
+  }
+
+  async startCrawl(collection: string, settings: CrawlSettings): Promise<CrawlJob> {
+    return this.json<CrawlJob>(`/api/collections/${encodeURIComponent(collection)}/crawl`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(settings),
+    });
+  }
+
+  async crawls(): Promise<CrawlJob[]> {
+    return (await this.json<{ data: CrawlJob[] }>("/api/crawls")).data;
+  }
+
+  async cancelCrawl(id: string): Promise<void> {
+    await this.send(`/api/crawls/${id}/cancel`, { method: "POST" });
   }
 
   /**
