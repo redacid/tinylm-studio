@@ -4,6 +4,11 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
+# Local settings such as HF_TOKEN or TINYLM_* overrides (see .env.example). Variables from .env
+# are exported, so the engine and the desktop app see them too.
+-include .env
+export $(shell sed -n 's/^[[:space:]]*\(export[[:space:]]\+\)\?\([A-Za-z_][A-Za-z0-9_]*\)=.*/\2/p' .env 2>/dev/null)
+
 # Managed engine environment (same defaults as scripts/lib.sh).
 DATA_DIR    ?= $(or $(XDG_DATA_HOME),$(HOME)/.local/share)/tinylm-studio
 TINYLM_VENV ?= $(DATA_DIR)/venv

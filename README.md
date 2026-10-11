@@ -25,6 +25,9 @@ Download a model (Models tab in the app, or):
 make download MODEL=gemma-3-4b-gguf
 ```
 
+For gated models and faster downloads, put a Hugging Face token into `.env`
+(`cp .env.example .env`); every `make` target passes it on.
+
 Add your own data (Data tab in the app, or a whole folder from the command line), then pick the
 collection in the chat to get answers that cite it:
 
