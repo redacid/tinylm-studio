@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { EngineClient } from "./api";
 import { Chat } from "./Chat";
+import { Data } from "./Data";
 import { Models } from "./Models";
 import type { EngineState } from "./types";
 
@@ -12,7 +13,9 @@ const PHASE_LABELS: Record<EngineState["phase"], string> = {
   stopped: "Engine stopped",
 };
 
-type Tab = "chat" | "models";
+type Tab = "chat" | "data" | "models";
+
+const TAB_LABELS: Record<Tab, string> = { chat: "Chat", data: "Data", models: "Models" };
 
 export function App() {
   const [engine, setEngine] = useState<EngineState>({ phase: "starting", port: 0 });
@@ -33,9 +36,9 @@ export function App() {
       <header>
         <strong>tinylm-studio</strong>
         <nav>
-          {(["chat", "models"] as Tab[]).map((t) => (
+          {(Object.keys(TAB_LABELS) as Tab[]).map((t) => (
             <button key={t} className={t === tab ? "active" : ""} onClick={() => setTab(t)}>
-              {t === "chat" ? "Chat" : "Models"}
+              {TAB_LABELS[t]}
             </button>
           ))}
         </nav>
@@ -50,6 +53,8 @@ export function App() {
           <p className="muted">Waiting for the engine…</p>
         ) : tab === "chat" ? (
           <Chat client={client} onNeedModel={() => setTab("models")} />
+        ) : tab === "data" ? (
+          <Data client={client} />
         ) : (
           <Models client={client} />
         )}

@@ -4,13 +4,27 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from engine import __version__
-from engine.api import admin, anthropic, openai, system
+from engine.api import admin, anthropic, knowledge, openai, system
 from engine.api.deps import AuthError, is_anthropic
 from engine.config import Settings
 from engine.models.manager import ModelManager
+from engine.rag.embeddings import HashEmbedder, SentenceTransformerEmbedder
+from engine.rag.store import KnowledgeStore
 
 
-def create_app(settings: Settings | None = None, models: ModelManager | None = None) -> FastAPI:
+def open_knowledge(settings: Settings) -> KnowledgeStore:
+    if settings.embedding_model == "hash":
+        return KnowledgeStore(settings.knowledge_db, HashEmbedder())
+    cache = settings.data_dir / "embeddings"
+    embedder = SentenceTransformerEmbedder(settings.embedding_model, cache)
+    return KnowledgeStore(settings.knowledge_db, embedder)
+
+
+def create_app(
+    settings: Settings | None = None,
+    models: ModelManager | None = None,
+    knowledge_store: KnowledgeStore | None = None,
+) -> FastAPI:
     settings = settings or Settings()
     settings.workspace_dir.mkdir(parents=True, exist_ok=True)
 
@@ -25,6 +39,8 @@ def create_app(settings: Settings | None = None, models: ModelManager | None = N
             "repetition_penalty": settings.repetition_penalty,
         },
     )
+
+    app.state.knowledge = knowledge_store or open_knowledge(settings)
 
     if settings.cors_origins:
         app.add_middleware(
@@ -46,4 +62,5 @@ def create_app(settings: Settings | None = None, models: ModelManager | None = N
     app.include_router(openai.router)
     app.include_router(anthropic.router)
     app.include_router(admin.router)
+    app.include_router(knowledge.router)
     return app

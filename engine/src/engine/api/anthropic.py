@@ -5,13 +5,14 @@ import uuid
 from collections.abc import Iterator
 from typing import Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
-from engine.api.deps import manager, require_api_key
+from engine.api.deps import grounded, manager, require_api_key
 from engine.chat import ChatRequest, Finish, Message, TextDelta, collect
 from engine.models.manager import ModelManager
+from engine.rag.store import CollectionNotFound
 
 router = APIRouter(dependencies=[Depends(require_api_key)], tags=["anthropic"])
 
@@ -37,6 +38,8 @@ class MessagesRequest(BaseModel):
     top_p: float = 1.0
     stop_sequences: list[str] = []
     stream: bool = False
+    # tinylm extension: answer from this collection of uploaded data, with cited sources.
+    collection: str | None = None
 
     def to_internal(self) -> ChatRequest:
         messages: list[Message] = []
@@ -83,10 +86,13 @@ def sse(event: str, data: dict) -> str:
 
 
 @router.post("/v1/messages")
-def create_message(body: MessagesRequest, models: ModelManager = Depends(manager)):
+def create_message(body: MessagesRequest, http: Request, models: ModelManager = Depends(manager)):
     if body.model not in models.installed():
         return error(404, f"model: {body.model}", "not_found_error")
-    request = body.to_internal()
+    try:
+        request, sources = grounded(http, body.to_internal(), body.collection)
+    except CollectionNotFound:
+        return error(404, f"collection: {body.collection}", "not_found_error")
     runtime = models.runtime(body.model)
     message_id = f"msg_{uuid.uuid4().hex}"
 
@@ -100,6 +106,8 @@ def create_message(body: MessagesRequest, models: ModelManager = Depends(manager
             "stop_reason": stop_reason,
             "stop_sequence": stop_sequence,
             "usage": usage or {"input_tokens": 0, "output_tokens": 0},
+            # Extension field, only present when a collection was used.
+            **({"sources": sources} if body.collection else {}),
         }
 
     if not body.stream:

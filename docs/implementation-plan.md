@@ -165,8 +165,7 @@ tinylm-studio/
 │   ├── src/engine/
 │   │   ├── main.py         # FastAPI app factory
 │   │   ├── api/            # openai.py, anthropic.py, admin.py, schemas.py
-│   │   ├── ingest/         # parsers, chunking
-│   │   ├── rag/            # embeddings, vector store, retrieval
+│   │   ├── rag/            # file conversion, chunking, embeddings, vector store, grounding
 │   │   ├── datasets/       # dataset building and validation
 │   │   ├── training/       # LoRA jobs, job runner, progress events
 │   │   ├── inference/      # runtimes: transformers, llama.cpp
@@ -208,7 +207,10 @@ runtime for Hugging Face-format models and for fine-tuning.
 - Benchmark 3–4 candidate base models on CPU for speed and quality in the target languages.
 - **Done when:** the official `openai` and `anthropic` Python SDKs pointed at `http://127.0.0.1:<port>` get streamed answers; chat works in the UI on CPU.
 
-### Phase 2 – Data upload and RAG
+### Phase 2 – Data upload and RAG (files done; web source next)
+
+Done: file upload and folder import, multilingual-e5-small embeddings, sqlite-vec collections,
+grounded answers with sources through both APIs, Data screen and cited answers in the chat.
 - Ingestion for TXT/MD, PDF, DOCX, HTML, CSV/XLSX, JSON (via `markitdown` + specific parsers); folder import; deduplication.
 - Web source: crawler for a user-supplied site list and a search connector (reference scenario).
 - Embeddings with a small multilingual model; sqlite-vec index; collections.

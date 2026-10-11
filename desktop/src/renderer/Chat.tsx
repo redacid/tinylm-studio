@@ -1,11 +1,15 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { ChatMessage, EngineClient } from "./api";
+import { ChatMessage, EngineClient, Source } from "./api";
+
+type Turn = ChatMessage & { sources?: Source[] };
 
 export function Chat({ client, onNeedModel }: { client: EngineClient; onNeedModel: () => void }) {
   const [models, setModels] = useState<string[]>([]);
   const [model, setModel] = useState("");
   const [system, setSystem] = useState("");
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [collections, setCollections] = useState<string[]>([]);
+  const [collection, setCollection] = useState("");
+  const [messages, setMessages] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -16,12 +20,15 @@ export function Chat({ client, onNeedModel }: { client: EngineClient; onNeedMode
       setModels(ids);
       setModel((current) => current || ids[0] || "");
     }, (e) => setError(String(e)));
+    client.collections().then((list) => setCollections(list.map((c) => c.name)), () => {});
   }, [client]);
 
   async function send(event: FormEvent) {
     event.preventDefault();
     if (!input.trim() || !model || busy) return;
-    const history: ChatMessage[] = [...messages, { role: "user", content: input.trim() }];
+    const history: ChatMessage[] = [...messages, { role: "user" as const, content: input.trim() }].map(
+      ({ role, content }) => ({ role, content }),
+    );
     setMessages([...history, { role: "assistant", content: "" }]);
     setInput("");
     setError(null);
@@ -30,11 +37,13 @@ export function Chat({ client, onNeedModel }: { client: EngineClient; onNeedMode
     setBusy(true);
     const prompt = system.trim() ? [{ role: "system" as const, content: system.trim() }, ...history] : history;
     try {
-      await client.chat(model, prompt, (text) =>
-        setMessages((current) => {
-          const last = current[current.length - 1];
-          return [...current.slice(0, -1), { ...last, content: last.content + text }];
-        }), controller.signal);
+      const updateLast = (change: (last: Turn) => Turn) =>
+        setMessages((current) => [...current.slice(0, -1), change(current[current.length - 1])]);
+      await client.chat(model, prompt, (text) => updateLast((last) => ({ ...last, content: last.content + text })), {
+        signal: controller.signal,
+        collection: collection || undefined,
+        onSources: (sources) => updateLast((last) => ({ ...last, sources })),
+      });
     } catch (e) {
       if (!controller.signal.aborted) setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -58,6 +67,10 @@ export function Chat({ client, onNeedModel }: { client: EngineClient; onNeedMode
         <select value={model} onChange={(e) => setModel(e.target.value)}>
           {models.map((id) => <option key={id}>{id}</option>)}
         </select>
+        <select value={collection} onChange={(e) => setCollection(e.target.value)} title="Answer from uploaded data">
+          <option value="">No data</option>
+          {collections.map((name) => <option key={name} value={name}>Data: {name}</option>)}
+        </select>
         <input
           className="system"
           placeholder="System prompt (optional)"
@@ -68,7 +81,16 @@ export function Chat({ client, onNeedModel }: { client: EngineClient; onNeedMode
       </div>
       <div className="messages">
         {messages.map((m, i) => (
-          <div key={i} className={`message ${m.role}`}>{m.content || (busy ? "…" : "")}</div>
+          <div key={i} className={`message ${m.role}`}>
+            {m.content || (busy ? "…" : "")}
+            {m.sources && m.sources.length > 0 && (
+              <ol className="sources">
+                {m.sources.map((s) => (
+                  <li key={s.index} value={s.index} title={s.text}>{s.document}</li>
+                ))}
+              </ol>
+            )}
+          </div>
         ))}
         {error && <div className="message error">{error}</div>}
       </div>

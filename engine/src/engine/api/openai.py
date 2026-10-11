@@ -11,9 +11,10 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from engine.api import anthropic as anthropic_api
-from engine.api.deps import is_anthropic, manager, require_api_key
+from engine.api.deps import grounded, is_anthropic, manager, require_api_key
 from engine.chat import ChatRequest, Finish, Message, TextDelta, collect
 from engine.models.manager import ModelManager
+from engine.rag.store import CollectionNotFound
 
 router = APIRouter(dependencies=[Depends(require_api_key)], tags=["openai"])
 
@@ -44,6 +45,8 @@ class ChatCompletionRequest(BaseModel):
     stop: str | list[str] | None = None
     stream: bool = False
     stream_options: StreamOptions | None = None
+    # tinylm extension: answer from this collection of uploaded data, with cited sources.
+    collection: str | None = None
 
     def to_internal(self) -> ChatRequest:
         messages = []
@@ -85,7 +88,9 @@ def list_models(request: Request, models: ModelManager = Depends(manager)):
 
 
 @router.post("/v1/chat/completions")
-def chat_completions(body: ChatCompletionRequest, models: ModelManager = Depends(manager)):
+def chat_completions(
+    body: ChatCompletionRequest, http: Request, models: ModelManager = Depends(manager)
+):
     if body.model not in models.installed():
         return error(
             404,
@@ -93,7 +98,14 @@ def chat_completions(body: ChatCompletionRequest, models: ModelManager = Depends
             "invalid_request_error",
             "model_not_found",
         )
-    request = body.to_internal()
+    try:
+        request, sources = grounded(http, body.to_internal(), body.collection)
+    except CollectionNotFound:
+        return error(
+            404, f"The collection '{body.collection}' does not exist", "invalid_request_error"
+        )
+    # Sources are an extension field, only present when a collection was used.
+    extra = {"sources": sources} if body.collection else {}
     runtime = models.runtime(body.model)
     completion_id = f"chatcmpl-{uuid.uuid4().hex}"
     created = int(time.time())
@@ -118,6 +130,7 @@ def chat_completions(body: ChatCompletionRequest, models: ModelManager = Depends
                 "completion_tokens": usage.output_tokens,
                 "total_tokens": usage.input_tokens + usage.output_tokens,
             },
+            **extra,
         }
 
     include_usage = bool(body.stream_options and body.stream_options.include_usage)
@@ -134,7 +147,7 @@ def chat_completions(body: ChatCompletionRequest, models: ModelManager = Depends
         return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
     def events() -> Iterator[str]:
-        yield chunk({"role": "assistant", "content": ""})
+        yield chunk({"role": "assistant", "content": ""}, **extra)
         for event in runtime.stream(request):
             if isinstance(event, TextDelta):
                 yield chunk({"content": event.text})

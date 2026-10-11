@@ -48,6 +48,26 @@ print(message.content[0].text)
 Both protocols run through the same internal request type and runtime, so the same request
 with `temperature: 0` returns the same text through either API.
 
+### Answers from uploaded data
+
+Both chat endpoints accept an extra `collection` field. The engine then searches that collection
+for the chunks most similar to the last user message, adds them to the system prompt as numbered
+sources and asks the model to cite them as `[1]`, `[2]`. The response carries a `sources` list
+(top level for non-streaming responses, in the first chunk or `message_start` event when
+streaming) so a client can show where each citation comes from.
+
+```python
+reply = client.chat.completions.create(
+    model="gemma-3-4b-gguf",
+    messages=[{"role": "user", "content": "Де відбуваються події Blood and Wine?"}],
+    extra_body={"collection": "games"},
+)
+print(reply.choices[0].message.content)
+print([s["document"] for s in reply.sources])
+```
+
+With the Anthropic SDK, pass the same `extra_body` and read `message.model_extra["sources"]`.
+
 Not supported yet: tool use / function calling, images, logprobs, `n > 1`, batch APIs.
 
 ## Management (used by the desktop app)
@@ -58,6 +78,13 @@ Not supported yet: tool use / function calling, images, logprobs, `n > 1`, batch
 | GET | `/api/system` | Python path and hardware |
 | GET | `/api/models` | Catalog with install and download state |
 | POST | `/api/models/{id}/download` | Starts a background download from Hugging Face |
+| GET | `/api/collections` | Collections with document and chunk counts |
+| POST | `/api/collections` | `{"name": "games"}`: letters, digits, `_`, `-` |
+| DELETE | `/api/collections/{name}` | Deletes the collection and its documents |
+| GET | `/api/collections/{name}/documents` | Documents in a collection |
+| POST | `/api/collections/{name}/documents` | Multipart upload, field `files` (one or more); returns a result per file |
+| DELETE | `/api/collections/{name}/documents/{id}` | Deletes one document |
+| POST | `/api/collections/{name}/search` | `{"query": "...", "k": 4}`: the most similar chunks |
 
 Interactive docs: `http://127.0.0.1:8765/docs`.
 
@@ -72,6 +99,18 @@ Interactive docs: `http://127.0.0.1:8765/docs`.
 - `TINYLM_ENABLE_ECHO=true` (or `make run-engine ECHO=1`) adds an `echo` model that needs no
   weights, for testing clients and the UI.
 
+## Uploaded data
+
+- Supported files: PDF, DOCX, PPTX, XLSX/XLS, CSV, HTML, XML (converted with markitdown), and
+  plain text, Markdown, JSON, YAML.
+- Each document is split into chunks of up to ~1200 characters along paragraph and sentence
+  boundaries, embedded with `intfloat/multilingual-e5-small` (uk/ru/en and ~100 other languages,
+  downloaded on first use into `<data dir>/embeddings`) and stored in
+  `<data dir>/workspace/knowledge.db` (SQLite with sqlite-vec).
+- The same file content added twice to one collection is stored once.
+- Whole folders can be added from the command line:
+  `make ingest COLLECTION=games FILES=~/Documents/games` (or `python -m engine ingest games PATH...`).
+
 ## Settings
 
 | Variable | Default | Meaning |
@@ -84,3 +123,5 @@ Interactive docs: `http://127.0.0.1:8765/docs`.
 | `TINYLM_CORS_ORIGINS` | `[]` | Allowed browser origins (JSON list) |
 | `TINYLM_THREADS` | physical cores, at most 8 | CPU threads for inference |
 | `TINYLM_REPETITION_PENALTY` | `1.1` | Discourages repeated tokens; small models loop without it |
+| `TINYLM_EMBEDDING_MODEL` | `intfloat/multilingual-e5-small` | Embedding model for uploaded data; `hash` needs no download (tests, UI development) |
+| `TINYLM_RAG_TOP_K` | `4` | Chunks added to the prompt per question |

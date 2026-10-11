@@ -114,6 +114,12 @@ download: ## Download a catalog model: make download MODEL=qwen3-1.7b-gguf
 bench: ## Benchmark installed models (all, or MODEL=...); report goes to the workspace
 	$(PYTHON) -m engine bench $(if $(filter command line,$(origin MODEL)),$(MODEL))
 
+##@ Data
+
+.PHONY: ingest
+ingest: ## Add files or folders to a collection: make ingest COLLECTION=games FILES=~/docs
+	$(PYTHON) -m engine ingest $(COLLECTION) $(FILES)
+
 ##@ Cleanup
 
 .PHONY: clean

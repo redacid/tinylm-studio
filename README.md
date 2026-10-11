@@ -22,7 +22,14 @@ make run     # start the desktop app (it starts the engine)
 Download a model (Models tab in the app, or):
 
 ```bash
-make download MODEL=qwen3-1.7b-gguf
+make download MODEL=gemma-3-4b-gguf
+```
+
+Add your own data (Data tab in the app, or a whole folder from the command line), then pick the
+collection in the chat to get answers that cite it:
+
+```bash
+make ingest COLLECTION=games FILES=~/Documents/games
 ```
 
 Engine only, for API clients (see [docs/api.md](docs/api.md)):

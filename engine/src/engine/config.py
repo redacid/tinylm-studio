@@ -5,6 +5,8 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from engine.rag.embeddings import DEFAULT_EMBEDDING_MODEL
+
 
 def default_data_dir() -> Path:
     base = os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share"
@@ -28,10 +30,19 @@ class Settings(BaseSettings):
     threads: int | None = None
     # Penalizes repeated tokens; small models loop without it.
     repetition_penalty: float = 1.1
+    # Sentence-transformers model used to index and search uploaded data;
+    # "hash" is a crude built-in one that needs no download, for tests and UI development.
+    embedding_model: str = DEFAULT_EMBEDDING_MODEL
+    # How many chunks are added to the prompt when a chat request names a collection.
+    rag_top_k: int = 4
 
     @property
     def workspace_dir(self) -> Path:
         return self.data_dir / "workspace"
+
+    @property
+    def knowledge_db(self) -> Path:
+        return self.workspace_dir / "knowledge.db"
 
     @property
     def models_dir(self) -> Path:

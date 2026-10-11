@@ -4,6 +4,7 @@ python -m engine [serve] [--host H] [--port P]   run the API server (default)
 python -m engine download MODEL_ID               download a catalog model
 python -m engine models                          list catalog and installed models
 python -m engine bench [MODEL_ID ...]            benchmark installed models
+python -m engine ingest COLLECTION PATH ...      add files or folders to a collection
 """
 
 import argparse
@@ -68,6 +69,31 @@ def bench(settings: Settings, args: argparse.Namespace) -> None:
     print(f"Report: {report}")
 
 
+def ingest(settings: Settings, args: argparse.Namespace) -> None:
+    from pathlib import Path
+
+    from engine.main import open_knowledge
+    from engine.rag.convert import SUPPORTED_SUFFIXES, to_text
+
+    store = open_knowledge(settings)
+    store.create_collection(args.collection)
+    files = []
+    for path in map(Path, args.paths):
+        files += sorted(p for p in path.rglob("*") if p.is_file()) if path.is_dir() else [path]
+    for path in files:
+        if path.suffix.lower() not in SUPPORTED_SUFFIXES:
+            continue
+        try:
+            result = store.add_document(
+                args.collection, path.name, to_text(path.name, path.read_bytes()), str(path)
+            )
+        except Exception as e:
+            print(f"skipped  {path}: {e}")
+            continue
+        state = "same as an earlier file" if result["duplicate"] else f"{result['chunks']} chunks"
+        print(f"added    {path} ({state})", flush=True)
+
+
 def main() -> None:
     settings = Settings()
     parser = argparse.ArgumentParser(prog="python -m engine", description="tinylm-studio engine")
@@ -89,6 +115,11 @@ def main() -> None:
     p.add_argument("model_ids", nargs="*")
     p.add_argument("--max-tokens", type=int, default=128)
     p.set_defaults(func=bench)
+
+    p = sub.add_parser("ingest", help="add files or folders to a collection")
+    p.add_argument("collection")
+    p.add_argument("paths", nargs="+")
+    p.set_defaults(func=ingest)
 
     args = parser.parse_args()
     getattr(args, "func", serve)(settings, args)

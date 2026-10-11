@@ -3,6 +3,8 @@ from fastapi.testclient import TestClient
 
 from engine.config import Settings
 from engine.main import create_app
+from engine.rag.embeddings import HashEmbedder
+from engine.rag.store import KnowledgeStore
 
 
 @pytest.fixture
@@ -11,5 +13,11 @@ def settings(tmp_path) -> Settings:
 
 
 @pytest.fixture
-def client(settings) -> TestClient:
-    return TestClient(create_app(settings))
+def store(settings) -> KnowledgeStore:
+    # The hash embedder needs no model download.
+    return KnowledgeStore(settings.knowledge_db, HashEmbedder())
+
+
+@pytest.fixture
+def client(settings, store) -> TestClient:
+    return TestClient(create_app(settings, knowledge_store=store))
