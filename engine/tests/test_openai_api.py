@@ -66,3 +66,15 @@ def test_api_key_is_enforced(tmp_path):
     with pytest.raises(openai.AuthenticationError):
         sdk(client, "wrong").models.list()
     assert [m.id for m in sdk(client, "secret").models.list()] == ["echo"]
+
+
+def test_timings_are_reported(client):
+    api = sdk(client)
+    messages = [{"role": "user", "content": "one two three"}]
+    reply = api.chat.completions.create(model="echo", messages=messages)
+    assert reply.timings["predicted_n"] == 4
+    assert reply.timings["total_ms"] >= reply.timings["predicted_ms"]
+
+    chunks = list(api.chat.completions.create(model="echo", messages=messages, stream=True))
+    finish = next(c for c in chunks if c.choices and c.choices[0].finish_reason)
+    assert finish.timings["predicted_n"] == 4

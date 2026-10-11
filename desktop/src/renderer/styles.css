@@ -63,3 +63,5 @@ th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border);
 .data .actions .danger { margin-left: auto; }
 .data input[type="file"] { display: none; }
 .button { display: inline-block; border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+.stats { margin-top: 8px; font-size: 12px; color: var(--muted); white-space: normal; }
+.stats.live { font-style: italic; }

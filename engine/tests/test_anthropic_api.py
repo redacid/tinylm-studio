@@ -66,3 +66,10 @@ def test_api_key_is_enforced(tmp_path):
     with pytest.raises(anthropic.AuthenticationError):
         sdk(client, "wrong").models.list()
     assert [m.id for m in sdk(client, "secret").models.list()] == ["echo"]
+
+
+def test_timings_are_reported(client):
+    message = sdk(client).messages.create(
+        model="echo", max_tokens=64, messages=[{"role": "user", "content": "one two three"}]
+    )
+    assert message.model_extra["timings"]["predicted_n"] == 4

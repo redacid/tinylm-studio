@@ -15,6 +15,7 @@ from engine.api.deps import grounded, is_anthropic, manager, require_api_key
 from engine.chat import ChatRequest, Finish, Message, TextDelta, collect
 from engine.models.manager import ModelManager
 from engine.rag.store import CollectionNotFound
+from engine.timings import Timings
 
 router = APIRouter(dependencies=[Depends(require_api_key)], tags=["openai"])
 
@@ -98,20 +99,23 @@ def chat_completions(
             "invalid_request_error",
             "model_not_found",
         )
+    timings = Timings()
     try:
-        request, sources = grounded(http, body.to_internal(), body.collection)
+        with timings.measure("retrieval_ms"):
+            request, sources = grounded(http, body.to_internal(), body.collection)
     except CollectionNotFound:
         return error(
             404, f"The collection '{body.collection}' does not exist", "invalid_request_error"
         )
     # Sources are an extension field, only present when a collection was used.
     extra = {"sources": sources} if body.collection else {}
-    runtime = models.runtime(body.model)
+    with timings.measure("load_ms"):
+        runtime = models.runtime(body.model)
     completion_id = f"chatcmpl-{uuid.uuid4().hex}"
     created = int(time.time())
 
     if not body.stream:
-        result = collect(runtime.stream(request))
+        result = collect(timings.track(runtime.stream(request)))
         usage = result.finish.usage
         return {
             "id": completion_id,
@@ -130,6 +134,7 @@ def chat_completions(
                 "completion_tokens": usage.output_tokens,
                 "total_tokens": usage.input_tokens + usage.output_tokens,
             },
+            "timings": timings.to_dict(),
             **extra,
         }
 
@@ -148,11 +153,11 @@ def chat_completions(
 
     def events() -> Iterator[str]:
         yield chunk({"role": "assistant", "content": ""}, **extra)
-        for event in runtime.stream(request):
+        for event in timings.track(runtime.stream(request)):
             if isinstance(event, TextDelta):
                 yield chunk({"content": event.text})
             elif isinstance(event, Finish):
-                yield chunk({}, FINISH_REASONS[event.reason])
+                yield chunk({}, FINISH_REASONS[event.reason], timings=timings.to_dict())
                 if include_usage:
                     usage = event.usage
                     payload = {

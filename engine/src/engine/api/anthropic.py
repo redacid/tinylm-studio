@@ -13,6 +13,7 @@ from engine.api.deps import grounded, manager, require_api_key
 from engine.chat import ChatRequest, Finish, Message, TextDelta, collect
 from engine.models.manager import ModelManager
 from engine.rag.store import CollectionNotFound
+from engine.timings import Timings
 
 router = APIRouter(dependencies=[Depends(require_api_key)], tags=["anthropic"])
 
@@ -89,11 +90,14 @@ def sse(event: str, data: dict) -> str:
 def create_message(body: MessagesRequest, http: Request, models: ModelManager = Depends(manager)):
     if body.model not in models.installed():
         return error(404, f"model: {body.model}", "not_found_error")
+    timings = Timings()
     try:
-        request, sources = grounded(http, body.to_internal(), body.collection)
+        with timings.measure("retrieval_ms"):
+            request, sources = grounded(http, body.to_internal(), body.collection)
     except CollectionNotFound:
         return error(404, f"collection: {body.collection}", "not_found_error")
-    runtime = models.runtime(body.model)
+    with timings.measure("load_ms"):
+        runtime = models.runtime(body.model)
     message_id = f"msg_{uuid.uuid4().hex}"
 
     def envelope(content: list, stop_reason=None, stop_sequence=None, usage=None) -> dict:
@@ -111,17 +115,18 @@ def create_message(body: MessagesRequest, http: Request, models: ModelManager = 
         }
 
     if not body.stream:
-        result = collect(runtime.stream(request))
+        result = collect(timings.track(runtime.stream(request)))
         usage = result.finish.usage
-        return envelope(
+        message = envelope(
             [{"type": "text", "text": result.text}],
             STOP_REASONS[result.finish.reason],
             result.finish.stop_sequence,
             {"input_tokens": usage.input_tokens, "output_tokens": usage.output_tokens},
         )
+        return {**message, "timings": timings.to_dict()}
 
     def events() -> Iterator[str]:
-        stream = runtime.stream(request)
+        stream = timings.track(runtime.stream(request))
         yield sse("message_start", {"message": envelope([])})
         yield sse(
             "content_block_start", {"index": 0, "content_block": {"type": "text", "text": ""}}
@@ -146,6 +151,7 @@ def create_message(body: MessagesRequest, http: Request, models: ModelManager = 
                             "input_tokens": event.usage.input_tokens,
                             "output_tokens": event.usage.output_tokens,
                         },
+                        "timings": timings.to_dict(),
                     },
                 )
         yield sse("message_stop", {})

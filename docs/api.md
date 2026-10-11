@@ -68,6 +68,20 @@ print([s["document"] for s in reply.sources])
 
 With the Anthropic SDK, pass the same `extra_body` and read `message.model_extra["sources"]`.
 
+### Timings
+
+Every answer carries a `timings` object (top level for non-streaming responses; on the chunk
+with `finish_reason` or the `message_delta` event when streaming). The names follow llama.cpp
+server's `timings` field:
+
+| Field | Meaning |
+|---|---|
+| `load_ms` | Loading the model, when this request had to load it |
+| `retrieval_ms` | Searching the collection, when one was given |
+| `prompt_n`, `prompt_ms`, `prompt_per_second` | Prompt tokens and the time until the first answer token |
+| `predicted_n`, `predicted_ms`, `predicted_per_second` | Answer tokens and the time to generate the rest of them |
+| `total_ms` | Sum of the above |
+
 Not supported yet: tool use / function calling, images, logprobs, `n > 1`, batch APIs.
 
 ## Management (used by the desktop app)

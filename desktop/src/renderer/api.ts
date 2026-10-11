@@ -21,6 +21,28 @@ export type UploadResult = { name: string; chunks?: number; duplicate?: boolean;
 
 export type Source = { index: number; document: string; source: string; text: string; score: number };
 
+/** Per-answer figures reported by the engine (same names as llama.cpp server's `timings`). */
+export type Timings = {
+  load_ms: number;
+  retrieval_ms: number;
+  prompt_n: number;
+  prompt_ms: number;
+  prompt_per_second: number;
+  predicted_n: number;
+  predicted_ms: number;
+  predicted_per_second: number;
+  total_ms: number;
+};
+
+export type ChatOptions = {
+  signal?: AbortSignal;
+  collection?: string;
+  /** The engine has loaded the model and searched the data, and starts reading the prompt. */
+  onStart?: () => void;
+  onSources?: (sources: Source[]) => void;
+  onTimings?: (timings: Timings) => void;
+};
+
 export class EngineClient {
   constructor(private readonly baseUrl: string) {}
 
@@ -86,7 +108,7 @@ export class EngineClient {
     model: string,
     messages: ChatMessage[],
     onText: (text: string) => void,
-    options: { signal?: AbortSignal; collection?: string; onSources?: (sources: Source[]) => void } = {},
+    options: ChatOptions = {},
   ) {
     const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
       method: "POST",
@@ -108,7 +130,9 @@ export class EngineClient {
         const data = event.replace(/^data: /, "");
         if (data === "[DONE]") return;
         const chunk = JSON.parse(data);
+        if (chunk.choices?.[0]?.delta?.role) options.onStart?.();
         if (chunk.sources) options.onSources?.(chunk.sources);
+        if (chunk.timings) options.onTimings?.(chunk.timings);
         const text = chunk.choices?.[0]?.delta?.content;
         if (text) onText(text);
       }
