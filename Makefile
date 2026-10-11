@@ -13,7 +13,7 @@ PYTHON      := $(or $(TINYLM_PYTHON),$(TINYLM_VENV)/bin/python)
 HOST ?= 127.0.0.1
 PORT ?= 8765
 # Model id for `make download` / `make bench` (see `make models`).
-MODEL ?= qwen3-1.7b-gguf
+MODEL ?= gemma-3-4b-gguf
 # Set ECHO=1 to offer the built-in "echo" model (no weights needed).
 ECHO ?=
 

@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     # Browser origins allowed to call the API; the desktop app sets this for its renderer.
     cors_origins: list[str] = []
     hf_token: str | None = None
-    # CPU threads for inference; default is the number of physical cores.
+    # CPU threads for inference; default is physical cores, at most 8.
     threads: int | None = None
     # Penalizes repeated tokens; small models loop without it.
     repetition_penalty: float = 1.1

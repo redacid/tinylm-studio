@@ -82,5 +82,5 @@ Interactive docs: `http://127.0.0.1:8765/docs`.
 | `TINYLM_HF_TOKEN` | none | Hugging Face token for gated models |
 | `TINYLM_ENABLE_ECHO` | `false` | Offer the `echo` test model |
 | `TINYLM_CORS_ORIGINS` | `[]` | Allowed browser origins (JSON list) |
-| `TINYLM_THREADS` | physical cores | CPU threads for inference |
+| `TINYLM_THREADS` | physical cores, at most 8 | CPU threads for inference |
 | `TINYLM_REPETITION_PENALTY` | `1.1` | Discourages repeated tokens; small models loop without it |

@@ -11,7 +11,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 from engine.chat import ChatRequest, Finish, StopSequenceFilter, StreamEvent, TextDelta, Usage
-from engine.inference.transformers_runtime import physical_cores
+from engine.inference.transformers_runtime import default_threads
 
 log = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ class LlamaCppRuntime:
         from llama_cpp import Llama
 
         gguf = sorted(model_path.glob("*.gguf"))[0]
-        self.threads = threads or physical_cores()
+        self.threads = threads or default_threads()
         self.repetition_penalty = repetition_penalty
         log.info("Loading %s with llama.cpp (%d threads)", gguf.name, self.threads)
         # gpu_layers=-1 offloads everything when llama.cpp was built with GPU support;

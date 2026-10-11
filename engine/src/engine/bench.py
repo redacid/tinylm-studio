@@ -15,7 +15,7 @@ import torch
 from engine import hardware
 from engine.chat import ChatRequest, Finish, Message, TextDelta
 from engine.inference.base import Runtime
-from engine.inference.transformers_runtime import physical_cores
+from engine.inference.transformers_runtime import default_threads
 from engine.models.manager import ModelManager, model_format
 
 # Small models drift into another language without an explicit instruction.
@@ -77,7 +77,7 @@ def benchmark(
     hw = hardware.detect()
     torch.manual_seed(0)
     manager = ModelManager(models_dir, runtime_options=runtime_options)
-    threads = (runtime_options or {}).get("threads") or physical_cores()
+    threads = (runtime_options or {}).get("threads") or default_threads()
     lines = [
         f"# Model benchmark {datetime.now():%Y-%m-%d %H:%M}",
         "",
@@ -98,6 +98,8 @@ def benchmark(
         started = time.perf_counter()
         runtime = manager.runtime(model_id)
         load = time.perf_counter() - started
+        # Warm-up: the first request pays one-off setup costs that would skew the first language.
+        run_one(runtime, "Hi", 1)
         results = {lang: run_one(runtime, prompt, max_tokens) for lang, prompt in PROMPTS.items()}
         rss = psutil.Process().memory_info().rss / 2**30
         cells = " | ".join(f"{r['tok_s']:.1f} ({r['ttft']:.2f})" for r in results.values())

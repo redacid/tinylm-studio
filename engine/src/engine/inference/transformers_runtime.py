@@ -26,6 +26,13 @@ def physical_cores() -> int:
     return psutil.cpu_count(logical=False) or psutil.cpu_count() or 1
 
 
+def default_threads() -> int:
+    # Token generation is limited by memory bandwidth, so more than ~8 threads does not help.
+    # On hybrid CPUs (P + E cores) extra threads land on slow E-cores and every step waits
+    # for them: on an i9-12900H, 8 threads beat 12 and 14 by 40-60%.
+    return min(physical_cores(), 8)
+
+
 class TransformersRuntime:
     def __init__(
         self,
@@ -40,7 +47,7 @@ class TransformersRuntime:
         self.device = device or pick_device()
         self.repetition_penalty = repetition_penalty
         if self.device == "cpu":
-            torch.set_num_threads(threads or physical_cores())
+            torch.set_num_threads(threads or default_threads())
         self.threads = torch.get_num_threads()
         dtype = torch.float32 if self.device == "cpu" else torch.float16
         log.info("Loading %s on %s (%d threads)", model_path, self.device, self.threads)
