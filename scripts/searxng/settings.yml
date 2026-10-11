@@ -1,0 +1,19 @@
+# SearXNG settings for tinylm-studio: the defaults, plus JSON output for the engine.
+# `make searxng` copies this file into <data dir>/searxng/ on first run; edit that copy to
+# change engines or add an outgoing proxy (outgoing.proxies), then restart SearXNG.
+use_default_settings: true
+
+general:
+  instance_name: tinylm-studio search
+
+server:
+  # Overridden by SEARXNG_SECRET, which `make searxng` generates.
+  secret_key: "change-me"
+  # Local use only: no bot detection (it needs Valkey/Redis) and no image proxying.
+  limiter: false
+  image_proxy: false
+
+search:
+  formats:
+    - html
+    - json

@@ -4,13 +4,14 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from engine import __version__
-from engine.api import admin, anthropic, knowledge, openai, system, web
+from engine.api import admin, anthropic, knowledge, openai, search, system, web
 from engine.api.deps import AuthError, is_anthropic
 from engine.config import Settings
 from engine.models.manager import ModelManager
 from engine.rag.embeddings import HashEmbedder, SentenceTransformerEmbedder
 from engine.rag.store import KnowledgeStore
 from engine.web.crawler import Crawler, CrawlManager
+from engine.web.search import BraveSearch, SearchError, SearchProvider, SearxngSearch
 
 
 def open_knowledge(settings: Settings) -> KnowledgeStore:
@@ -23,6 +24,14 @@ def open_knowledge(settings: Settings) -> KnowledgeStore:
 
 def crawler(settings: Settings, store: KnowledgeStore) -> Crawler:
     return Crawler(store, settings.proxy, settings.cdp_url, settings.user_agent)
+
+
+def searcher(settings: Settings) -> SearchProvider:
+    if settings.search_provider == "brave":
+        if not settings.brave_api_key:
+            raise SearchError("Set TINYLM_BRAVE_API_KEY to search with Brave, or use SearXNG.")
+        return BraveSearch(settings.brave_api_key, settings.proxy)
+    return SearxngSearch(settings.searxng_url)
 
 
 def create_app(
@@ -47,6 +56,8 @@ def create_app(
 
     app.state.knowledge = knowledge_store or open_knowledge(settings)
     app.state.crawls = CrawlManager(crawler(settings, app.state.knowledge))
+    # A new search client per request, so a changed setting or a missing key shows up at once.
+    app.state.searcher = lambda: searcher(settings)
 
     if settings.cors_origins:
         app.add_middleware(
@@ -70,4 +81,5 @@ def create_app(
     app.include_router(admin.router)
     app.include_router(knowledge.router)
     app.include_router(web.router)
+    app.include_router(search.router)
     return app

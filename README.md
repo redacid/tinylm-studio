@@ -36,6 +36,15 @@ make ingest COLLECTION=games FILES=~/Documents/games
 make crawl COLLECTION=games URLS="https://example.com/reviews/"  # run again for the next new pages
 ```
 
+To find sites and trailers instead of typing addresses, start a local SearXNG once (Docker or
+Podman) and search from the Data tab or the command line:
+
+```bash
+make searxng
+make search Q="elden ring review" ADD=games
+make search Q="elden ring trailer" VIDEO=1 ADD=games
+```
+
 Engine only, for API clients (see [docs/api.md](docs/api.md)):
 
 ```bash

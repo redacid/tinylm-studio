@@ -207,10 +207,13 @@ runtime for Hugging Face-format models and for fine-tuning.
 - Benchmark 3–4 candidate base models on CPU for speed and quality in the target languages.
 - **Done when:** the official `openai` and `anthropic` Python SDKs pointed at `http://127.0.0.1:<port>` get streamed answers; chat works in the UI on CPU.
 
-### Phase 2 – Data upload and RAG (files and crawler done; search next)
+### Phase 2 – Data upload and RAG (done)
 
-Done: website crawler (same-site link following, per-site rate limit, robots.txt, Retry-After,
-HTTP/SOCKS proxy, browser over CDP); hybrid search (vectors + FTS5 full text); saved websites and resumable crawls that download only new pages; document paging and search. Next: search connector for finding sites.
+Done: web search for finding sites and trailers (local SearXNG by default, Brave Search API as an
+option; pages are crawled or saved as websites, videos kept as citable links); website crawler
+(same-site link following, per-site rate limit, robots.txt, Retry-After, HTTP/SOCKS proxy,
+browser over CDP); hybrid search (vectors + FTS5 full text); saved websites and resumable crawls
+that download only new pages; document paging and search.
 
 Done before: file upload and folder import, multilingual-e5-small embeddings, sqlite-vec collections,
 grounded answers with sources through both APIs, Data screen and cited answers in the chat.
@@ -259,4 +262,4 @@ grounded answers with sources through both APIs, Data screen and cited answers i
 4. ~~Platforms and hardware~~ **Decided:** Linux (Debian-based first, Alpine second), i7-class CPU with 32 GB RAM.
 5. ~~Reference use case~~ **Decided:** video game assistant (section 3.8).
 6. ~~Repository~~ **Decided:** local git repository `tinylm-studio` for now; a remote is added later.
-7. **Web search provider** for discovering game sites and trailers: self-hosted SearXNG (free, no key) or a keyed API (Brave Search, YouTube Data API). Default: SearXNG, plus an explicit user-supplied site list.
+7. ~~**Web search provider**~~ Decided: self-hosted SearXNG by default (free, no key; `make searxng`), Brave Search API as an option, plus user-supplied site lists.

@@ -6,6 +6,7 @@ python -m engine models                          list catalog and installed mode
 python -m engine bench [MODEL_ID ...]            benchmark installed models
 python -m engine ingest COLLECTION PATH ...      add files or folders to a collection
 python -m engine crawl COLLECTION URL ...        add pages of websites to a collection
+python -m engine search QUERY [--add COLLECTION] find pages or videos (and add them)
 """
 
 import argparse
@@ -116,11 +117,8 @@ def ingest(settings: Settings, args: argparse.Namespace) -> None:
 
 
 def crawl(settings: Settings, args: argparse.Namespace) -> None:
-    from engine.main import crawler, open_knowledge
-    from engine.web.crawler import CrawlJob, CrawlOptions
+    from engine.web.crawler import CrawlOptions
 
-    store = open_knowledge(settings)
-    store.create_collection(args.collection)
     options = CrawlOptions(
         args.urls,
         max_pages=args.max_pages,
@@ -129,7 +127,16 @@ def crawl(settings: Settings, args: argparse.Namespace) -> None:
         use_browser=args.browser,
         respect_robots=not args.ignore_robots,
     )
-    job = CrawlJob(args.collection, options)
+    run_crawl(settings, args.collection, options)
+
+
+def run_crawl(settings: Settings, collection: str, options) -> None:
+    from engine.main import crawler, open_knowledge
+    from engine.web.crawler import CrawlJob
+
+    store = open_knowledge(settings)
+    store.create_collection(collection)
+    job = CrawlJob(collection, options)
     printed = 0
     worker = threading.Thread(target=crawler(settings, store).run, args=(job,))
     worker.start()
@@ -150,6 +157,38 @@ def crawl(settings: Settings, args: argparse.Namespace) -> None:
     )
     if job.error:
         sys.exit(job.error)
+
+
+def search(settings: Settings, args: argparse.Namespace) -> None:
+    from engine.main import open_knowledge, searcher
+    from engine.web.crawler import CrawlOptions
+    from engine.web.search import SearchError, link_document
+
+    kind = "video" if args.video else "web"
+    try:
+        provider = searcher(settings)
+        results = provider.search(args.query, kind, args.limit, args.language)
+        provider.close()
+    except SearchError as e:
+        sys.exit(str(e))
+    if not results:
+        print("Nothing found.")
+    for i, result in enumerate(results, 1):
+        print(f"{i:2}. {result.title}\n    {result.url}")
+    if not args.add or not results:
+        return
+    if kind == "video":
+        # Videos are kept as links (title, address, description) that answers can cite.
+        store = open_knowledge(settings)
+        store.create_collection(args.add)
+        for result in results:
+            store.add_document(args.add, *link_document(result), source=result.url)
+        print(f"Added {len(results)} video links to {args.add}.")
+    else:
+        urls = [r.url for r in results]
+        per_minute = settings.crawl_per_minute
+        options = CrawlOptions(urls, max_pages=len(urls), max_depth=0, per_minute=per_minute)
+        run_crawl(settings, args.add, options)
 
 
 def main() -> None:
@@ -190,6 +229,16 @@ def main() -> None:
     p.add_argument("--browser", action="store_true", help="fetch through the browser at CDP_URL")
     p.add_argument("--ignore-robots", action="store_true", help="do not follow robots.txt")
     p.set_defaults(func=crawl)
+
+    p = sub.add_parser("search", help="find pages or videos on the web (SearXNG or Brave)")
+    p.add_argument("query")
+    p.add_argument("--video", action="store_true", help="find videos (trailers) instead of pages")
+    p.add_argument("--limit", type=int, default=10)
+    p.add_argument("--language", help="result language, such as uk, ru or en")
+    p.add_argument(
+        "--add", metavar="COLLECTION", help="add the found pages (or video links) to a collection"
+    )
+    p.set_defaults(func=search)
 
     args = parser.parse_args()
     getattr(args, "func", serve)(settings, args)

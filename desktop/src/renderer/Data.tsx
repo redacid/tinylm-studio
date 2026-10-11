@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Collection, EngineClient } from "./api";
 import { Documents } from "./Documents";
+import { Search } from "./Search";
 import { Websites } from "./Websites";
 
 export function Data({ client }: { client: EngineClient }) {
@@ -17,6 +18,8 @@ export function Data({ client }: { client: EngineClient }) {
 
   // Bumped after anything that adds or removes documents, so the document list reloads.
   const [version, setVersion] = useState(0);
+  // Bumped when websites are saved from search results, so the website list reloads.
+  const [sitesVersion, setSitesVersion] = useState(0);
 
   const refresh = useCallback(async () => {
     setVersion((v) => v + 1);
@@ -126,7 +129,16 @@ export function Data({ client }: { client: EngineClient }) {
             </div>
             <p className="muted">PDF, DOCX, PPTX, XLSX, CSV, HTML, Markdown, text and JSON files.</p>
             {log.length > 0 && <pre className="muted">{log.join("\n")}</pre>}
-            <Websites client={client} collection={selected} onIndexed={refreshAll} />
+            <Search
+              key={`search-${selected}`}
+              client={client}
+              collection={selected}
+              onSaved={() => {
+                setSitesVersion((v) => v + 1);
+                refreshAll();
+              }}
+            />
+            <Websites client={client} collection={selected} onIndexed={refreshAll} savedVersion={sitesVersion} />
             <Documents key={selected} client={client} collection={selected} version={version} onDelete={removeDocument} />
           </>
         )}

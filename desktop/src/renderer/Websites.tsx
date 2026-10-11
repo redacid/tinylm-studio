@@ -20,10 +20,13 @@ export function Websites({
   client,
   collection,
   onIndexed,
+  savedVersion,
 }: {
   client: EngineClient;
   collection: string;
   onIndexed: () => void;
+  /** Changes when websites were saved elsewhere (from search results), to reload the list. */
+  savedVersion: number;
 }) {
   const [websites, setWebsites] = useState<Website[]>([]);
   const [jobs, setJobs] = useState<CrawlJob[]>([]);
@@ -46,6 +49,10 @@ export function Websites({
     setError(null);
     refreshWebsites().catch(report);
   }, [refreshWebsites]);
+
+  useEffect(() => {
+    if (savedVersion > 0) refreshWebsites().catch(report);
+  }, [refreshWebsites, savedVersion]);
 
   // Poll crawls into this collection; reload documents as pages arrive and websites when one ends.
   useEffect(() => {
@@ -212,7 +219,7 @@ export function Websites({
   );
 }
 
-function CrawlProgress({ job }: { job: CrawlJob }) {
+export function CrawlProgress({ job }: { job: CrawlJob }) {
   const running = job.state === "running";
   const state = running ? "Crawling" : job.state === "done" ? "Finished" : job.state === "cancelled" ? "Stopped" : "Failed";
   return (

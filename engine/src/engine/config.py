@@ -2,6 +2,7 @@
 
 import os
 from pathlib import Path
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -43,6 +44,11 @@ class Settings(BaseSettings):
     # Default requests per minute to each site; keep it low to stay polite and avoid bans.
     crawl_per_minute: float = 20
     user_agent: str = DEFAULT_USER_AGENT
+    # Web search for finding pages and videos: a self-hosted SearXNG (free, no key) or the
+    # Brave Search API (needs brave_api_key).
+    search_provider: Literal["searxng", "brave"] = "searxng"
+    searxng_url: str = "http://127.0.0.1:8888"
+    brave_api_key: str | None = None
 
     @property
     def workspace_dir(self) -> Path:

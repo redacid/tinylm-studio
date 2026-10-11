@@ -70,6 +70,18 @@ export type CrawlJob = {
   options: CrawlSettings;
 };
 
+export type SearchKind = "web" | "video";
+
+export type SearchResult = {
+  title: string;
+  url: string;
+  snippet: string;
+  kind: SearchKind;
+  thumbnail: string | null;
+  source: string;
+  site: string;
+};
+
 /** Per-answer figures reported by the engine (same names as llama.cpp server's `timings`). */
 export type Timings = {
   load_ms: number;
@@ -187,6 +199,25 @@ export class EngineClient {
 
   async crawlWebsite(id: number): Promise<CrawlJob> {
     return this.json<CrawlJob>(`/api/websites/${id}/crawl`, { method: "POST" });
+  }
+
+  /** Finds pages or videos on the web with the engine's search provider (SearXNG or Brave). */
+  async search(query: string, kind: SearchKind, language = "", limit = 20): Promise<SearchResult[]> {
+    const body = await this.json<{ data: SearchResult[] }>("/api/search", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ query, kind, language: language || null, limit }),
+    });
+    return body.data;
+  }
+
+  /** Keeps search results (e.g. trailers) as small link documents that answers can cite. */
+  async addLinks(collection: string, links: SearchResult[]): Promise<void> {
+    await this.json(`/api/collections/${encodeURIComponent(collection)}/links`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ links }),
+    });
   }
 
   async crawls(): Promise<CrawlJob[]> {

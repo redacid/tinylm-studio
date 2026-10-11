@@ -129,6 +129,32 @@ ingest: ## Add files or folders to a collection: make ingest COLLECTION=games FI
 crawl: ## Add website pages to a collection: make crawl COLLECTION=games URLS="https://..." [PAGES=50]
 	$(PYTHON) -m engine crawl $(COLLECTION) $(URLS) --max-pages $(or $(PAGES),50)
 
+##@ Web search
+
+SEARXNG_PORT ?= 8888
+# Docker or Podman, whichever is installed.
+CONTAINER ?= $(shell command -v docker 2>/dev/null || command -v podman 2>/dev/null)
+
+.PHONY: searxng
+searxng: ## Start a local SearXNG for web search on 127.0.0.1:SEARXNG_PORT (Docker or Podman)
+	@test -n "$(CONTAINER)" || { echo "Install Docker or Podman, or set TINYLM_SEARXNG_URL to a running SearXNG."; exit 1; }
+	mkdir -p "$(DATA_DIR)/searxng"
+	test -f "$(DATA_DIR)/searxng/settings.yml" || cp scripts/searxng/settings.yml "$(DATA_DIR)/searxng/"
+	-$(CONTAINER) rm -f tinylm-searxng >/dev/null 2>&1
+	$(CONTAINER) run -d --name tinylm-searxng --restart unless-stopped \
+		-p 127.0.0.1:$(SEARXNG_PORT):8080 -v "$(DATA_DIR)/searxng:/etc/searxng:Z" \
+		-e GRANIAN_HOST=0.0.0.0 -e SEARXNG_SECRET=$$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n') \
+		docker.io/searxng/searxng:latest
+	@echo "SearXNG runs on http://127.0.0.1:$(SEARXNG_PORT) (TINYLM_SEARXNG_URL)"
+
+.PHONY: searxng-stop
+searxng-stop: ## Stop the local SearXNG
+	$(CONTAINER) rm -f tinylm-searxng
+
+.PHONY: search
+search: ## Find pages on the web: make search Q="elden ring review" [VIDEO=1] [ADD=games]
+	$(PYTHON) -m engine search "$(Q)" $(if $(VIDEO),--video) $(if $(ADD),--add $(ADD))
+
 ##@ Cleanup
 
 .PHONY: clean
