@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 import psutil
+import torch
 
 from engine import hardware
 from engine.chat import ChatRequest, Finish, Message, TextDelta
@@ -23,8 +24,13 @@ PROMPTS = {
 
 
 def run_one(runtime: TransformersRuntime, prompt: str, max_tokens: int) -> dict:
+    # Sampling settings recommended for small chat models; greedy decoding tends to loop.
     request = ChatRequest(
-        model="bench", messages=[Message("user", prompt)], max_tokens=max_tokens, temperature=0
+        model="bench",
+        messages=[Message("user", prompt)],
+        max_tokens=max_tokens,
+        temperature=0.7,
+        top_p=0.8,
     )
     started = time.perf_counter()
     first: float | None = None
@@ -46,13 +52,21 @@ def run_one(runtime: TransformersRuntime, prompt: str, max_tokens: int) -> dict:
     }
 
 
-def benchmark(models_dir: Path, model_ids: list[str], max_tokens: int, out_dir: Path) -> Path:
+def benchmark(
+    models_dir: Path,
+    model_ids: list[str],
+    max_tokens: int,
+    out_dir: Path,
+    runtime_options: dict | None = None,
+) -> Path:
     hw = hardware.detect()
+    torch.manual_seed(0)
     lines = [
         f"# Model benchmark {datetime.now():%Y-%m-%d %H:%M}",
         "",
         f"Machine: {platform.platform()}, {hw.cpu_cores} cores, {hw.memory_gb} GB RAM, "
         f"accelerators: {', '.join(hw.accelerators) or 'none'}. Max tokens: {max_tokens}.",
+        f"PyTorch {torch.__version__}, threads: {{threads}}, options: {runtime_options or {}}.",
         "",
         "| Model | Load, s | RSS, GB | "
         + " | ".join(f"{k} tok/s (TTFT s)" for k in PROMPTS)
@@ -63,7 +77,7 @@ def benchmark(models_dir: Path, model_ids: list[str], max_tokens: int, out_dir: 
     for model_id in model_ids:
         print(f"Benchmarking {model_id}…", flush=True)
         started = time.perf_counter()
-        runtime = TransformersRuntime(models_dir / model_id)
+        runtime = TransformersRuntime(models_dir / model_id, **(runtime_options or {}))
         load = time.perf_counter() - started
         results = {lang: run_one(runtime, prompt, max_tokens) for lang, prompt in PROMPTS.items()}
         rss = psutil.Process().memory_info().rss / 2**30
@@ -76,5 +90,6 @@ def benchmark(models_dir: Path, model_ids: list[str], max_tokens: int, out_dir: 
 
     out_dir.mkdir(parents=True, exist_ok=True)
     report = out_dir / f"benchmark-{datetime.now():%Y%m%d-%H%M%S}.md"
-    report.write_text("\n".join(lines + [""] + answers), encoding="utf-8")
+    text = "\n".join(lines + [""] + answers).replace("{threads}", str(torch.get_num_threads()))
+    report.write_text(text, encoding="utf-8")
     return report

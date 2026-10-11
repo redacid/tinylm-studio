@@ -17,7 +17,13 @@ def create_app(settings: Settings | None = None, models: ModelManager | None = N
     app = FastAPI(title="tinylm-studio engine", version=__version__)
     app.state.settings = settings
     app.state.models = models or ModelManager(
-        settings.models_dir, enable_echo=settings.enable_echo, hf_token=settings.hf_token
+        settings.models_dir,
+        enable_echo=settings.enable_echo,
+        hf_token=settings.hf_token,
+        runtime_options={
+            "threads": settings.threads,
+            "repetition_penalty": settings.repetition_penalty,
+        },
     )
 
     if settings.cors_origins:

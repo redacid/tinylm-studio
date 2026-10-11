@@ -33,8 +33,16 @@ class Download:
 
 
 class ModelManager:
-    def __init__(self, models_dir: Path, enable_echo: bool = False, hf_token: str | None = None):
+    def __init__(
+        self,
+        models_dir: Path,
+        enable_echo: bool = False,
+        hf_token: str | None = None,
+        runtime_options: dict | None = None,
+    ):
         self.models_dir = models_dir
+        # Passed to TransformersRuntime, e.g. threads and repetition_penalty.
+        self.runtime_options = runtime_options or {}
         self.models_dir.mkdir(parents=True, exist_ok=True)
         self.enable_echo = enable_echo
         self.hf_token = hf_token
@@ -105,6 +113,6 @@ class ModelManager:
             self._loaded = None  # release memory of the previous model before loading
             from engine.inference.transformers_runtime import TransformersRuntime
 
-            runtime = TransformersRuntime(path)
+            runtime = TransformersRuntime(path, **self.runtime_options)
             self._loaded = (model_id, runtime)
             return runtime

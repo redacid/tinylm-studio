@@ -20,14 +20,30 @@ def pick_device() -> str:
     return "cpu"
 
 
+def physical_cores() -> int:
+    import psutil
+
+    return psutil.cpu_count(logical=False) or psutil.cpu_count() or 1
+
+
 class TransformersRuntime:
-    def __init__(self, model_path: Path, device: str | None = None):
+    def __init__(
+        self,
+        model_path: Path,
+        device: str | None = None,
+        threads: int | None = None,
+        repetition_penalty: float = 1.1,
+    ):
         import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
         self.device = device or pick_device()
+        self.repetition_penalty = repetition_penalty
+        if self.device == "cpu":
+            torch.set_num_threads(threads or physical_cores())
+        self.threads = torch.get_num_threads()
         dtype = torch.float32 if self.device == "cpu" else torch.float16
-        log.info("Loading %s on %s", model_path, self.device)
+        log.info("Loading %s on %s (%d threads)", model_path, self.device, self.threads)
         self.tokenizer = AutoTokenizer.from_pretrained(model_path)
         self.model = AutoModelForCausalLM.from_pretrained(model_path, dtype=dtype)
         self.model.to(self.device).eval()
@@ -57,6 +73,7 @@ class TransformersRuntime:
                 streamer=streamer,
                 max_new_tokens=request.max_tokens,
                 do_sample=sampling,
+                repetition_penalty=self.repetition_penalty,
                 pad_token_id=self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
             )
             if sampling:

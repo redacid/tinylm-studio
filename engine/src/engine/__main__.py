@@ -59,7 +59,11 @@ def bench(settings: Settings, args: argparse.Namespace) -> None:
             f"Not installed: {', '.join(missing) or 'no models'}. Run: make download MODEL=..."
         )
     report = benchmark(
-        settings.models_dir, model_ids, args.max_tokens, settings.workspace_dir / "benchmarks"
+        settings.models_dir,
+        model_ids,
+        args.max_tokens,
+        settings.workspace_dir / "benchmarks",
+        {"threads": settings.threads, "repetition_penalty": settings.repetition_penalty},
     )
     print(f"Report: {report}")
 
