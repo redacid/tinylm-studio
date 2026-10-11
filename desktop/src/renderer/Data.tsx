@@ -10,6 +10,8 @@ export function Data({ client }: { client: EngineClient }) {
   const [progress, setProgress] = useState<string | null>(null);
   const [log, setLog] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  // In-app confirmation: a native confirm() dialog leaves text inputs unfocusable in Electron on Linux.
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const report = (e: unknown) => setError(e instanceof Error ? e.message : String(e));
 
@@ -70,7 +72,8 @@ export function Data({ client }: { client: EngineClient }) {
   }
 
   async function removeCollection() {
-    if (!selected || !confirm(`Delete the collection "${selected}" and all its documents?`)) return;
+    if (!selected) return;
+    setConfirmDelete(false);
     await client.deleteCollection(selected).catch(report);
     await refresh().catch(report);
   }
@@ -85,7 +88,7 @@ export function Data({ client }: { client: EngineClient }) {
       <aside>
         <strong>Collections</strong>
         {collections.map((c) => (
-          <button key={c.name} className={c.name === selected ? "active" : ""} onClick={() => setSelected(c.name)}>
+          <button key={c.name} className={c.name === selected ? "active" : ""} onClick={() => { setSelected(c.name); setConfirmDelete(false); }}>
             {c.name}
             <div className="muted">{c.documents} documents · {c.chunks} chunks</div>
           </button>
@@ -112,7 +115,17 @@ export function Data({ client }: { client: EngineClient }) {
                 <input type="file" webkitdirectory="" onChange={(e) => upload(e.target.files)} disabled={!!progress} />
               </label>
               {progress && <span className="muted">{progress}</span>}
-              <button className="danger" onClick={removeCollection} disabled={!!progress}>Delete collection</button>
+              {confirmDelete ? (
+                <span className="danger">
+                  Delete "{selected}" and all its documents?{" "}
+                  <button onClick={removeCollection}>Delete</button>{" "}
+                  <button onClick={() => setConfirmDelete(false)}>Cancel</button>
+                </span>
+              ) : (
+                <button className="danger" onClick={() => setConfirmDelete(true)} disabled={!!progress}>
+                  Delete collection
+                </button>
+              )}
             </div>
             <p className="muted">PDF, DOCX, PPTX, XLSX, CSV, HTML, Markdown, text and JSON files.</p>
             {log.length > 0 && <pre className="muted">{log.join("\n")}</pre>}
