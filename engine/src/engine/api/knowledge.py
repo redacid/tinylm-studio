@@ -1,10 +1,12 @@
 """Management API for uploaded data: collections, documents and search."""
 
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from engine.api.deps import knowledge, require_api_key
-from engine.rag.convert import UnsupportedFile, to_text
+from engine.rag.convert import UnsupportedFile, convert
 from engine.rag.store import CollectionNotFound, InvalidName, KnowledgeStore
 
 router = APIRouter(
@@ -58,13 +60,17 @@ def list_documents(name: str, store: KnowledgeStore = Depends(knowledge)) -> dic
 def upload_documents(
     name: str, files: list[UploadFile], store: KnowledgeStore = Depends(knowledge)
 ) -> dict:
-    """Converts and indexes each file; one bad file does not stop the others."""
+    """Converts and indexes each file; one bad file does not stop the others.
+
+    The file name may be a relative path (folder uploads); it is kept as the document's source.
+    """
     results = []
     for upload in files:
         filename = upload.filename or "upload"
         try:
-            text = to_text(filename, upload.file.read())
-            results.append(store.add_document(name, filename, text))
+            doc = convert(filename, upload.file.read())
+            title = doc.title or Path(filename).name
+            results.append(store.add_document(name, title, doc.text, filename))
         except CollectionNotFound:
             raise not_found(name) from None
         except UnsupportedFile as e:

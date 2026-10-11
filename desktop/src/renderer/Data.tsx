@@ -116,7 +116,10 @@ export function Data({ client }: { client: EngineClient }) {
               <tbody>
                 {documents.map((d) => (
                   <tr key={d.id}>
-                    <td>{d.name}</td>
+                    <td>
+                      {d.name}
+                      {d.source !== d.name && <div className="muted">{d.source}</div>}
+                    </td>
                     <td>{Math.ceil(d.chars / 1000)}k chars</td>
                     <td>{d.chunks}</td>
                     <td><button onClick={() => removeDocument(d.id)}>Delete</button></td>

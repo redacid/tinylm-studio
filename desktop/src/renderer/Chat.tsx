@@ -16,9 +16,9 @@ export function Chat({ client, onNeedModel }: { client: EngineClient; onNeedMode
   const abort = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    client.installedModels().then((ids) => {
+    Promise.all([client.installedModels(), client.defaultModel()]).then(([ids, preferred]) => {
       setModels(ids);
-      setModel((current) => current || ids[0] || "");
+      setModel((current) => current || (ids.includes(preferred) ? preferred : ids[0]) || "");
     }, (e) => setError(String(e)));
     client.collections().then((list) => setCollections(list.map((c) => c.name)), () => {});
   }, [client]);

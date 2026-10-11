@@ -6,7 +6,7 @@ import pytest
 
 from engine.chat import ChatRequest, Message
 from engine.rag.chunking import chunk_text
-from engine.rag.convert import UnsupportedFile, to_text
+from engine.rag.convert import UnsupportedFile, convert, strip_markup
 from engine.rag.prompt import ground
 from engine.rag.store import Hit
 
@@ -22,13 +22,30 @@ def test_chunks_respect_the_size_limit():
     assert "".join(chunks).count("Long sentence here.") == 200
 
 
-def test_converts_common_formats():
-    html = b"<html><body><h1>Hollow Knight</h1><p>A metroidvania.</p></body></html>"
-    assert to_text("review.html", html) == "# Hollow Knight\n\nA metroidvania."
-    assert "| 1 | ї |" in to_text("table.csv", "a,b\n1,ї\n".encode())
-    assert to_text("notes.md", "# Привіт\n".encode()) == "# Привіт"
+PAGE = """<html><head><title>Hollow Knight review</title></head><body>
+<nav><a href="/">Home</a> <a href="/guides/">Guides</a> <a href="/news/">News</a></nav>
+<article><h1>Hollow Knight review</h1>
+<p>Hollow Knight is a metroidvania about a small knight exploring the ruined kingdom of
+Hallownest. Its combat is precise and every boss teaches a new pattern to learn.</p>
+<p>The map is huge and rewards curiosity: shortcuts, hidden rooms and charms that change
+how the knight plays. It is one of the best games of its genre.</p>
+<img src="/shot.jpg" alt="screenshot"></article>
+<footer>Copyright 2026. <a href="/privacy">Privacy</a></footer></body></html>"""
+
+
+def test_web_pages_keep_main_content_and_title():
+    page = convert("index.html", PAGE.encode())
+    assert page.title == "Hollow Knight review"
+    assert "ruined kingdom of" in page.text
+    assert "Privacy" not in page.text and "Guides" not in page.text
+
+
+def test_converts_other_formats():
+    assert "| 1 | ї |" in convert("table.csv", "a,b\n1,ї\n".encode()).text
+    assert convert("notes.md", "# Привіт\n".encode()).text == "# Привіт"
+    assert strip_markup("See ![shot](a.png)[the guide](https://x.y/g).") == "See the guide."
     with pytest.raises(UnsupportedFile):
-        to_text("image.png", b"\x89PNG")
+        convert("image.png", b"\x89PNG")
 
 
 def test_ground_prepends_numbered_sources():

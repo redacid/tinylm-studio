@@ -29,6 +29,11 @@ export class EngineClient {
     return body.data.map((m) => m.id);
   }
 
+  /** The engine's recommended model, used when it is installed. */
+  async defaultModel(): Promise<string> {
+    return (await this.json<{ default: string }>("/api/models")).default;
+  }
+
   async catalog(): Promise<CatalogEntry[]> {
     return (await this.json<{ catalog: CatalogEntry[] }>("/api/models")).catalog;
   }
@@ -60,7 +65,9 @@ export class EngineClient {
 
   async upload(collection: string, file: File): Promise<UploadResult> {
     const form = new FormData();
-    form.append("files", file, file.name);
+    // Folder uploads send the path inside the folder, so documents with the same file name
+    // (e.g. index.html of saved web pages) stay distinguishable.
+    form.append("files", file, file.webkitRelativePath || file.name);
     const path = `/api/collections/${encodeURIComponent(collection)}/documents`;
     return (await this.json<{ data: UploadResult[] }>(path, { method: "POST", body: form })).data[0];
   }

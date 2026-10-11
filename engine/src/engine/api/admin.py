@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from engine.api.deps import manager, require_api_key
+from engine.models.catalog import DEFAULT_MODEL
 from engine.models.manager import ModelManager, ModelNotFound
 
 router = APIRouter(prefix="/api", dependencies=[Depends(require_api_key)], tags=["admin"])
@@ -10,7 +11,11 @@ router = APIRouter(prefix="/api", dependencies=[Depends(require_api_key)], tags=
 
 @router.get("/models")
 def model_catalog(models: ModelManager = Depends(manager)) -> dict:
-    return {"installed": models.installed(), "catalog": models.catalog()}
+    return {
+        "installed": models.installed(),
+        "catalog": models.catalog(),
+        "default": DEFAULT_MODEL,
+    }
 
 
 @router.post("/models/{model_id}/download", status_code=202)

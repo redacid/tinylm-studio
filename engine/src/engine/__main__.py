@@ -73,7 +73,7 @@ def ingest(settings: Settings, args: argparse.Namespace) -> None:
     from pathlib import Path
 
     from engine.main import open_knowledge
-    from engine.rag.convert import SUPPORTED_SUFFIXES, to_text
+    from engine.rag.convert import SUPPORTED_SUFFIXES, convert
 
     store = open_knowledge(settings)
     store.create_collection(args.collection)
@@ -84,9 +84,9 @@ def ingest(settings: Settings, args: argparse.Namespace) -> None:
         if path.suffix.lower() not in SUPPORTED_SUFFIXES:
             continue
         try:
-            result = store.add_document(
-                args.collection, path.name, to_text(path.name, path.read_bytes()), str(path)
-            )
+            doc = convert(path.name, path.read_bytes())
+            title = doc.title or path.name
+            result = store.add_document(args.collection, title, doc.text, str(path))
         except Exception as e:
             print(f"skipped  {path}: {e}")
             continue
