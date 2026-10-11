@@ -131,12 +131,14 @@ class WebsiteStore:
 
     # Pages already downloaded
 
-    def known_links(self, collection: str, url: str) -> list[str] | None:
-        """The links of a page downloaded before, or None when it has to be downloaded."""
+    def known_page(self, collection: str, url: str) -> tuple[list[str], bool] | None:
+        """For a page downloaded before: its links and whether it was indexed. None when it has
+        to be downloaded."""
         row = self.db.execute(
-            "SELECT links FROM crawled_pages WHERE collection = ? AND url = ?", (collection, url)
+            "SELECT links, document_id FROM crawled_pages WHERE collection = ? AND url = ?",
+            (collection, url),
         ).fetchone()
-        return None if row is None else json.loads(row["links"])
+        return None if row is None else (json.loads(row["links"]), row["document_id"] is not None)
 
     def remember_page(
         self, collection: str, url: str, links: list[str], document_id: int | None

@@ -350,3 +350,19 @@ def test_saved_websites_api(client, site):
     assert client.delete(f"/api/websites/{website['id']}").status_code == 204
     assert client.post(f"/api/websites/{website['id']}/crawl").status_code == 404
     assert client.get("/api/collections/games/websites").json()["data"] == []
+
+
+def test_outcome_of_each_start_address(games, site):
+    crawl(games, [f"{site}/a"], max_depth=0)
+    urls = [f"{site}/a#comments", f"{site}/b", f"{site}/", f"{site}/missing", f"{site}/private/x"]
+    job = crawl(games, urls, max_depth=0)
+    assert job.outcomes == {
+        f"{site}/a": "known",
+        f"{site}/b": "added",
+        f"{site}/": "skipped",  # too little text
+        f"{site}/missing": "failed",
+        f"{site}/private/x": "skipped",  # robots.txt
+    }
+    assert (job.known, job.indexed, job.skipped, job.failed) == (1, 1, 2, 1)
+    # Next time the short home page is still reported as skipped, not as already there.
+    assert crawl(games, [f"{site}/"], max_depth=0).outcomes == {f"{site}/": "skipped"}

@@ -35,6 +35,16 @@ SKIP_SUFFIXES = {
 MIN_TEXT_CHARS = 300
 
 
+Outcome = Literal["added", "duplicate", "known", "skipped", "failed"]
+OUTCOME_COUNTERS = {
+    "added": "indexed",
+    "duplicate": "duplicates",
+    "known": "known",
+    "skipped": "skipped",
+    "failed": "failed",
+}
+
+
 @dataclass
 class CrawlOptions:
     urls: list[str]
@@ -60,6 +70,9 @@ class CrawlJob:
     failed: int = 0
     current: str | None = None
     log: list[str] = field(default_factory=list)  # the last 50 events, newest last
+    # What happened to each start address (without #fragment): added, duplicate, known (downloaded
+    # by an earlier crawl), skipped (robots.txt, too little text) or failed. Unlisted: not reached.
+    outcomes: dict[str, Outcome] = field(default_factory=dict)
     notes: int = 0  # events so far, including those dropped from log
     error: str | None = None
     started_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat(timespec="seconds"))
@@ -67,6 +80,15 @@ class CrawlJob:
 
     def __post_init__(self):
         self.cancelled = threading.Event()
+        self.starts = {urldefrag(u)[0] for u in self.options.urls}
+
+    def record(self, url: str, outcome: Outcome, counter: str | None = None) -> None:
+        """Counts what happened to a page (in counter, by default the outcome's own); for start
+        addresses, also remembers it per address."""
+        counter = counter or OUTCOME_COUNTERS[outcome]
+        setattr(self, counter, getattr(self, counter) + 1)
+        if url in self.starts:
+            self.outcomes[url] = outcome
 
     def note(self, message: str) -> None:
         self.log = [*self.log[-49:], message]
@@ -144,15 +166,17 @@ class Crawler:
         try:
             while queue and job.fetched < options.max_pages and not job.cancelled.is_set():
                 url, depth = queue.popleft()
-                known = self.pages.known_links(job.collection, url)
+                known = self.pages.known_page(job.collection, url)
                 if known is not None:
-                    job.known += 1
-                    follow(known, depth)
+                    found, indexed = known
+                    # Pages with too little text were remembered too, only for their links.
+                    job.record(url, "known" if indexed else "skipped", counter="known")
+                    follow(found, depth)
                     continue
                 host = site(url)
                 if options.respect_robots:
                     if not robots.allowed(url):
-                        job.skipped += 1
+                        job.record(url, "skipped")
                         job.note(f"robots.txt disallows {url}")
                         continue
                     limiter.set_min_delay(host, robots.crawl_delay(url))
@@ -163,7 +187,7 @@ class Crawler:
                 try:
                     page = (browser or http).fetch(url)
                 except FetchError as e:
-                    job.failed += 1
+                    job.record(url, "failed")
                     job.note(f"failed {url}: {e}")
                     continue
                 if page.status in (429, 503) and attempts.get(url, 0) < 2:
@@ -178,10 +202,10 @@ class Crawler:
                     continue
                 job.fetched += 1
                 if page.status >= 400:
-                    job.failed += 1
+                    job.record(url, "failed")
                     job.note(f"HTTP {page.status} {url}")
                     continue
-                document_id = self._index(job, page)
+                document_id = self._index(job, url, page)
                 found = [link for link in links(page) if site(link) == host] if page.is_html else []
                 self.pages.remember_page(job.collection, url, found, document_id)
                 follow(found, depth)
@@ -198,29 +222,29 @@ class Crawler:
             if browser:
                 browser.close()
 
-    def _index(self, job: CrawlJob, page: Page) -> int | None:
+    def _index(self, job: CrawlJob, url: str, page: Page) -> int | None:
         """Adds the page to the collection; returns its document id, or None if not indexed."""
         if page.is_html:
             filename = "page.html"
         elif "pdf" in page.content_type:
             filename = "document.pdf"
         else:
-            job.skipped += 1
+            job.record(url, "skipped")
             return None
         try:
             doc = convert(filename, page.body)
         except (UnsupportedFile, ValueError) as e:
-            job.failed += 1
+            job.record(url, "failed")
             job.note(f"cannot read {page.url}: {e}")
             return None
         if len(doc.text) < MIN_TEXT_CHARS:
-            job.skipped += 1
+            job.record(url, "skipped")
             return None
         result = self.store.add_document(job.collection, doc.title or page.url, doc.text, page.url)
         if result["duplicate"]:
-            job.duplicates += 1
+            job.record(url, "duplicate")
         else:
-            job.indexed += 1
+            job.record(url, "added")
             job.note(f"added {doc.title or page.url} ({result['chunks']} chunks)")
         return result["id"]
 

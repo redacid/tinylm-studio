@@ -91,4 +91,7 @@ th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border);
 .search .snippet { font-size: 12px; }
 .search .buttons { align-items: center; }
 .search .notice { color: var(--good, #1a7f37); margin-right: 8px; }
-.search .added { color: var(--good, #1a7f37); font-weight: normal; font-size: 12px; }
+.search .mark { font-weight: normal; font-size: 12px; }
+.search .mark.ok { color: var(--good, #1a7f37); }
+.search .mark.bad { color: var(--bad); }
+.search .mark.muted { color: var(--muted); }

@@ -68,6 +68,8 @@ export type CrawlJob = {
   log: string[];
   error: string | null;
   options: CrawlSettings;
+  /** What happened to each start address (without #fragment); missing ones were not reached. */
+  outcomes: Record<string, "added" | "duplicate" | "known" | "skipped" | "failed">;
 };
 
 export type SearchKind = "web" | "video";

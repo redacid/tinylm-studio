@@ -169,7 +169,7 @@ or the Data tab) adds pages of websites to a collection in the background:
 | DELETE | `/api/websites/{id}` | Deletes a saved website; its pages stay in the collection |
 | POST | `/api/websites/{id}/crawl` | Crawls a saved website again; 409 while it is already running |
 | GET | `/api/crawls` | All crawls since the engine started |
-| GET | `/api/crawls/{id}` | Progress: `state`, `website_id`, `fetched` (new pages), `known` (downloaded before), `indexed`, `duplicates`, `skipped`, `failed`, `current`, `log` |
+| GET | `/api/crawls/{id}` | Progress: `state`, `website_id`, `fetched` (new pages), `known` (downloaded before), `indexed`, `duplicates`, `skipped`, `failed`, `current`, `log`, and `outcomes`: per start address `added`, `duplicate`, `known`, `skipped` or `failed` (missing: not reached) |
 | POST | `/api/crawls/{id}/cancel` | Stops a crawl after the current page |
 
 ## Web search
