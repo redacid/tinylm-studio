@@ -18,6 +18,9 @@ from engine.inference.base import Runtime
 from engine.inference.transformers_runtime import physical_cores
 from engine.models.manager import ModelManager, model_format
 
+# Small models drift into another language without an explicit instruction.
+SYSTEM_PROMPT = "Always answer in the same language as the user's message."
+
 PROMPTS = {
     "uk": "Коротко опиши гру The Witcher 3: Wild Hunt і для кого вона.",
     "ru": "Дай короткую подсказку, как победить первого босса в Dark Souls, без спойлеров.",
@@ -25,11 +28,21 @@ PROMPTS = {
 }
 
 
+def llama_system_info() -> str:
+    """CPU features llama.cpp was compiled with; a generic build is several times slower."""
+    try:
+        import llama_cpp
+
+        return llama_cpp.llama_print_system_info().decode().strip()
+    except Exception as error:  # informational only
+        return f"unavailable ({error})"
+
+
 def run_one(runtime: Runtime, prompt: str, max_tokens: int) -> dict:
     # Sampling settings recommended for small chat models; greedy decoding tends to loop.
     request = ChatRequest(
         model="bench",
-        messages=[Message("user", prompt)],
+        messages=[Message("system", SYSTEM_PROMPT), Message("user", prompt)],
         max_tokens=max_tokens,
         temperature=0.7,
         top_p=0.8,
@@ -72,6 +85,7 @@ def benchmark(
         f"accelerators: {', '.join(hw.accelerators) or 'none'}. Max tokens: {max_tokens}.",
         f"PyTorch {torch.__version__}, threads: {threads}, options: {runtime_options or {}}.",
         "Runtime: llama.cpp for GGUF models, PyTorch for Hugging Face models.",
+        f"llama.cpp build: {llama_system_info()}",
         "",
         "| Model | Load, s | RSS, GB | "
         + " | ".join(f"{k} tok/s (TTFT s)" for k in PROMPTS)
