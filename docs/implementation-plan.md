@@ -179,7 +179,8 @@ tinylm-studio/
 │   ├── src/main/           # process management, IPC, auto-update
 │   ├── src/preload/
 │   └── src/renderer/       # React UI
-├── scripts/                # dev.sh, build.sh, release helpers
+├── Makefile                # setup, build, test, run, clean (make help)
+├── scripts/                # environment setup and release helpers
 └── .github/workflows/      # lint, tests, builds
 ```
 
@@ -193,7 +194,7 @@ Each phase ends with something usable.
 - Repository, README, AGENTS.md, CI (ruff + pytest, eslint + vitest).
 - Engine skeleton with `/health`, SQLite storage, workspace folder.
 - Electron shell that starts the engine and shows its status.
-- **Done when:** `scripts/dev.sh` creates the engine environment, opens the app and shows "engine ready" on Debian-based Linux.
+- **Done when:** `make setup && make run` creates the engine environment, opens the app and shows "engine ready" on Debian-based Linux.
 
 ### Phase 1 – Local chat with compatible APIs
 - Inference runtime (transformers first) with a default small base model; model download manager.

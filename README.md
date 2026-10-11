@@ -15,17 +15,19 @@ A desktop studio for building small, narrowly specialized language models that r
 ## Quick start
 
 ```bash
-scripts/setup-engine.sh   # create the engine virtual environment
-scripts/dev.sh            # start the desktop app (it starts the engine)
+make setup   # create the engine environment and install desktop dependencies
+make run     # start the desktop app (it starts the engine)
 ```
 
 Engine only:
 
 ```bash
-scripts/setup-engine.sh
-~/.local/share/tinylm-studio/venv/bin/python -m engine --port 8765
-curl http://127.0.0.1:8765/health
+make setup-engine
+make run-engine PORT=8765
+make health
 ```
+
+Run `make help` for all targets.
 
 ## Python environment
 
@@ -44,5 +46,6 @@ scripts/setup-engine.sh   # installs the engine into that environment
 ## Tests
 
 ```bash
-scripts/test.sh
+make setup-dev   # once: install pytest and ruff into the engine environment
+make check       # lint + tests
 ```
