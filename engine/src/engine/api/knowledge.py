@@ -2,12 +2,18 @@
 
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from pydantic import BaseModel
 
 from engine.api.deps import knowledge, require_api_key
 from engine.rag.convert import UnsupportedFile, convert
-from engine.rag.store import CollectionNotFound, InvalidName, KnowledgeStore
+from engine.rag.store import (
+    CollectionNotFound,
+    DocumentKind,
+    DocumentSort,
+    InvalidName,
+    KnowledgeStore,
+)
 
 router = APIRouter(
     prefix="/api/collections", dependencies=[Depends(require_api_key)], tags=["knowledge"]
@@ -49,9 +55,21 @@ def delete_collection(name: str, store: KnowledgeStore = Depends(knowledge)) -> 
 
 
 @router.get("/{name}/documents")
-def list_documents(name: str, store: KnowledgeStore = Depends(knowledge)) -> dict:
+def list_documents(
+    name: str,
+    query: str = "",
+    kind: DocumentKind = "all",
+    sort: DocumentSort = "oldest",
+    offset: int = Query(0, ge=0),
+    limit: int | None = Query(None, ge=1, le=1000),
+    store: KnowledgeStore = Depends(knowledge),
+) -> dict:
+    """One page of documents; total is the number matching the filter, for paging."""
     try:
-        return {"data": store.documents(name)}
+        return {
+            "data": store.documents(name, query, kind, sort, offset, limit),
+            "total": store.count_documents(name, query, kind),
+        }
     except CollectionNotFound:
         raise not_found(name) from None
 

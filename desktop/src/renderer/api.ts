@@ -15,7 +15,22 @@ export type CatalogEntry = {
 
 export type Collection = { name: string; documents: number; chunks: number };
 
-export type DocumentInfo = { id: number; name: string; source: string; chars: number; chunks: number };
+export type DocumentInfo = {
+  id: number;
+  name: string;
+  source: string;
+  chars: number;
+  chunks: number;
+  created_at: string;
+};
+
+export type DocumentFilter = {
+  query?: string;
+  kind?: "all" | "file" | "web";
+  sort?: "oldest" | "newest" | "name" | "largest";
+  offset?: number;
+  limit?: number;
+};
 
 export type UploadResult = { name: string; chunks?: number; duplicate?: boolean; error?: string };
 
@@ -23,17 +38,28 @@ export type Source = { index: number; document: string; source: string; text: st
 
 export type CrawlSettings = {
   urls: string[];
+  /** New pages to download; pages downloaded by earlier crawls are skipped and not counted. */
   max_pages: number;
   max_depth: number;
   per_minute: number;
   use_browser: boolean;
 };
 
+/** A saved website: start addresses and crawl settings that can be run again. */
+export type Website = CrawlSettings & {
+  id: number;
+  name: string;
+  collection: string;
+  last_crawled_at: string | null;
+};
+
 export type CrawlJob = {
   id: string;
   collection: string;
   state: "running" | "done" | "cancelled" | "error";
+  website_id: number | null;
   fetched: number;
+  known: number;
   indexed: number;
   duplicates: number;
   skipped: number;
@@ -103,9 +129,13 @@ export class EngineClient {
     await this.send(`/api/collections/${encodeURIComponent(name)}`, { method: "DELETE" });
   }
 
-  async documents(collection: string): Promise<DocumentInfo[]> {
-    const path = `/api/collections/${encodeURIComponent(collection)}/documents`;
-    return (await this.json<{ data: DocumentInfo[] }>(path)).data;
+  /** One page of a collection's documents, and how many match the filter in total. */
+  async documents(collection: string, filter: DocumentFilter = {}): Promise<{ data: DocumentInfo[]; total: number }> {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(filter)) {
+      if (value !== undefined && value !== "") params.set(key, String(value));
+    }
+    return this.json(`/api/collections/${encodeURIComponent(collection)}/documents?${params}`);
   }
 
   async upload(collection: string, file: File): Promise<UploadResult> {
@@ -129,6 +159,34 @@ export class EngineClient {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(settings),
     });
+  }
+
+  async websites(collection: string): Promise<Website[]> {
+    return (await this.json<{ data: Website[] }>(`/api/collections/${encodeURIComponent(collection)}/websites`)).data;
+  }
+
+  async addWebsite(collection: string, website: CrawlSettings & { name: string }): Promise<Website> {
+    return this.json<Website>(`/api/collections/${encodeURIComponent(collection)}/websites`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(website),
+    });
+  }
+
+  async updateWebsite(id: number, website: CrawlSettings & { name: string }): Promise<Website> {
+    return this.json<Website>(`/api/websites/${id}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(website),
+    });
+  }
+
+  async deleteWebsite(id: number): Promise<void> {
+    await this.send(`/api/websites/${id}`, { method: "DELETE" });
+  }
+
+  async crawlWebsite(id: number): Promise<CrawlJob> {
+    return this.json<CrawlJob>(`/api/websites/${id}/crawl`, { method: "POST" });
   }
 
   async crawls(): Promise<CrawlJob[]> {

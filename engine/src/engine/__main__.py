@@ -125,8 +125,9 @@ def crawl(settings: Settings, args: argparse.Namespace) -> None:
         job.cancelled.set()
         worker.join()
     print(
-        f"{job.state}: {job.fetched} pages fetched, {job.indexed} added, "
-        f"{job.duplicates} already known, {job.skipped} skipped, {job.failed} failed"
+        f"{job.state}: {job.fetched} new pages fetched, {job.known} downloaded before, "
+        f"{job.indexed} added, {job.duplicates} duplicates, {job.skipped} skipped, "
+        f"{job.failed} failed"
     )
     if job.error:
         sys.exit(job.error)
@@ -162,7 +163,9 @@ def main() -> None:
     p = sub.add_parser("crawl", help="add pages of websites to a collection")
     p.add_argument("collection")
     p.add_argument("urls", nargs="+")
-    p.add_argument("--max-pages", type=int, default=50)
+    p.add_argument(
+        "--max-pages", type=int, default=50, help="new pages to download (earlier ones are skipped)"
+    )
     p.add_argument("--max-depth", type=int, default=2)
     p.add_argument("--per-minute", type=float, help="requests per minute to each site")
     p.add_argument("--browser", action="store_true", help="fetch through the browser at CDP_URL")

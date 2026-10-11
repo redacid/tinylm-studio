@@ -210,7 +210,7 @@ runtime for Hugging Face-format models and for fine-tuning.
 ### Phase 2 – Data upload and RAG (files and crawler done; search next)
 
 Done: website crawler (same-site link following, per-site rate limit, robots.txt, Retry-After,
-HTTP/SOCKS proxy, browser over CDP); hybrid search (vectors + FTS5 full text). Next: search connector for finding sites.
+HTTP/SOCKS proxy, browser over CDP); hybrid search (vectors + FTS5 full text); saved websites and resumable crawls that download only new pages; document paging and search. Next: search connector for finding sites.
 
 Done before: file upload and folder import, multilingual-e5-small embeddings, sqlite-vec collections,
 grounded answers with sources through both APIs, Data screen and cited answers in the chat.

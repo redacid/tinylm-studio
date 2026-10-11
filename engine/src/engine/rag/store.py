@@ -13,6 +13,7 @@ import threading
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 
@@ -20,6 +21,14 @@ from engine.rag.chunking import chunk_text
 from engine.rag.embeddings import Embedder
 
 COLLECTION_NAME = re.compile(r"^[\w-]{1,64}$")
+DocumentKind = Literal["all", "file", "web"]
+DocumentSort = Literal["oldest", "newest", "name", "largest"]
+DOCUMENT_ORDER = {
+    "oldest": "d.id",
+    "newest": "d.id DESC",
+    "name": "d.name COLLATE NOCASE, d.id",
+    "largest": "d.chars DESC, d.id",
+}
 # Reciprocal rank fusion constant: the usual value from the original RRF paper.
 RRF_K = 60
 # Each ranking contributes this many candidates per requested hit before fusion.
@@ -111,6 +120,7 @@ class KnowledgeStore:
         sqlite_vec.load(self.db)
         self.db.enable_load_extension(False)
         self.db.execute("PRAGMA foreign_keys = ON")
+        self.db.create_function("casefold", 1, str.casefold, deterministic=True)
         self.db.executescript(SCHEMA)
         self._full_text()
         self._lock = threading.Lock()
@@ -176,15 +186,47 @@ class KnowledgeStore:
             self.db.execute("DELETE FROM collections WHERE name = ?", (name,))
             self.db.commit()
 
-    def documents(self, collection: str) -> list[dict]:
-        self._require(collection)
+    def documents(
+        self,
+        collection: str,
+        query: str = "",
+        kind: DocumentKind = "all",
+        sort: DocumentSort = "oldest",
+        offset: int = 0,
+        limit: int | None = None,
+    ) -> list[dict]:
+        """Documents of a collection, optionally filtered and one page at a time.
+
+        query matches the name or source (file path or web address); kind keeps only uploaded
+        files or only web pages.
+        """
+        where, params = self._document_filter(collection, query, kind)
         rows = self.db.execute(
-            "SELECT d.id, d.name, d.source, d.chars, d.created_at, COUNT(k.id) AS chunks "
-            "FROM documents d LEFT JOIN chunks k ON k.document_id = d.id "
-            "WHERE d.collection = ? GROUP BY d.id ORDER BY d.id",
-            (collection,),
+            "SELECT d.id, d.name, d.source, d.chars, d.created_at, "
+            "(SELECT COUNT(*) FROM chunks k WHERE k.document_id = d.id) AS chunks "
+            f"FROM documents d WHERE {where} ORDER BY {DOCUMENT_ORDER[sort]} LIMIT ? OFFSET ?",
+            (*params, -1 if limit is None else limit, offset),
         )
         return [dict(r) for r in rows]
+
+    def count_documents(self, collection: str, query: str = "", kind: DocumentKind = "all") -> int:
+        where, params = self._document_filter(collection, query, kind)
+        return self.db.execute(
+            f"SELECT COUNT(*) FROM documents d WHERE {where}", params
+        ).fetchone()[0]
+
+    def _document_filter(self, collection: str, query: str, kind: DocumentKind) -> tuple[str, list]:
+        self._require(collection)
+        where, params = ["d.collection = ?"], [collection]
+        if query.strip():
+            # SQLite's LIKE and lower() only fold ASCII; casefold also handles Cyrillic.
+            where.append("(instr(casefold(d.name), ?) OR instr(casefold(d.source), ?))")
+            params += [query.strip().casefold()] * 2
+        if kind == "web":
+            where.append("(d.source LIKE 'http://%' OR d.source LIKE 'https://%')")
+        elif kind == "file":
+            where.append("NOT (d.source LIKE 'http://%' OR d.source LIKE 'https://%')")
+        return " AND ".join(where), params
 
     def add_document(self, collection: str, name: str, text: str, source: str = "") -> dict:
         """Indexes a document; the same text added twice to a collection is stored once."""

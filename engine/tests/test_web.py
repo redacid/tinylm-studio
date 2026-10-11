@@ -296,3 +296,57 @@ def test_crawl_api(client, site):
         time.sleep(0.1)
     assert status["state"] == "done" and status["indexed"] == 2
     assert [j["id"] for j in client.get("/api/crawls").json()["data"]] == [job["id"]]
+
+
+def test_repeated_crawls_download_only_new_pages(games, site):
+    first = crawl(games, [f"{site}/"], max_pages=2, max_depth=3)
+    assert first.fetched == 2 and first.known == 0
+    # Home and A were downloaded; the next crawl walks through them and fetches B and C.
+    second = crawl(games, [f"{site}/"], max_pages=2, max_depth=3)
+    assert (second.fetched, second.known) == (2, 2)
+    third = crawl(games, [f"{site}/"], max_pages=2, max_depth=3)
+    assert (third.fetched, third.known) == (1, 4)
+    assert titles(games) == ["Article A", "Article B", "Article C", "Article D"]
+    pages = [p for p in Site.requests if p != "/robots.txt"]
+    assert sorted(pages) == ["/", "/a", "/b", "/c", "/d"]
+
+    # A deleted document is forgotten, so the next crawl downloads its page again.
+    article_c = next(d for d in games.documents("games") if d["name"] == "Article C")
+    games.delete_document("games", article_c["id"])
+    fourth = crawl(games, [f"{site}/"], max_depth=3)
+    assert fourth.fetched == 1 and fourth.indexed == 1
+    assert Site.requests.count("/c") == 2
+
+
+def wait_for(client, job_id: str) -> dict:
+    for _ in range(100):
+        status = client.get(f"/api/crawls/{job_id}").json()
+        if status["state"] != "running":
+            return status
+        time.sleep(0.1)
+    raise AssertionError("crawl did not finish")
+
+
+def test_saved_websites_api(client, site):
+    client.post("/api/collections", json={"name": "games"})
+    body = {"urls": [f"{site}/"], "max_pages": 2, "max_depth": 3, "per_minute": 120}
+    saved = client.post("/api/collections/games/websites", json=body)
+    assert saved.status_code == 201
+    website = saved.json()
+    assert website["name"] == "127.0.0.1" and website["last_crawled_at"] is None
+
+    edited = client.put(f"/api/websites/{website['id']}", json={**body, "name": "Witcher fans"})
+    assert edited.json()["name"] == "Witcher fans" and edited.json()["max_pages"] == 2
+    listed = client.get("/api/collections/games/websites").json()["data"]
+    assert [w["name"] for w in listed] == ["Witcher fans"]
+
+    job = client.post(f"/api/websites/{website['id']}/crawl").json()
+    assert job["website_id"] == website["id"]
+    assert wait_for(client, job["id"])["fetched"] == 2
+    again = wait_for(client, client.post(f"/api/websites/{website['id']}/crawl").json()["id"])
+    assert (again["fetched"], again["known"]) == (2, 2)
+    assert client.get("/api/collections/games/websites").json()["data"][0]["last_crawled_at"]
+
+    assert client.delete(f"/api/websites/{website['id']}").status_code == 204
+    assert client.post(f"/api/websites/{website['id']}/crawl").status_code == 404
+    assert client.get("/api/collections/games/websites").json()["data"] == []

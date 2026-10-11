@@ -189,3 +189,32 @@ def test_existing_databases_get_a_word_index(tmp_path):
 
     store = KnowledgeStore(path, BlindEmbedder())
     assert store.search("games", "Borderlands", k=1)[0].document == "bl3.txt"
+
+
+def test_documents_are_paged_and_filtered(client):
+    client.post("/api/collections", json={"name": "games"})
+    upload(
+        client,
+        "games",
+        *[(f"review-{i}.txt", f"Review number {i} of a game.".encode()) for i in range(5)],
+        ("Відьмак.md", "Огляд гри «Відьмак 3».".encode()),
+    )
+    store = client.app.state.knowledge
+    store.add_document("games", "Doom page", "Doom Eternal guide.", "https://doom.example/guide")
+
+    def documents(**params) -> dict:
+        return client.get("/api/collections/games/documents", params=params).json()
+
+    everything = documents()
+    assert everything["total"] == 7 and len(everything["data"]) == 7
+
+    page = documents(limit=3, offset=3, sort="oldest")
+    assert page["total"] == 7
+    assert [d["name"] for d in page["data"]] == ["review-3.txt", "review-4.txt", "Відьмак.md"]
+    assert documents(sort="newest", limit=1)["data"][0]["name"] == "Doom page"
+
+    assert [d["name"] for d in documents(kind="web")["data"]] == ["Doom page"]
+    assert documents(kind="file")["total"] == 6
+    assert documents(query="ВІДЬМАК")["data"][0]["name"] == "Відьмак.md"
+    assert documents(query="doom.example")["total"] == 1
+    assert documents(query="review", limit=2)["total"] == 5

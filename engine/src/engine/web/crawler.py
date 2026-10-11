@@ -1,4 +1,9 @@
-"""Crawls websites into a collection: follows links within each start site, politely."""
+"""Crawls websites into a collection: follows links within each start site, politely.
+
+Pages downloaded by earlier crawls into the same collection are not downloaded again: the crawl
+walks through them using their remembered links and spends its page budget only on new pages,
+so repeated crawls of a site gradually cover all of it.
+"""
 
 import logging
 import threading
@@ -15,6 +20,7 @@ from engine.rag.convert import UnsupportedFile, convert
 from engine.rag.store import KnowledgeStore
 from engine.web.fetch import DEFAULT_USER_AGENT, CdpFetcher, FetchError, HttpFetcher, Page
 from engine.web.politeness import RateLimiter, Robots, site
+from engine.web.sites import WebsiteStore
 
 log = logging.getLogger(__name__)
 
@@ -32,7 +38,7 @@ MIN_TEXT_CHARS = 300
 @dataclass
 class CrawlOptions:
     urls: list[str]
-    max_pages: int = 50  # pages fetched, across all start sites
+    max_pages: int = 50  # new pages downloaded, across all start sites
     max_depth: int = 2  # link hops from a start URL
     per_minute: float = 20  # requests per minute to each site
     use_browser: bool = False  # fetch through the browser at cdp_url instead of plain HTTP
@@ -45,7 +51,9 @@ class CrawlJob:
     options: CrawlOptions
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     state: Literal["running", "done", "cancelled", "error"] = "running"
-    fetched: int = 0
+    website_id: int | None = None  # the saved website this crawl runs, if any
+    fetched: int = 0  # new pages downloaded
+    known: int = 0  # pages downloaded by earlier crawls, walked through without a request
     indexed: int = 0
     duplicates: int = 0
     skipped: int = 0
@@ -103,6 +111,7 @@ class Crawler:
         self.proxy = proxy
         self.cdp_url = cdp_url
         self.user_agent = user_agent
+        self.pages = WebsiteStore(store)
 
     def run(self, job: CrawlJob) -> None:
         options = job.options
@@ -123,9 +132,23 @@ class Crawler:
         queue = deque((normalize(u), 0) for u in options.urls)
         seen = {url for url, _ in queue}
         attempts: dict[str, int] = {}
+
+        def follow(found: list[str], depth: int) -> None:
+            if depth >= options.max_depth:
+                return
+            for link in found:
+                if link not in seen and site(link) in start_sites and worth_fetching(link):
+                    seen.add(link)
+                    queue.append((link, depth + 1))
+
         try:
             while queue and job.fetched < options.max_pages and not job.cancelled.is_set():
                 url, depth = queue.popleft()
+                known = self.pages.known_links(job.collection, url)
+                if known is not None:
+                    job.known += 1
+                    follow(known, depth)
+                    continue
                 host = site(url)
                 if options.respect_robots:
                     if not robots.allowed(url):
@@ -158,46 +181,48 @@ class Crawler:
                     job.failed += 1
                     job.note(f"HTTP {page.status} {url}")
                     continue
-                self._index(job, page)
-                if page.is_html and depth < options.max_depth:
-                    for link in links(page):
-                        if link not in seen and site(link) in start_sites and worth_fetching(link):
-                            seen.add(link)
-                            queue.append((link, depth + 1))
+                document_id = self._index(job, page)
+                found = [link for link in links(page) if site(link) == host] if page.is_html else []
+                self.pages.remember_page(job.collection, url, found, document_id)
+                follow(found, depth)
             job.state = "cancelled" if job.cancelled.is_set() else "done"
         except Exception as e:  # keep the job record useful instead of losing the thread
             log.exception("Crawl %s failed", job.id)
             job.state, job.error = "error", str(e)
         finally:
             job.current = None
+            if job.website_id is not None:
+                self.pages.mark_crawled(job.website_id)
             job.finished_at = datetime.now(UTC).isoformat(timespec="seconds")
             http.close()
             if browser:
                 browser.close()
 
-    def _index(self, job: CrawlJob, page: Page) -> None:
+    def _index(self, job: CrawlJob, page: Page) -> int | None:
+        """Adds the page to the collection; returns its document id, or None if not indexed."""
         if page.is_html:
             filename = "page.html"
         elif "pdf" in page.content_type:
             filename = "document.pdf"
         else:
             job.skipped += 1
-            return
+            return None
         try:
             doc = convert(filename, page.body)
         except (UnsupportedFile, ValueError) as e:
             job.failed += 1
             job.note(f"cannot read {page.url}: {e}")
-            return
+            return None
         if len(doc.text) < MIN_TEXT_CHARS:
             job.skipped += 1
-            return
+            return None
         result = self.store.add_document(job.collection, doc.title or page.url, doc.text, page.url)
         if result["duplicate"]:
             job.duplicates += 1
         else:
             job.indexed += 1
             job.note(f"added {doc.title or page.url} ({result['chunks']} chunks)")
+        return result["id"]
 
 
 class CrawlManager:
@@ -207,8 +232,10 @@ class CrawlManager:
         self.crawler = crawler
         self.jobs: dict[str, CrawlJob] = {}
 
-    def start(self, collection: str, options: CrawlOptions) -> CrawlJob:
-        job = CrawlJob(collection, options)
+    def start(
+        self, collection: str, options: CrawlOptions, website_id: int | None = None
+    ) -> CrawlJob:
+        job = CrawlJob(collection, options, website_id=website_id)
         self.jobs[job.id] = job
         threading.Thread(target=self.crawler.run, args=(job,), daemon=True).start()
         return job

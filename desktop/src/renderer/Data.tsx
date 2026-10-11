@@ -1,11 +1,11 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { Collection, DocumentInfo, EngineClient } from "./api";
+import { Collection, EngineClient } from "./api";
+import { Documents } from "./Documents";
 import { Websites } from "./Websites";
 
 export function Data({ client }: { client: EngineClient }) {
   const [collections, setCollections] = useState<Collection[]>([]);
   const [selected, setSelected] = useState("");
-  const [documents, setDocuments] = useState<DocumentInfo[]>([]);
   const [newName, setNewName] = useState("");
   const [progress, setProgress] = useState<string | null>(null);
   const [log, setLog] = useState<string[]>([]);
@@ -15,7 +15,11 @@ export function Data({ client }: { client: EngineClient }) {
 
   const report = (e: unknown) => setError(e instanceof Error ? e.message : String(e));
 
+  // Bumped after anything that adds or removes documents, so the document list reloads.
+  const [version, setVersion] = useState(0);
+
   const refresh = useCallback(async () => {
+    setVersion((v) => v + 1);
     const list = await client.collections();
     setCollections(list);
     setSelected((current) => (list.some((c) => c.name === current) ? current : list[0]?.name ?? ""));
@@ -28,13 +32,6 @@ export function Data({ client }: { client: EngineClient }) {
   const refreshAll = useCallback(() => {
     refresh().catch(report);
   }, [refresh]);
-
-  const refreshDocuments = useCallback(() => {
-    if (selected) client.documents(selected).then(setDocuments, report);
-    else setDocuments([]);
-  }, [client, selected]);
-
-  useEffect(refreshDocuments, [refreshDocuments, collections]);
 
   async function create(event: FormEvent) {
     event.preventDefault();
@@ -130,24 +127,7 @@ export function Data({ client }: { client: EngineClient }) {
             <p className="muted">PDF, DOCX, PPTX, XLSX, CSV, HTML, Markdown, text and JSON files.</p>
             {log.length > 0 && <pre className="muted">{log.join("\n")}</pre>}
             <Websites client={client} collection={selected} onIndexed={refreshAll} />
-            <table>
-              <thead>
-                <tr><th>Document</th><th>Size</th><th>Chunks</th><th /></tr>
-              </thead>
-              <tbody>
-                {documents.map((d) => (
-                  <tr key={d.id}>
-                    <td>
-                      {d.name}
-                      {d.source !== d.name && <div className="muted">{d.source}</div>}
-                    </td>
-                    <td>{Math.ceil(d.chars / 1000)}k chars</td>
-                    <td>{d.chunks}</td>
-                    <td><button onClick={() => removeDocument(d.id)}>Delete</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <Documents key={selected} client={client} collection={selected} version={version} onDelete={removeDocument} />
           </>
         )}
       </section>

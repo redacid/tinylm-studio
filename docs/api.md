@@ -95,7 +95,7 @@ Not supported yet: tool use / function calling, images, logprobs, `n > 1`, batch
 | GET | `/api/collections` | Collections with document and chunk counts |
 | POST | `/api/collections` | `{"name": "games"}`: letters, digits, `_`, `-` |
 | DELETE | `/api/collections/{name}` | Deletes the collection and its documents |
-| GET | `/api/collections/{name}/documents` | Documents in a collection |
+| GET | `/api/collections/{name}/documents` | `?query=&kind=all\|file\|web&sort=oldest\|newest\|name\|largest&offset=0&limit=50`: one page of documents and the matching `total`; `query` matches the name or the file path / web address, any letter case |
 | POST | `/api/collections/{name}/documents` | Multipart upload, field `files` (one or more); returns a result per file |
 | DELETE | `/api/collections/{name}/documents/{id}` | Deletes one document |
 | POST | `/api/collections/{name}/search` | `{"query": "...", "k": 4}`: the best matching chunks |
@@ -136,9 +136,17 @@ Interactive docs: `http://127.0.0.1:8765/docs`.
 or the Data tab) adds pages of websites to a collection in the background:
 
 - Starts from the given addresses and follows links **within the same sites** up to `max_depth`
-  hops, until `max_pages` pages are fetched. Images, video, archives, scripts and styles are
+  hops, until `max_pages` **new** pages are downloaded. Images, video, archives, scripts and styles are
   never requested. Pages with little text (listings, navigation) are followed but not indexed;
   web pages keep only their main text (menus and footers are dropped); PDFs are indexed too.
+- **Repeated crawls continue where the last one stopped.** Every downloaded page is remembered
+  in the collection with its links. A later crawl into the same collection walks through those
+  pages without requesting them and does not count them toward `max_pages`, so running a site
+  again and again gradually downloads all of it (raise `max_depth` to reach deep pages).
+  Deleting a document forgets its page, so the next crawl downloads it again. Pages with little
+  text are remembered too: new links that later appear on them are not seen.
+- **Saved websites** keep the addresses and settings of a crawl so it can be run again, edited
+  or deleted (deleting a saved website keeps the pages already added).
 - **Politeness:** at most `per_minute` requests to each site (default `TINYLM_CRAWL_PER_MINUTE`
   = 20, with random jitter), robots.txt rules and `Crawl-delay` are followed (turn off with
   `respect_robots: false` only for your own sites), and an HTTP 429/503 answer pauses that site
@@ -154,9 +162,14 @@ or the Data tab) adds pages of websites to a collection in the background:
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/api/collections/{name}/crawl` | `{"urls": [...], "max_pages": 50, "max_depth": 2, "per_minute": 20, "use_browser": false, "respect_robots": true}` |
+| POST | `/api/collections/{name}/crawl` | One-off crawl: `{"urls": [...], "max_pages": 50, "max_depth": 2, "per_minute": 20, "use_browser": false, "respect_robots": true}` |
+| GET | `/api/collections/{name}/websites` | Saved websites of a collection, with `last_crawled_at` |
+| POST | `/api/collections/{name}/websites` | Saves a website: the crawl fields above plus an optional `name` (defaults to the host) |
+| PUT | `/api/websites/{id}` | Changes a saved website (same body) |
+| DELETE | `/api/websites/{id}` | Deletes a saved website; its pages stay in the collection |
+| POST | `/api/websites/{id}/crawl` | Crawls a saved website again; 409 while it is already running |
 | GET | `/api/crawls` | All crawls since the engine started |
-| GET | `/api/crawls/{id}` | Progress: `state`, `fetched`, `indexed`, `duplicates`, `skipped`, `failed`, `current`, `log` |
+| GET | `/api/crawls/{id}` | Progress: `state`, `website_id`, `fetched` (new pages), `known` (downloaded before), `indexed`, `duplicates`, `skipped`, `failed`, `current`, `log` |
 | POST | `/api/crawls/{id}/cancel` | Stops a crawl after the current page |
 
 ## Settings
