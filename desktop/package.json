@@ -1,0 +1,17 @@
+{
+  "name": "tinylm-studio-desktop",
+  "version": "0.1.0",
+  "description": "Desktop UI for tinylm-studio.",
+  "private": true,
+  "main": "dist/main/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && cp src/renderer/index.html dist/renderer/",
+    "start": "npm run build && electron .",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "electron": "^33.0.0",
+    "typescript": "^5.6.0"
+  }
+}

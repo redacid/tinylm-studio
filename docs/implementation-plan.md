@@ -1,0 +1,251 @@
+# Implementation Plan: Narrow-Domain Small Language Model Studio
+
+Status: approved direction, in progress · Last updated: 2026-10-11
+
+## 0. Decisions so far
+
+| Topic | Decision |
+|---|---|
+| Engine language | Python (section 2) |
+| Python environment | The engine creates and manages its own virtual environment automatically; the user can point it to their own environment instead (section 3.6) |
+| Model APIs | The engine exposes both OpenAI-compatible and Anthropic-compatible APIs (section 3.3) |
+| Languages | Ukrainian, Russian and English, in data and in answers |
+| Platforms (stage 1) | Linux only: Debian-based distributions first, Alpine as a second target (section 3.7) |
+| Minimum hardware | Intel Core i7-class CPU, 32 GB RAM, no GPU required |
+| Reference scenario | Video game assistant (section 3.8) |
+| Repository | Local git repository for now; remote added later |
+
+## 1. Goal
+
+A desktop application for building small, narrowly specialized language models:
+
+- Runs on an ordinary laptop/desktop **without a powerful GPU**; uses a GPU (CUDA, Apple Metal/MPS) when present to speed things up.
+- Lets the user **upload arbitrary data** (documents, tables, notes), analyzes it and uses it when answering.
+- Lets the user **fine-tune** a small model on that data and serve it.
+- Exposes the model through **OpenAI-compatible and Anthropic-compatible APIs**, so existing clients and SDKs can talk to it unchanged.
+- Has a simple, understandable project structure.
+
+Two parts:
+
+1. **Engine** – a local service with an HTTP API: data ingestion, retrieval, training, inference.
+2. **Desktop** – an Electron UI that drives the engine.
+
+## 2. Key decision: Rust or Python for the engine
+
+### Options compared
+
+| Criterion | Rust (candle / burn) | Python (PyTorch + Hugging Face) |
+|---|---|---|
+| Fine-tuning (LoRA/QLoRA, SFT) | Possible but mostly hand-built; no mature PEFT/TRL equivalent; few ready training recipes | Mature: `transformers`, `peft`, `trl`, `accelerate`; LoRA on a 0.5–1.5B model is a few dozen lines |
+| Model coverage | Inference for many architectures; training support for new architectures lags | New open models are supported on release day |
+| CPU / GPU acceleration | Good CPU perf; CUDA/Metal in candle, wgpu in burn | CPU, CUDA, ROCm, Apple MPS out of the box |
+| Document parsing (PDF, DOCX, HTML, XLSX…) | Thin ecosystem | Rich ecosystem (`markitdown`, `pymupdf`, `pandas`, …) |
+| Embeddings / RAG | Possible (candle + fastembed-rs) | Trivial (`sentence-transformers`, `fastembed`) |
+| Fast CPU inference | Good | Use `llama.cpp` via `llama-cpp-python` (C++ core, GGUF, quantization) |
+| Packaging size | Small single binary | Large (PyTorch CPU ≈ 200–300 MB, with CUDA ≈ 2 GB+) |
+| Development speed / hiring / examples | Slower; fewer examples for training | Fastest; almost every tutorial and paper is in Python |
+
+### Recommendation: Python for the engine
+
+Training is the core of the product, and in 2026 the training ecosystem is still overwhelmingly Python. With Rust we would spend most of the effort re-implementing LoRA, optimizers, data collation, checkpointing and tokenizer edge cases instead of building the product. The heavy numeric work in Python runs in native code anyway (PyTorch kernels, llama.cpp), so the "Python is slow" argument does not apply here.
+
+Concretely:
+
+- **Python 3.12 + FastAPI** for the HTTP service, managed with **uv**.
+- **PyTorch + transformers + peft + trl** for fine-tuning.
+- **llama.cpp (`llama-cpp-python`)** for fast quantized CPU/GPU inference of trained models (GGUF).
+- Rust stays an option for later, narrowly scoped work (e.g. a small inference-only sidecar) if packaging size or startup time becomes a real problem. The HTTP API boundary makes such a swap invisible to the UI.
+
+## 3. Architecture
+
+```
+┌──────────────────────────── Desktop (Electron) ────────────────────────────┐
+│  Renderer: React + TypeScript                                              │
+│   Chat · Data sources · Datasets · Training · Models · Settings            │
+│  Main process: starts/stops the engine, picks a free port, health checks   │
+└───────────────▲────────────────────────────────────────────────────────────┘
+                │ HTTP + SSE on 127.0.0.1 (generated TypeScript client)
+┌───────────────┴──────────────────────── Engine (Python) ───────────────────┐
+│  API layer (FastAPI)                                                        │
+│   /v1/chat/completions, /v1/models, /v1/embeddings   (OpenAI-compatible)    │
+│   /v1/messages                                       (Anthropic-compatible) │
+│   /api/*  management: sources, datasets, jobs, models, settings             │
+│                                                                             │
+│  Core modules                                                               │
+│   ingest   – parse files → normalized Markdown → chunks                     │
+│   rag      – embeddings + vector search, prompt augmentation                │
+│   datasets – build training sets (user-provided or generated from sources)  │
+│   training – LoRA/QLoRA SFT jobs, progress events, checkpoints              │
+│   inference– model runtime (transformers for dev, llama.cpp for prod)       │
+│   registry – base models, adapters, merged/quantized exports                │
+│   hardware – detect CPU/CUDA/MPS, choose dtype, batch size, threads         │
+│                                                                             │
+│  Storage: SQLite (metadata + sqlite-vec vectors) + workspace folder (files) │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 3.1 How "learning from uploaded data" works
+
+Two complementary mechanisms, both driven by the same uploaded sources:
+
+1. **Retrieval (RAG)** – available immediately, CPU-cheap. Uploaded files are parsed, chunked, embedded and indexed. At answer time the relevant chunks are added to the prompt. Best for facts that change or that must be quoted precisely.
+2. **Fine-tuning (LoRA)** – changes the model's behavior: domain vocabulary, answer format, style, narrow tasks (classification, extraction, structured output). Training data comes from:
+   - user-provided examples (JSONL / CSV of prompt → answer), or
+   - pairs generated from the uploaded sources by a "teacher" model (see open question 1).
+
+A small model plus RAG plus a LoRA adapter is the practical way to get a useful narrow assistant without a big GPU.
+
+### 3.2 Models
+
+- Default base models in the 0.3–1.7B range (candidates at time of writing: Qwen3 0.6B/1.7B, Gemma 3 270M/1B, SmolLM family). The final shortlist is picked in Phase 1 by quick benchmarks on the target hardware and languages.
+- Training on CPU: LoRA on a ≤0.6B model with a few thousand short examples is feasible (hours, not days). GPU makes it 10–50× faster and enables 1–3B models with QLoRA.
+- After training: merge the adapter, convert to GGUF, quantize (Q4_K_M / Q8_0) and serve through llama.cpp.
+
+### 3.3 API compatibility
+
+Requirement (confirmed by the user): the engine supports both APIs as first-class, equal protocols.
+
+
+- **OpenAI**: `POST /v1/chat/completions` (incl. `stream: true` SSE), `GET /v1/models`, `POST /v1/embeddings`.
+- **Anthropic**: `POST /v1/messages` (incl. streaming events `message_start`, `content_block_delta`, `message_stop`, …), `x-api-key` / `anthropic-version` headers accepted.
+- Both translate into one internal request type (`ChatRequest`) handled by the same inference + RAG pipeline, so behaviour is identical across protocols.
+- Model id selects base model / adapter / RAG collection, e.g. `support-bot` or `support-bot+docs`.
+- Optional local API key; bound to `127.0.0.1` by default, LAN exposure is an explicit setting.
+- Compatibility verified by contract tests that call the engine with the official `openai` and `anthropic` SDKs.
+- Out of MVP scope: tool use / function calling, images, batch APIs.
+
+### 3.4 Desktop app
+
+- Electron + React + TypeScript + Vite; packaged with electron-builder.
+- The main process launches the engine as a child process, waits for `/health`, and shuts it down on exit.
+- Screens: **Chat** (pick model, see cited sources), **Data** (drag-and-drop files and folders, ingestion status), **Datasets** (preview/edit examples), **Training** (configure, start, live loss chart, stop/resume), **Models** (list, export, delete, copy API endpoint snippet), **Settings** (hardware, API keys, storage path).
+- The renderer only talks HTTP; it never touches Python directly. A TypeScript client is generated from the engine's OpenAPI schema.
+
+### 3.5 Hardware acceleration
+
+`hardware` module detects available devices at start-up and picks defaults: CPU (thread count, fp32/bf16), CUDA (fp16/bf16, optional 4-bit QLoRA), Apple MPS. The user can override in Settings. Packaging ships the CPU build by default; GPU-enabled PyTorch is an optional download from inside the app.
+
+### 3.6 Python environment management
+
+- On first start the desktop app (or `scripts/setup-engine.sh` for headless use) creates a dedicated virtual environment with `uv` and installs the engine and its dependencies into it.
+- Default location: `${XDG_DATA_HOME:-~/.local/share}/tinylm-studio/venv`.
+- The user can override it with the `TINYLM_PYTHON` environment variable or in Settings, pointing at the Python interpreter of their own environment. The engine checks that the environment has the required packages and reports what is missing instead of modifying a user-owned environment.
+- Optional extras are installed on demand: `gpu` (CUDA PyTorch), `train` (peft, trl), `web` (crawler).
+
+### 3.7 Platform notes
+
+- **Debian/Ubuntu (glibc)** is the primary target: PyTorch, llama.cpp and Electron all ship prebuilt binaries for it.
+- **Alpine (musl)** has no official PyTorch wheels and Electron's prebuilt binaries target glibc. Plan: support Alpine for the **engine** by building llama.cpp from source and running training inside a Debian-based container (Docker/Podman), or via `gcompat`; the desktop UI on Alpine uses the distribution's own `electron` package. Alpine is treated as a second target after the Debian build is complete.
+- Sizing for an i7 + 32 GB RAM machine without GPU: inference of 1–3B quantized models is interactive; LoRA training of ≤1B models on a few thousand examples is practical; full 3B training is not.
+
+### 3.8 Reference scenario: video game assistant
+
+Used as the end-to-end test case for every phase.
+
+1. **Sources:** the user provides a list of gaming websites, or the app discovers them via web search (open question 7).
+2. **Collection:** a polite crawler (robots.txt, rate limits, caching) fetches articles, reviews and guides; pages go through the normal ingestion pipeline; each chunk keeps its source URL, game title and date.
+3. **Knowledge:** the RAG index is organized per game; game titles and aliases (including Ukrainian/Russian names) are normalized to one entity.
+4. **Tasks the model performs:**
+   - write an original review of a game, synthesized from several sources, with citations;
+   - find trailers (YouTube links from the crawled pages or via video search) and return them as links;
+   - give walkthrough hints for a specific place or quest, spoiler-graded (hint first, full answer on request).
+5. **Fine-tuning target:** answer format and tone (review structure, hint style), trained on examples generated from the sources.
+
+This adds a `web` ingestion source (crawler + search connector) to Phase 2.
+
+## 4. Project structure
+
+```
+tinylm-studio/
+├── README.md               # what it is, how to run it in 3 commands
+├── AGENTS.md / CLAUDE.md   # agent rules
+├── docs/                   # architecture, API, decisions (ADRs)
+├── engine/                 # Python service
+│   ├── pyproject.toml      # uv-managed
+│   ├── src/engine/
+│   │   ├── main.py         # FastAPI app factory
+│   │   ├── api/            # openai.py, anthropic.py, admin.py, schemas.py
+│   │   ├── ingest/         # parsers, chunking
+│   │   ├── rag/            # embeddings, vector store, retrieval
+│   │   ├── datasets/       # dataset building and validation
+│   │   ├── training/       # LoRA jobs, job runner, progress events
+│   │   ├── inference/      # runtimes: transformers, llama.cpp
+│   │   ├── registry/       # models, adapters, exports
+│   │   ├── hardware.py
+│   │   └── storage.py      # SQLite + workspace paths
+│   └── tests/
+├── desktop/                # Electron app
+│   ├── package.json
+│   ├── src/main/           # process management, IPC, auto-update
+│   ├── src/preload/
+│   └── src/renderer/       # React UI
+├── scripts/                # dev.sh, build.sh, release helpers
+└── .github/workflows/      # lint, tests, builds
+```
+
+Two top-level code folders, one language each, one HTTP contract between them.
+
+## 5. Milestones
+
+Each phase ends with something usable.
+
+### Phase 0 – Foundation
+- Repository, README, AGENTS.md, CI (ruff + pytest, eslint + vitest).
+- Engine skeleton with `/health`, SQLite storage, workspace folder.
+- Electron shell that starts the engine and shows its status.
+- **Done when:** `scripts/dev.sh` creates the engine environment, opens the app and shows "engine ready" on Debian-based Linux.
+
+### Phase 1 – Local chat with compatible APIs
+- Inference runtime (transformers first) with a default small base model; model download manager.
+- OpenAI- and Anthropic-compatible endpoints with streaming.
+- Chat screen in the UI.
+- Benchmark 3–4 candidate base models on CPU for speed and quality in the target languages.
+- **Done when:** the official `openai` and `anthropic` Python SDKs pointed at `http://127.0.0.1:<port>` get streamed answers; chat works in the UI on CPU.
+
+### Phase 2 – Data upload and RAG
+- Ingestion for TXT/MD, PDF, DOCX, HTML, CSV/XLSX, JSON (via `markitdown` + specific parsers); folder import; deduplication.
+- Web source: crawler for a user-supplied site list and a search connector (reference scenario).
+- Embeddings with a small multilingual model; sqlite-vec index; collections.
+- Answers grounded in retrieved chunks with source citations.
+- Data screen in the UI.
+- **Done when:** a user drops a folder of documents, or a list of gaming sites, and gets cited answers about them through both the UI and the APIs.
+
+### Phase 3 – Fine-tuning
+- Dataset import (JSONL/CSV), validation, train/eval split, preview/edit in UI.
+- LoRA SFT job runner (one job at a time, background process), progress via SSE, cancel/resume from checkpoint.
+- Model registry: base + adapter; serving adapters through the same APIs.
+- Training screen with live loss chart.
+- **Done when:** a LoRA fine-tune of a ≤0.6B model on ~1,000 examples completes on CPU and on GPU, and the tuned model is selectable in chat and via the API.
+
+### Phase 4 – Dataset generation and evaluation
+- Generate Q&A / instruction pairs from uploaded sources with a teacher model (local larger model or an external provider, see open question 1).
+- Simple evaluation: held-out set, exact-match / LLM-judge score, before/after comparison.
+- **Done when:** a user can go from "folder of documents" to "fine-tuned model with a score report" without writing any data by hand.
+
+### Phase 5 – Performance and distribution
+- Merge + GGUF export + quantization; llama.cpp runtime as the default for trained models.
+- Hardware auto-tuning; optional GPU PyTorch download.
+- Installers (AppImage/deb, dmg, exe), code signing, auto-update.
+- **Done when:** a non-developer installs the app from a release and completes the full flow.
+
+## 6. Risks
+
+| Risk | Mitigation |
+|---|---|
+| CPU training too slow for useful models | Keep models ≤0.6B by default, LoRA only, short sequences; rely on RAG for knowledge, fine-tuning for behavior |
+| Small models weak in Ukrainian/Russian | Benchmark languages in Phase 1; prefer multilingual base and embedding models |
+| Large installer because of PyTorch | CPU-only build by default; GPU runtime as optional download; Rust inference sidecar as a later option |
+| API drift in OpenAI/Anthropic specs | Contract tests with official SDKs pinned in CI |
+| Alpine lacks PyTorch/Electron binaries | Debian first; Alpine engine via container or source builds (section 3.7) |
+| Crawled content and copyright | Store sources, generate original text with citations, respect robots.txt |
+| "Any data" is unbounded | Start with text formats; OCR, images and audio are later, pluggable parsers |
+
+## 7. Open questions
+
+1. ~~Meaning of "supports Anthropic and OpenAI APIs".~~ **Decided (2026-10-11):** the model service must expose both OpenAI-compatible and Anthropic-compatible APIs (section 3.3). Still open: whether to also offer Anthropic/OpenAI as opt-in "teacher" providers for dataset generation and evaluation in Phase 4 (recommended, opt-in only).
+2. ~~Is Rust a hard requirement?~~ **Decided:** Python, with an automatically managed, user-overridable virtual environment.
+3. ~~Languages~~ **Decided:** Ukrainian, Russian and English. Base and embedding models must be multilingual.
+4. ~~Platforms and hardware~~ **Decided:** Linux (Debian-based first, Alpine second), i7-class CPU with 32 GB RAM.
+5. ~~Reference use case~~ **Decided:** video game assistant (section 3.8).
+6. ~~Repository~~ **Decided:** local git repository `tinylm-studio` for now; a remote is added later.
+7. **Web search provider** for discovering game sites and trailers: self-hosted SearXNG (free, no key) or a keyed API (Brave Search, YouTube Data API). Default: SearXNG, plus an explicit user-supplied site list.

@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'" />
+    <title>tinylm-studio</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 2rem; }
+      #status[data-phase="ready"] { color: #1a7f37; }
+      #status[data-phase="error"] { color: #cf222e; }
+    </style>
+  </head>
+  <body>
+    <h1>tinylm-studio</h1>
+    <p id="status">Loading…</p>
+    <script>var exports = {};</script>
+    <script src="renderer.js"></script>
+  </body>
+</html>
