@@ -28,7 +28,7 @@ CATALOG: list[ModelSpec] = [
         "qwen3-1.7b-gguf",
         "Qwen/Qwen3-1.7B-GGUF",
         "1.7B",
-        "Default. Q8_0 via llama.cpp, good uk/ru/en quality, fast on CPU.",
+        "Q8_0 via llama.cpp, fast; weak Ukrainian (often answers in Russian).",
         format="gguf",
         file_pattern="*Q8_0.gguf",
     ),
@@ -52,7 +52,7 @@ CATALOG: list[ModelSpec] = [
         "gemma-3-4b-gguf",
         "unsloth/gemma-3-4b-it-GGUF",
         "4B",
-        "Q4_K_M via llama.cpp, strong Ukrainian among small models.",
+        "Default. Q4_K_M via llama.cpp, best uk/ru/en quality in our benchmarks.",
         format="gguf",
         file_pattern="*Q4_K_M.gguf",
     ),
@@ -77,7 +77,7 @@ CATALOG: list[ModelSpec] = [
     ),
 ]
 
-DEFAULT_MODEL = "qwen3-1.7b-gguf"
+DEFAULT_MODEL = "gemma-3-4b-gguf"
 
 
 def find(model_id: str) -> ModelSpec | None:

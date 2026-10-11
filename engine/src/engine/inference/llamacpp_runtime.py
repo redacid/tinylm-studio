@@ -79,10 +79,12 @@ class LlamaCppRuntime:
 
     def stream(self, request: ChatRequest) -> Iterator[StreamEvent]:
         with self._lock:
-            prompt = self.render(request)
-            input_tokens = len(self.llm.tokenize(prompt.encode(), add_bos=False, special=True))
+            # The template already contains BOS where the model needs it (e.g. Gemma), so the
+            # prompt is tokenized here without adding a second one.
+            tokens = self.llm.tokenize(self.render(request).encode(), add_bos=False, special=True)
+            input_tokens = len(tokens)
             chunks = self.llm.create_completion(
-                prompt,
+                tokens,
                 max_tokens=request.max_tokens,
                 temperature=request.temperature,
                 top_p=request.top_p,
