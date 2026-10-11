@@ -48,6 +48,14 @@ CATALOG: list[ModelSpec] = [
         format="gguf",
         file_pattern="*Q4_K_M.gguf",
     ),
+    ModelSpec(
+        "gemma-3-4b-gguf",
+        "unsloth/gemma-3-4b-it-GGUF",
+        "4B",
+        "Q4_K_M via llama.cpp, strong Ukrainian among small models.",
+        format="gguf",
+        file_pattern="*Q4_K_M.gguf",
+    ),
     ModelSpec("qwen3-0.6b", "Qwen/Qwen3-0.6B", "0.6B", "PyTorch weights, base for fine-tuning."),
     ModelSpec("qwen3-1.7b", "Qwen/Qwen3-1.7B", "1.7B", "PyTorch weights, base for fine-tuning."),
     ModelSpec(
