@@ -21,6 +21,9 @@ export function Search({
   const [results, setResults] = useState<SearchResult[] | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  const [adding, setAdding] = useState(false);
+  // Results already in the collection, marked in the list so it is clear what was added.
+  const [added, setAdded] = useState<Set<string>>(new Set());
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [job, setJob] = useState<CrawlJob | null>(null);
@@ -48,6 +51,7 @@ export function Search({
       const found = await client.search(query.trim(), kind, language);
       setResults(found);
       setSelected(new Set(found.map((r) => r.url)));
+      setAdded(new Set());
     } catch (e) {
       setResults(null);
       report(e);
@@ -87,12 +91,23 @@ export function Search({
 
   async function addLinks() {
     setError(null);
+    setMessage(null);
+    setAdding(true);
     try {
-      await client.addLinks(collection, chosen);
-      setMessage(`Added ${chosen.length} link${chosen.length === 1 ? "" : "s"} to the collection.`);
+      const results = await client.addLinks(collection, chosen);
+      const fresh = results.filter((r) => !r.duplicate).length;
+      const known = results.length - fresh;
+      setAdded((current) => new Set([...current, ...chosen.map((r) => r.url)]));
+      setSelected(new Set());
+      setMessage(
+        `Added ${fresh} link${fresh === 1 ? "" : "s"} to "${collection}"` +
+          (known ? `; ${known} ${known === 1 ? "was" : "were"} already there.` : "."),
+      );
       onSaved();
     } catch (e) {
       report(e);
+    } finally {
+      setAdding(false);
     }
   }
 
@@ -137,6 +152,7 @@ export function Search({
                   <input type="checkbox" checked={selected.has(r.url)} onChange={() => toggle(r.url)} />
                   <span>
                     <strong>{r.title}</strong>
+                    {added.has(r.url) && <span className="added"> ✓ added</span>}
                     <div className="muted">{r.url}</div>
                     {r.snippet && <div className="snippet">{r.snippet}</div>}
                   </span>
@@ -145,6 +161,7 @@ export function Search({
             ))}
           </ul>
           <div className="buttons">
+            {message && <span className="notice">{message}</span>}
             {kind === "web" ? (
               <>
                 <button onClick={saveSites} disabled={chosen.length === 0} title="Save the sites of the selected pages, to crawl them further now and later">
@@ -155,14 +172,13 @@ export function Search({
                 </button>
               </>
             ) : (
-              <button onClick={addLinks} disabled={chosen.length === 0} title="Keep title, address and description so answers can cite them">
-                Add {chosen.length} link{chosen.length === 1 ? "" : "s"}
+              <button onClick={addLinks} disabled={chosen.length === 0 || adding} title="Keep title, address and description so answers can cite them">
+                {adding ? "Adding…" : `Add ${chosen.length} link${chosen.length === 1 ? "" : "s"}`}
               </button>
             )}
           </div>
         </>
       )}
-      {message && <p className="muted">{message}</p>}
       {job && <CrawlProgress job={job} />}
     </div>
   );

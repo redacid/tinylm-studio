@@ -212,12 +212,14 @@ export class EngineClient {
   }
 
   /** Keeps search results (e.g. trailers) as small link documents that answers can cite. */
-  async addLinks(collection: string, links: SearchResult[]): Promise<void> {
-    await this.json(`/api/collections/${encodeURIComponent(collection)}/links`, {
+  async addLinks(collection: string, links: SearchResult[]): Promise<UploadResult[]> {
+    const path = `/api/collections/${encodeURIComponent(collection)}/links`;
+    const body = await this.json<{ data: UploadResult[] }>(path, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ links }),
     });
+    return body.data;
   }
 
   async crawls(): Promise<CrawlJob[]> {

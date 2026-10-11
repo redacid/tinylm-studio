@@ -89,3 +89,6 @@ th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border);
 .search .results li { padding: 6px 0; border-bottom: 1px solid var(--border); }
 .search .results label { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; overflow-wrap: anywhere; }
 .search .snippet { font-size: 12px; }
+.search .buttons { align-items: center; }
+.search .notice { color: var(--good, #1a7f37); margin-right: 8px; }
+.search .added { color: var(--good, #1a7f37); font-weight: normal; font-size: 12px; }

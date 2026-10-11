@@ -94,7 +94,7 @@ export function Documents({
                 {d.source !== d.name && <div className="muted">{d.source}</div>}
               </td>
               <td className="nowrap">{new Date(d.created_at).toLocaleString()}</td>
-              <td className="nowrap">{Math.ceil(d.chars / 1000)}k chars</td>
+              <td className="nowrap">{d.chars < 1000 ? `${d.chars} chars` : `${Math.round(d.chars / 1000)}k chars`}</td>
               <td>{d.chunks}</td>
               <td><button onClick={() => onDelete(d.id)}>Delete</button></td>
             </tr>
