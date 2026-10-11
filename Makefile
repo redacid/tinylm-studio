@@ -19,6 +19,7 @@ ECHO ?=
 
 ENGINE_DIR  := engine
 DESKTOP_DIR := desktop
+DESKTOP_DEPS := $(DESKTOP_DIR)/node_modules/.package-lock.json
 
 export TINYLM_VENV
 
@@ -32,12 +33,16 @@ setup-engine: ## Create/update the engine virtual environment (runtime dependenc
 	bash scripts/setup-engine.sh
 
 .PHONY: setup-dev
-setup-dev: ## Install the engine with development tools (pytest, ruff)
+setup-dev: setup-desktop ## Install everything plus development tools (pytest, ruff)
 	bash scripts/setup-engine.sh --dev
 
 .PHONY: setup-desktop
-setup-desktop: ## Install desktop (Electron) dependencies from the lockfile
+setup-desktop: $(DESKTOP_DEPS) ## Install desktop (Electron) dependencies from the lockfile
+
+# Reinstalled automatically whenever package-lock.json changes.
+$(DESKTOP_DEPS): $(DESKTOP_DIR)/package-lock.json
 	cd $(DESKTOP_DIR) && npm ci
+	touch $@
 
 ##@ Build
 
@@ -45,7 +50,7 @@ setup-desktop: ## Install desktop (Electron) dependencies from the lockfile
 build: build-desktop ## Build all components
 
 .PHONY: build-desktop
-build-desktop: ## Compile the desktop app TypeScript into desktop/dist
+build-desktop: $(DESKTOP_DEPS) ## Compile the desktop app TypeScript into desktop/dist
 	cd $(DESKTOP_DIR) && npm run build
 
 ##@ Quality
@@ -58,7 +63,7 @@ lint-engine: ## Lint the engine with ruff
 	cd $(ENGINE_DIR) && $(PYTHON) -m ruff check .
 
 .PHONY: lint-desktop
-lint-desktop: ## Type-check the desktop app
+lint-desktop: $(DESKTOP_DEPS) ## Type-check the desktop app
 	cd $(DESKTOP_DIR) && npm run typecheck
 
 .PHONY: format
