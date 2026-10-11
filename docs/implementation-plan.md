@@ -73,14 +73,14 @@ Concretely:
 │                                                                             │
 │  Core modules                                                               │
 │   ingest   – parse files → normalized Markdown → chunks                     │
-│   rag      – embeddings + vector search, prompt augmentation                │
+│   rag      – embeddings + hybrid search, prompt augmentation                │
 │   datasets – build training sets (user-provided or generated from sources)  │
 │   training – LoRA/QLoRA SFT jobs, progress events, checkpoints              │
 │   inference– model runtime (transformers for dev, llama.cpp for prod)       │
 │   registry – base models, adapters, merged/quantized exports                │
 │   hardware – detect CPU/CUDA/MPS, choose dtype, batch size, threads         │
 │                                                                             │
-│  Storage: SQLite (metadata + sqlite-vec vectors) + workspace folder (files) │
+│  Storage: SQLite (sqlite-vec vectors + FTS5) + workspace folder (files)     │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -210,7 +210,7 @@ runtime for Hugging Face-format models and for fine-tuning.
 ### Phase 2 – Data upload and RAG (files and crawler done; search next)
 
 Done: website crawler (same-site link following, per-site rate limit, robots.txt, Retry-After,
-HTTP/SOCKS proxy, browser over CDP). Next: search connector for finding sites.
+HTTP/SOCKS proxy, browser over CDP); hybrid search (vectors + FTS5 full text). Next: search connector for finding sites.
 
 Done before: file upload and folder import, multilingual-e5-small embeddings, sqlite-vec collections,
 grounded answers with sources through both APIs, Data screen and cited answers in the chat.

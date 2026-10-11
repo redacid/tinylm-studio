@@ -1,6 +1,9 @@
 """Uploaded data: conversion, chunking, collections, search and grounded chat answers."""
 
+import sqlite3
+
 import anthropic
+import numpy as np
 import openai
 import pytest
 
@@ -8,7 +11,7 @@ from engine.chat import ChatRequest, Message
 from engine.rag.chunking import chunk_text
 from engine.rag.convert import UnsupportedFile, convert, strip_markup
 from engine.rag.prompt import ground
-from engine.rag.store import Hit
+from engine.rag.store import Hit, KnowledgeStore, full_text_query
 
 WITCHER = "The Witcher 3 is an open-world RPG. Geralt of Rivia hunts monsters for coin."
 SOULS = "Dark Souls bosses punish greed. Learn the attack rhythm and roll sideways."
@@ -133,3 +136,56 @@ def test_anthropic_answer_carries_sources(games):
         extra_body={"collection": "games"},
     )
     assert message.model_extra["sources"][0]["document"] == "souls.txt"
+
+
+class BlindEmbedder:
+    """Gives every text the same vector, so only the word index can tell chunks apart."""
+
+    name = "blind"
+    dim = 8
+
+    def embed_documents(self, texts: list[str]) -> np.ndarray:
+        return np.ones((len(texts), self.dim), dtype=np.float32)
+
+    def embed_query(self, text: str) -> np.ndarray:
+        return np.ones(self.dim, dtype=np.float32)
+
+
+def test_full_text_query_matches_word_forms():
+    assert full_text_query("Хто такий Відьмак?") == '"хто" OR "такий" OR "відьм"*'
+    assert full_text_query("Borderlands 3, 3!") == '"borderlan"* OR "3"'
+    assert full_text_query("?!") == ""
+
+
+def test_exact_names_are_found_by_words(tmp_path):
+    store = KnowledgeStore(tmp_path / "knowledge.db", BlindEmbedder())
+    store.create_collection("games")
+    store.create_collection("other")
+    for name in ["witcher", "souls", "doom", "zelda", "mario"]:
+        store.add_document("games", f"{name}.txt", f"A review of {name} with many details.")
+    store.add_document("games", "bl3.txt", "Borderlands 3 is a looter shooter set on Pandora.")
+    store.add_document("other", "bl3-other.txt", "Borderlands 3 again, in another collection.")
+    store.add_document("games", "uk.txt", "Відьмака звуть Геральт, він полює на чудовиськ.")
+
+    assert store.search("games", "Borderlands 3 setting", k=1)[0].document == "bl3.txt"
+    assert store.search("games", "Хто такий відьмак?", k=1)[0].document == "uk.txt"
+
+    bl3 = next(d for d in store.documents("games") if d["name"] == "bl3.txt")
+    store.delete_document("games", bl3["id"])
+    store.delete_collection("other")
+    assert all("Borderlands" not in h.text for h in store.search("games", "Borderlands", k=8))
+
+
+def test_existing_databases_get_a_word_index(tmp_path):
+    path = tmp_path / "knowledge.db"
+    store = KnowledgeStore(path, BlindEmbedder())
+    store.create_collection("games")
+    store.add_document("games", "doom.txt", "Doom Eternal: rip and tear.")
+    store.add_document("games", "bl3.txt", "Borderlands 3 is a looter shooter.")
+    store.db.close()
+    old = sqlite3.connect(path)
+    old.executescript("DROP TABLE chunk_text; DROP TRIGGER chunks_ai; DROP TRIGGER chunks_ad;")
+    old.close()
+
+    store = KnowledgeStore(path, BlindEmbedder())
+    assert store.search("games", "Borderlands", k=1)[0].document == "bl3.txt"

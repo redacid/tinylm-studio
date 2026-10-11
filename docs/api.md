@@ -51,7 +51,7 @@ with `temperature: 0` returns the same text through either API.
 ### Answers from uploaded data
 
 Both chat endpoints accept an extra `collection` field. The engine then searches that collection
-for the chunks most similar to the last user message, adds them to the system prompt as numbered
+for the chunks that best match the last user message, adds them to the system prompt as numbered
 sources and asks the model to cite them as `[1]`, `[2]`. The response carries a `sources` list
 (top level for non-streaming responses, in the first chunk or `message_start` event when
 streaming) so a client can show where each citation comes from.
@@ -98,7 +98,7 @@ Not supported yet: tool use / function calling, images, logprobs, `n > 1`, batch
 | GET | `/api/collections/{name}/documents` | Documents in a collection |
 | POST | `/api/collections/{name}/documents` | Multipart upload, field `files` (one or more); returns a result per file |
 | DELETE | `/api/collections/{name}/documents/{id}` | Deletes one document |
-| POST | `/api/collections/{name}/search` | `{"query": "...", "k": 4}`: the most similar chunks |
+| POST | `/api/collections/{name}/search` | `{"query": "...", "k": 4}`: the best matching chunks |
 
 Interactive docs: `http://127.0.0.1:8765/docs`.
 
@@ -121,6 +121,11 @@ Interactive docs: `http://127.0.0.1:8765/docs`.
   boundaries, embedded with `intfloat/multilingual-e5-small` (uk/ru/en and ~100 other languages,
   downloaded on first use into `<data dir>/embeddings`) and stored in
   `<data dir>/workspace/knowledge.db` (SQLite with sqlite-vec).
+- Search is hybrid: chunks are ranked by meaning (vectors) and by words (SQLite FTS5 with BM25;
+  long words also match by prefix, so inflected forms find each other), and the two rankings are
+  merged with reciprocal rank fusion. Exact names such as "Borderlands 3" are found even when the
+  small embedding model blurs them. A source's `score` is the fused rank: higher is better, and it
+  is only comparable within one search.
 - The same file content added twice to one collection is stored once.
 - Whole folders can be added from the command line:
   `make ingest COLLECTION=games FILES=~/Documents/games` (or `python -m engine ingest games PATH...`).
