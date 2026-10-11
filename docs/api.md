@@ -20,7 +20,7 @@ from openai import OpenAI
 
 client = OpenAI(base_url="http://127.0.0.1:8765/v1", api_key="unused")
 reply = client.chat.completions.create(
-    model="qwen3-0.6b",
+    model="qwen3-1.7b-gguf",
     messages=[{"role": "user", "content": "Коротко про The Witcher 3"}],
 )
 print(reply.choices[0].message.content)
@@ -38,7 +38,7 @@ from anthropic import Anthropic
 
 client = Anthropic(base_url="http://127.0.0.1:8765", api_key="unused")
 message = client.messages.create(
-    model="qwen3-0.6b",
+    model="qwen3-1.7b-gguf",
     max_tokens=256,
     messages=[{"role": "user", "content": "Дай подсказку по первому боссу Dark Souls"}],
 )
@@ -63,9 +63,11 @@ Interactive docs: `http://127.0.0.1:8765/docs`.
 
 ## Models
 
-- Catalog models are downloaded into `<data dir>/models/<id>` (`make download MODEL=qwen3-0.6b`).
-- Any Hugging Face-format model folder (with `config.json`) copied into `<data dir>/models/` is
-  served under the folder name.
+- Catalog models are downloaded into `<data dir>/models/<id>` (`make download MODEL=qwen3-1.7b-gguf`).
+- Two formats are supported, chosen per model folder:
+  - **GGUF** (`*.gguf`, quantized) runs with llama.cpp: the fast option on CPU and the default.
+  - **Hugging Face** (`config.json` + safetensors) runs with PyTorch; used as a base for fine-tuning.
+- Any such model folder copied into `<data dir>/models/` is served under the folder name.
 - Gated models (Gemma, Llama) need `TINYLM_HF_TOKEN` and an accepted license on Hugging Face.
 - `TINYLM_ENABLE_ECHO=true` (or `make run-engine ECHO=1`) adds an `echo` model that needs no
   weights, for testing clients and the UI.

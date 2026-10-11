@@ -14,7 +14,9 @@ import torch
 
 from engine import hardware
 from engine.chat import ChatRequest, Finish, Message, TextDelta
-from engine.inference.transformers_runtime import TransformersRuntime
+from engine.inference.base import Runtime
+from engine.inference.transformers_runtime import physical_cores
+from engine.models.manager import ModelManager, model_format
 
 PROMPTS = {
     "uk": "Коротко опиши гру The Witcher 3: Wild Hunt і для кого вона.",
@@ -23,7 +25,7 @@ PROMPTS = {
 }
 
 
-def run_one(runtime: TransformersRuntime, prompt: str, max_tokens: int) -> dict:
+def run_one(runtime: Runtime, prompt: str, max_tokens: int) -> dict:
     # Sampling settings recommended for small chat models; greedy decoding tends to loop.
     request = ChatRequest(
         model="bench",
@@ -61,12 +63,15 @@ def benchmark(
 ) -> Path:
     hw = hardware.detect()
     torch.manual_seed(0)
+    manager = ModelManager(models_dir, runtime_options=runtime_options)
+    threads = (runtime_options or {}).get("threads") or physical_cores()
     lines = [
         f"# Model benchmark {datetime.now():%Y-%m-%d %H:%M}",
         "",
         f"Machine: {platform.platform()}, {hw.cpu_cores} cores, {hw.memory_gb} GB RAM, "
         f"accelerators: {', '.join(hw.accelerators) or 'none'}. Max tokens: {max_tokens}.",
-        f"PyTorch {torch.__version__}, threads: {{threads}}, options: {runtime_options or {}}.",
+        f"PyTorch {torch.__version__}, threads: {threads}, options: {runtime_options or {}}.",
+        "Runtime: llama.cpp for GGUF models, PyTorch for Hugging Face models.",
         "",
         "| Model | Load, s | RSS, GB | "
         + " | ".join(f"{k} tok/s (TTFT s)" for k in PROMPTS)
@@ -77,12 +82,13 @@ def benchmark(
     for model_id in model_ids:
         print(f"Benchmarking {model_id}…", flush=True)
         started = time.perf_counter()
-        runtime = TransformersRuntime(models_dir / model_id, **(runtime_options or {}))
+        runtime = manager.runtime(model_id)
         load = time.perf_counter() - started
         results = {lang: run_one(runtime, prompt, max_tokens) for lang, prompt in PROMPTS.items()}
         rss = psutil.Process().memory_info().rss / 2**30
         cells = " | ".join(f"{r['tok_s']:.1f} ({r['ttft']:.2f})" for r in results.values())
-        lines.append(f"| {model_id} | {load:.1f} | {rss:.1f} | {cells} |")
+        name = f"{model_id} ({model_format(models_dir / model_id)})"
+        lines.append(f"| {name} | {load:.1f} | {rss:.1f} | {cells} |")
         answers += [f"## {model_id}", ""]
         for lang, result in results.items():
             answers += [f"**{lang}:** {PROMPTS[lang]}", "", f"> {result['text']}", ""]
@@ -90,6 +96,6 @@ def benchmark(
 
     out_dir.mkdir(parents=True, exist_ok=True)
     report = out_dir / f"benchmark-{datetime.now():%Y%m%d-%H%M%S}.md"
-    text = "\n".join(lines + [""] + answers).replace("{threads}", str(torch.get_num_threads()))
+    text = "\n".join(lines + [""] + answers)
     report.write_text(text, encoding="utf-8")
     return report

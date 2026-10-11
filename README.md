@@ -22,7 +22,7 @@ make run     # start the desktop app (it starts the engine)
 Download a model (Models tab in the app, or):
 
 ```bash
-make download MODEL=qwen3-0.6b
+make download MODEL=qwen3-1.7b-gguf
 ```
 
 Engine only, for API clients (see [docs/api.md](docs/api.md)):
@@ -51,6 +51,9 @@ scripts/setup-engine.sh   # installs the engine into that environment
 ```
 
 `TINYLM_VENV` changes where the managed environment is created.
+
+`TINYLM_LLAMA` picks the llama.cpp build: `cpu` (default, prebuilt wheel) or `source`
+(compile; e.g. `CMAKE_ARGS="-DGGML_CUDA=on"` for NVIDIA GPUs).
 
 `TINYLM_TORCH` picks the PyTorch build: `cpu` (default, small), `auto` (detect GPU),
 a CUDA version such as `cu128`, or `pypi`.

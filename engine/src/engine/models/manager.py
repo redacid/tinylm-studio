@@ -1,7 +1,8 @@
 """Tracks installed models, downloads catalog models and keeps one model loaded at a time.
 
-A model is any folder under <data_dir>/models containing a config.json, so users can also
-drop in their own Hugging Face-format models by copying a folder there.
+A model is any folder under <data_dir>/models that contains either a config.json (Hugging Face
+format, run with PyTorch) or a .gguf file (run with llama.cpp), so users can also drop in their
+own models by copying a folder there.
 """
 
 import logging
@@ -53,9 +54,9 @@ class ModelManager:
     def installed(self) -> list[str]:
         # Hidden folders are unfinished downloads.
         ids = sorted(
-            p.parent.name
-            for p in self.models_dir.glob("*/config.json")
-            if not p.parent.name.startswith(".")
+            p.name
+            for p in self.models_dir.iterdir()
+            if p.is_dir() and not p.name.startswith(".") and model_format(p)
         )
         return ([ECHO_MODEL] if self.enable_echo else []) + ids
 
@@ -85,14 +86,19 @@ class ModelManager:
         from huggingface_hub import snapshot_download
 
         target = self.models_dir / spec.id
+        partial = self.models_dir / f".{spec.id}.partial"
         try:
             snapshot_download(
                 spec.repo,
-                local_dir=self.models_dir / f".{spec.id}.partial",
+                local_dir=partial,
                 token=self.hf_token,
-                allow_patterns=["*.json", "*.safetensors", "*.model", "*.txt", "*.jinja"],
+                allow_patterns=[spec.file_pattern]
+                if spec.format == "gguf"
+                else ["*.json", "*.safetensors", "*.model", "*.txt", "*.jinja"],
             )
-            (self.models_dir / f".{spec.id}.partial").rename(target)
+            if model_format(partial) is None:
+                raise RuntimeError(f"No model files in {spec.repo} matched the download filter")
+            partial.rename(target)
             job.state = "done"
         except Exception as error:  # surfaced to the UI as text
             log.exception("Download of %s failed", spec.id)
@@ -105,14 +111,31 @@ class ModelManager:
 
             return EchoRuntime()
         path = self.models_dir / model_id
-        if not (path / "config.json").is_file():
+        fmt = model_format(path)
+        if fmt is None:
             raise ModelNotFound(model_id)
         with self._lock:
             if self._loaded and self._loaded[0] == model_id:
                 return self._loaded[1]
             self._loaded = None  # release memory of the previous model before loading
-            from engine.inference.transformers_runtime import TransformersRuntime
+            if fmt == "gguf":
+                from engine.inference.llamacpp_runtime import LlamaCppRuntime
 
-            runtime = TransformersRuntime(path, **self.runtime_options)
+                runtime: Runtime = LlamaCppRuntime(path, **self.runtime_options)
+            else:
+                from engine.inference.transformers_runtime import TransformersRuntime
+
+                runtime = TransformersRuntime(path, **self.runtime_options)
             self._loaded = (model_id, runtime)
             return runtime
+
+
+def model_format(path: Path) -> str | None:
+    """Return "gguf" or "hf" for a model folder, or None if it holds no model."""
+    if not path.is_dir():
+        return None
+    if any(path.glob("*.gguf")):
+        return "gguf"
+    if (path / "config.json").is_file():
+        return "hf"
+    return None

@@ -58,7 +58,7 @@ export function Models({ client }: { client: EngineClient }) {
         </tbody>
       </table>
       <p className="muted">
-        Any Hugging Face-format model folder copied into the models directory also appears here.
+        Any GGUF or Hugging Face-format model folder copied into the models directory also appears here.
       </p>
     </div>
   );

@@ -1,6 +1,11 @@
-"""Base models offered for download. Small, instruction-tuned, permissive or open licenses."""
+"""Base models offered for download. Small, instruction-tuned, permissive or open licenses.
+
+GGUF models run through llama.cpp and are the fast option on CPU; Hugging Face (safetensors)
+models run through PyTorch and are the ones used for fine-tuning.
+"""
 
 from dataclasses import asdict, dataclass
+from typing import Literal
 
 
 @dataclass(frozen=True)
@@ -9,6 +14,9 @@ class ModelSpec:
     repo: str
     params: str
     description: str
+    format: Literal["hf", "gguf"] = "hf"
+    # For GGUF repos: glob of the single quantized file to download.
+    file_pattern: str | None = None
     gated: bool = False  # requires accepting the license on Hugging Face and an HF token
 
     def to_dict(self) -> dict:
@@ -17,9 +25,31 @@ class ModelSpec:
 
 CATALOG: list[ModelSpec] = [
     ModelSpec(
-        "qwen3-0.6b", "Qwen/Qwen3-0.6B", "0.6B", "Default. Multilingual (uk/ru/en), fast on CPU."
+        "qwen3-1.7b-gguf",
+        "Qwen/Qwen3-1.7B-GGUF",
+        "1.7B",
+        "Default. Q8_0 via llama.cpp, good uk/ru/en quality, fast on CPU.",
+        format="gguf",
+        file_pattern="*Q8_0.gguf",
     ),
-    ModelSpec("qwen3-1.7b", "Qwen/Qwen3-1.7B", "1.7B", "Better quality, slower on CPU."),
+    ModelSpec(
+        "qwen3-0.6b-gguf",
+        "Qwen/Qwen3-0.6B-GGUF",
+        "0.6B",
+        "Q8_0 via llama.cpp, fastest.",
+        format="gguf",
+        file_pattern="*Q8_0.gguf",
+    ),
+    ModelSpec(
+        "qwen3-4b-gguf",
+        "Qwen/Qwen3-4B-GGUF",
+        "4B",
+        "Q4_K_M via llama.cpp, best quality that still runs on CPU.",
+        format="gguf",
+        file_pattern="*Q4_K_M.gguf",
+    ),
+    ModelSpec("qwen3-0.6b", "Qwen/Qwen3-0.6B", "0.6B", "PyTorch weights, base for fine-tuning."),
+    ModelSpec("qwen3-1.7b", "Qwen/Qwen3-1.7B", "1.7B", "PyTorch weights, base for fine-tuning."),
     ModelSpec(
         "qwen2.5-0.5b-instruct", "Qwen/Qwen2.5-0.5B-Instruct", "0.5B", "Compact, multilingual."
     ),
@@ -39,7 +69,7 @@ CATALOG: list[ModelSpec] = [
     ),
 ]
 
-DEFAULT_MODEL = "qwen3-0.6b"
+DEFAULT_MODEL = "qwen3-1.7b-gguf"
 
 
 def find(model_id: str) -> ModelSpec | None:

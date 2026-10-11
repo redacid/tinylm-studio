@@ -196,7 +196,12 @@ Each phase ends with something usable.
 - Electron shell that starts the engine and shows its status.
 - **Done when:** `make setup && make run` creates the engine environment, opens the app and shows "engine ready" on Debian-based Linux.
 
-### Phase 1 – Local chat with compatible APIs (implemented; model benchmark pending on target hardware)
+### Phase 1 – Local chat with compatible APIs (done)
+
+Benchmark on the target machine (20 threads, 62 GB RAM, no GPU) with qwen3-0.6b through
+PyTorch fp32 gave at most ~5 tokens/s (best at 4 threads), so the llama.cpp runtime with GGUF
+models was moved forward from Phase 5 and is now the default inference path. PyTorch stays the
+runtime for Hugging Face-format models and for fine-tuning.
 - Inference runtime (transformers first) with a default small base model; model download manager.
 - OpenAI- and Anthropic-compatible endpoints with streaming.
 - Chat screen in the UI.

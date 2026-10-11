@@ -13,7 +13,7 @@ PYTHON      := $(or $(TINYLM_PYTHON),$(TINYLM_VENV)/bin/python)
 HOST ?= 127.0.0.1
 PORT ?= 8765
 # Model id for `make download` / `make bench` (see `make models`).
-MODEL ?= qwen3-0.6b
+MODEL ?= qwen3-1.7b-gguf
 # Set ECHO=1 to offer the built-in "echo" model (no weights needed).
 ECHO ?=
 
@@ -107,7 +107,7 @@ models: ## List catalog and installed models
 	$(PYTHON) -m engine models
 
 .PHONY: download
-download: ## Download a catalog model: make download MODEL=qwen3-0.6b
+download: ## Download a catalog model: make download MODEL=qwen3-1.7b-gguf
 	$(PYTHON) -m engine download $(MODEL)
 
 .PHONY: bench
