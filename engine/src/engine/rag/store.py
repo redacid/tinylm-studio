@@ -115,7 +115,14 @@ class KnowledgeStore:
         self.embedder = embedder
         self._local = threading.local()
         # Write-ahead logging lets readers (the UI polling) work while a crawl or upload writes.
-        self.db.execute("PRAGMA journal_mode = WAL")
+        # Switching to it fails at once if another process holds a write lock.
+        try:
+            self.db.execute("PRAGMA journal_mode = WAL")
+        except sqlite3.OperationalError as e:
+            raise RuntimeError(
+                f"{path} is locked by another process, probably an engine that is still running. "
+                "Stop it (pkill -f 'python -m engine') and start again."
+            ) from e
         self.db.executescript(SCHEMA)
         self._full_text()
         # Serializes writes inside this process; reentrant so helpers can take it again.

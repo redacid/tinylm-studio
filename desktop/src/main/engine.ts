@@ -77,7 +77,8 @@ export class Engine {
       this.child = spawn(python, ["-m", "engine", "--port", String(port)], {
         stdio: "inherit",
         // The renderer is loaded from file://; Chromium reports that origin as "null" or "file://".
-        env: { ...process.env, TINYLM_CORS_ORIGINS: '["null", "file://"]' },
+        // TINYLM_EXIT_WITH_PARENT: the engine stops by itself if this app crashes or is killed.
+        env: { ...process.env, TINYLM_CORS_ORIGINS: '["null", "file://"]', TINYLM_EXIT_WITH_PARENT: "1" },
       });
       this.child.once("exit", (code) => {
         if (this.state.phase !== "stopped") this.set({ phase: "error", message: `Engine exited with code ${code}` });

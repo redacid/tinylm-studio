@@ -16,11 +16,30 @@ import time
 from engine.config import Settings
 
 
+def exit_with_parent() -> None:
+    """Stops the engine when the process that started it (the desktop app) is gone, so a crashed
+    or killed app does not leave an engine behind that keeps the knowledge base locked."""
+    import os
+
+    parent = os.getppid()
+
+    def watch() -> None:
+        while os.getppid() == parent:
+            time.sleep(2)
+        os._exit(0)
+
+    threading.Thread(target=watch, daemon=True).start()
+
+
 def serve(settings: Settings, args: argparse.Namespace) -> None:
+    import os
+
     import uvicorn
 
     from engine.main import create_app
 
+    if os.environ.get("TINYLM_EXIT_WITH_PARENT"):
+        exit_with_parent()
     settings.host, settings.port = args.host, args.port
     uvicorn.run(create_app(settings), host=args.host, port=args.port, log_level="info")
 

@@ -253,3 +253,15 @@ def test_parallel_reads_and_writes(tmp_path):
     assert errors == []
     assert store.count_documents("games") == 120
     assert len(websites.websites("games")) == 30
+
+
+def test_locked_database_explains_what_to_do(tmp_path):
+    path = tmp_path / "knowledge.db"
+    stuck = sqlite3.connect(path)  # an old engine that died in the middle of a write
+    stuck.execute("CREATE TABLE t (x)")
+    stuck.commit()
+    stuck.execute("INSERT INTO t VALUES (1)")
+    with pytest.raises(RuntimeError, match="locked by another process"):
+        KnowledgeStore(path, HashEmbedder())
+    stuck.rollback()
+    KnowledgeStore(path, HashEmbedder())
