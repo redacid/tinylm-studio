@@ -22,3 +22,6 @@ workspace/
 
 # ENV
 **/.env
+
+# test data
+games-test-data/
