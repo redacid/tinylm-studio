@@ -9,6 +9,8 @@ For the HTTP API see [api.md](api.md); for the design and roadmap see the
 - [Models](#models)
 - [Data: collections, files, web search and websites](#data)
 - [Datasets](#datasets)
+  - [Generating examples from your documents](#generating-examples)
+- [Teachers: OpenRouter, Anthropic and local models](#teachers)
 - [Training](#training)
 - [Settings](#settings)
   - [Proxy for crawling and search](#proxy)
@@ -60,6 +62,8 @@ can use them (see [api.md](api.md)).
 - **Fine-tuned models** show the base model, the dataset and the final loss. Deleting one
   removes its folder; the base model stays.
 - Any GGUF file or Hugging Face model folder copied into `<data dir>/models/<name>/` appears too.
+- **Teachers** at the bottom of the screen are the models that write training examples; see
+  [Teachers](#teachers).
 
 ## Data
 
@@ -119,6 +123,83 @@ language); facts are better left to collections and chat with data.
 - **Add example**, **Edit** and **Delete** change examples by hand.
 - **Evaluation %** holds examples out of training to measure the model on data it has not
   seen. Each example stays in its part when others are added or removed.
+- Each example shows where it came from: **imported**, **generated** (with the document it was
+  written from) or written by hand. The origin filter shows one kind at a time, for example to
+  review generated examples before training.
+
+### Generating examples
+
+Writing hundreds of examples by hand is slow. **Generate** lets a larger *teacher* model write
+them from the documents of a collection: it reads a chunk of text, writes question and answer
+pairs that use only facts from that text, and then checks them.
+
+![Generating examples from a collection](images/generate.png)
+
+1. Add documents, websites or search results to a collection on the **Data** screen.
+2. Add a teacher on the **Models** screen ([Teachers](#teachers)), or install a model to use as
+   a local teacher.
+3. Open the dataset, press **Generate**, pick the collection and the teacher, and press
+   **Generate** in the panel.
+
+Settings:
+
+- **Chunks**: how many pieces of text the teacher reads in this run (about 1,000 characters
+  each). Every run continues with chunks this dataset has not used yet, so you can generate in
+  small portions and review in between. Chunks shorter than 300 characters are skipped.
+- **Pairs per chunk**: question and answer pairs written from each chunk (3 by default).
+- **Languages**: Ukrainian, Russian and/or English. With several, the pairs are spread over
+  them; with none, each pair is in the language of its text. Pairs in another language are
+  dropped.
+- **Answer style**: how answers should look, e.g. "a one-line tip, then numbered steps". The
+  examples you wrote or imported into the dataset are also shown to the teacher as samples of the
+  style, so a few good hand-written examples go a long way.
+- **System prompt of the examples**: added as the system message of every generated example.
+  Use the same one later in chat.
+- **Add a question the text does not answer**: one more pair per chunk where the answer honestly
+  says there is no such information. This teaches the small model not to invent facts.
+- **Check pairs against the text**: a second request per chunk in which the teacher drops pairs
+  the text does not support. It doubles the number of requests but catches made-up answers.
+
+The progress shows chunks read, pairs written and added, duplicates, and why pairs were dropped
+(wrong language, too short or long, not supported by the text). **Stop** ends the run after the
+current chunk; what was added stays. When a free provider's rate limit is reached, the run waits
+and retries by itself. After three failed chunks in a row (for example, a wrong API key) the run
+stops with the reason.
+
+![Generated examples with the document they were written from](images/generated.png)
+
+Always skim generated examples before training: delete wrong ones and fix the style where
+needed. Generated examples are marked, so they are easy to find with the origin filter.
+
+## Teachers
+
+A teacher is the model that writes examples. Teachers are set up at the bottom of the
+**Models** screen.
+
+![Adding OpenRouter as a teacher](images/teacher-form.png)
+
+- **OpenRouter** gives access to many models through one key, including free ones (their ids
+  end with `:free`). Create a key at [openrouter.ai/keys](https://openrouter.ai/keys), press
+  **Add teacher**, keep the OpenRouter provider, paste the key, press **List models** and pick a
+  model; **Free only** hides the paid ones. Free models are limited to about 20 requests per
+  minute (and a daily limit), so the requests-per-minute field is preset to 20.
+- **Any OpenAI-compatible API**: OpenAI, Groq, or a server on your computer such as Ollama
+  (`http://localhost:11434/v1`) or LM Studio (`http://localhost:1234/v1`). Choose a preset or
+  **Other** and enter the base URL; servers on your computer need no key.
+- **Anthropic** (Claude): choose the Anthropic provider and paste a key from
+  [console.anthropic.com](https://console.anthropic.com).
+- **Installed models** are offered as teachers without any setup. They are free and private,
+  but a 4B model on a CPU takes minutes per chunk; use them for small runs.
+
+**Test** sends a tiny request and shows the answer or the provider's error. **Requests per
+minute** keeps the studio under the provider's limit; leave it empty for no limit.
+
+![Saved teachers](images/teachers.png)
+
+API keys are stored in `knowledge.db` on this computer, are sent only to the teacher's base URL,
+and are never shown again: when you edit a teacher, leave the key empty to keep the saved one.
+Generating sends the text of your documents to the provider, so prefer a local teacher for
+private data.
 
 ## Training
 
@@ -209,7 +290,7 @@ Everything lives in `~/.local/share/tinylm-studio` (`TINYLM_DATA_DIR` to change)
 | Path | Contents |
 |---|---|
 | `models/` | Downloaded and fine-tuned models, one folder each |
-| `workspace/knowledge.db` | Collections, documents, saved websites and datasets (SQLite) |
+| `workspace/knowledge.db` | Collections, documents, saved websites, datasets and teachers with their API keys (SQLite) |
 | `workspace/training/` | Training runs: settings, progress, logs and checkpoints |
 | `workspace/benchmarks/` | Reports of `make bench` |
 | `embeddings/` | The embedding model used to search collections |

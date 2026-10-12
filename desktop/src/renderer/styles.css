@@ -126,3 +126,12 @@ th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border);
 .loss-chart tspan.train { fill: var(--accent); }
 .loss-chart tspan.held { fill: var(--ok); }
 .data section pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.generate { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.generate textarea { width: 100%; height: 48px; resize: vertical; display: block; margin-top: 4px; box-sizing: border-box; }
+.generate input[type="number"] { width: 72px; margin-left: 4px; }
+.example-head .source { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.teachers { margin-top: 24px; display: flex; flex-direction: column; gap: 8px; }
+.teacher-form { border: 1px solid var(--accent); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; max-width: 760px; }
+.teacher-form label { display: flex; gap: 8px; align-items: center; }
+.teacher-form label > span:first-child { flex: 0 0 140px; }
+.teacher-form label input:not([type="checkbox"]), .teacher-form label select { flex: 1; min-width: 0; }

@@ -23,6 +23,16 @@ Model changes:
 - [ ] Investigate trimming Gemma 3's 262k vocabulary to uk/ru/en tokens (smaller output layer; risky).
 - [ ] Layer pruning only together with fine-tuning or distillation (Phase 3).
 
+## Dataset generation (Phase 4)
+
+- [ ] Real run with OpenRouter free models on the game collections: compare a few models
+      (Llama 3.3 70B, Qwen3, Gemma 3 27B, DeepSeek V3) on quality of uk/ru pairs and on how often
+      the check drops pairs; pick a recommended default.
+- [ ] Local teacher on the target machine: minutes per chunk with gemma-3-4b-gguf.
+- [ ] Evaluation: score the base model against the fine-tuned one on the held-out examples,
+      judged by a teacher, with a report per run (the rest of Phase 4).
+- [ ] Optional: multi-turn examples (follow-up questions) and paraphrased questions.
+
 ## Fine-tuning (Phase 3)
 
 - [ ] Real run on the target machine: qwen3-0.6b on ~1,000 examples, 3 epochs; note time per

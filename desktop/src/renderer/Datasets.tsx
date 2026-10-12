@@ -1,5 +1,6 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { ChatMessage, Dataset, EngineClient, Example, ExampleFilter } from "./api";
+import { GeneratePanel } from "./Generate";
 
 const PAGE_SIZE = 20;
 const NEW_EXAMPLE: ChatMessage[] = [
@@ -97,6 +98,8 @@ function DatasetView({
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState("");
   const [split, setSplit] = useState<ExampleFilter["split"]>("all");
+  const [origin, setOrigin] = useState<ExampleFilter["origin"]>(undefined);
+  const [generating, setGenerating] = useState(false);
   const [offset, setOffset] = useState(0);
   const [examples, setExamples] = useState<Example[]>([]);
   const [total, setTotal] = useState(0);
@@ -122,7 +125,7 @@ function DatasetView({
   useEffect(() => {
     let stale = false;
     client
-      .examples(dataset.name, { query: search, split, offset, limit: PAGE_SIZE })
+      .examples(dataset.name, { query: search, split, origin, offset, limit: PAGE_SIZE })
       .then((page) => {
         if (stale) return;
         setExamples(page.data);
@@ -133,7 +136,7 @@ function DatasetView({
     return () => {
       stale = true;
     };
-  }, [client, dataset.name, search, split, offset, version]);
+  }, [client, dataset.name, search, split, origin, offset, version]);
 
   async function importFiles(files: FileList | null) {
     if (!files) return;
@@ -211,6 +214,7 @@ function DatasetView({
           <input type="file" multiple accept=".jsonl,.json,.csv" onChange={(e) => importFiles(e.target.files)} disabled={importing} />
         </label>
         <button onClick={() => edit(null)} disabled={editing !== null}>Add example</button>
+        <button onClick={() => setGenerating(!generating)}>Generate</button>
         <label title="Examples held out from training to measure the model on data it has not seen">
           Evaluation{" "}
           <input
@@ -240,6 +244,9 @@ function DatasetView({
         <code>prompt</code>/<code>completion</code>, <code>question</code>/<code>answer</code> or{" "}
         <code>instruction</code>/<code>input</code>/<code>output</code>. The model learns to write the assistant's answers.
       </p>
+      {generating && (
+        <GeneratePanel client={client} dataset={dataset.name} onAdded={onChange} onClose={() => setGenerating(false)} />
+      )}
       {log.length > 0 && <pre className="muted">{log.join("\n")}</pre>}
       {error && <p className="error">{error}</p>}
       {editing !== null && (
@@ -285,6 +292,18 @@ function DatasetView({
             <option value="train">Training</option>
             <option value="eval">Held out</option>
           </select>
+          <select
+            value={origin ?? ""}
+            onChange={(e) => {
+              setOrigin((e.target.value || undefined) as ExampleFilter["origin"]);
+              setOffset(0);
+            }}
+          >
+            <option value="">Any origin</option>
+            <option value="manual">Written by hand</option>
+            <option value="imported">Imported</option>
+            <option value="generated">Generated</option>
+          </select>
           <span className="pager">
             <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>‹ Previous</button>
             <span className="muted">{total === 0 ? "0" : `${offset + 1}–${last}`} of {total}</span>
@@ -295,7 +314,13 @@ function DatasetView({
           <div key={example.id} className="example">
             <div className="example-head">
               <span className={`badge ${example.split}`}>{example.split === "eval" ? "held out" : "training"}</span>
+              {example.origin !== "manual" && <span className="badge">{example.origin}</span>}
               <span className="muted">#{example.id}</span>
+              {example.source && (
+                <span className="muted source" title={example.source}>
+                  from {example.source}
+                </span>
+              )}
               <span className="buttons">
                 <button onClick={() => edit(example)} disabled={editing !== null}>Edit</button>
                 <button onClick={() => remove(example.id)}>Delete</button>
@@ -309,7 +334,7 @@ function DatasetView({
             ))}
           </div>
         ))}
-        {total === 0 && <p className="muted">{search || split !== "all" ? "Nothing matches." : "No examples yet."}</p>}
+        {total === 0 && <p className="muted">{search || split !== "all" || origin ? "Nothing matches." : "No examples yet."}</p>}
       </div>
     </>
   );

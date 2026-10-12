@@ -5,7 +5,9 @@ A desktop studio for building small, narrowly specialized language models that r
 ![Fine-tuning a model on the Training screen](docs/images/training.png)
 
 Chat with local models, let them answer from your files and websites (with sources), collect
-pages and trailers from the web, and fine-tune a small model on your own examples. The
+pages and trailers from the web, generate training examples from your documents with a larger
+teacher model (local, OpenRouter including its free models, any OpenAI-compatible API, or
+Anthropic), and fine-tune a small model on them. The
 **[user guide](docs/user-guide.md)** walks through every screen and setting.
 
 - **engine/** – Python service: data ingestion, retrieval, training and inference, exposed through OpenAI- and Anthropic-compatible APIs.

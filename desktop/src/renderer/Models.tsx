@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { CatalogEntry, EngineClient, TrainedModel } from "./api";
+import { Teachers } from "./Teachers";
 
 export function Models({ client }: { client: EngineClient }) {
   const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
@@ -114,6 +115,7 @@ export function Models({ client }: { client: EngineClient }) {
       <p className="muted">
         Any GGUF or Hugging Face-format model folder copied into the models directory also appears here.
       </p>
+      <Teachers client={client} />
     </div>
   );
 }

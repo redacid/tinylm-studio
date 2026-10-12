@@ -227,10 +227,80 @@ write. Examples live in `knowledge.db` next to the collections.
 | PATCH | `/api/datasets/{name}` | `{"eval_percent": 20}` |
 | DELETE | `/api/datasets/{name}` | Deletes the dataset and its examples |
 | POST | `/api/datasets/{name}/import` | Multipart upload, field `files`: `added`, `duplicates`, `invalid` and the first `errors` (`line`, `error`) per file |
-| GET | `/api/datasets/{name}/examples` | `?query=&split=all\|train\|eval&offset=0&limit=20`: one page of examples and the matching `total` |
+| GET | `/api/datasets/{name}/examples` | `?query=&split=all\|train\|eval&origin=manual\|imported\|generated&offset=0&limit=20`: one page of examples (each with `split`, `origin` and, for generated ones, `source`) and the matching `total` |
 | POST | `/api/datasets/{name}/examples` | `{"messages": [...]}` |
 | PUT | `/api/datasets/{name}/examples/{id}` | `{"messages": [...]}` |
 | DELETE | `/api/datasets/{name}/examples/{id}` | Deletes one example |
+| POST | `/api/datasets/{name}/generate` | Starts generating examples, see below; 202 with the run, 404 for an unknown dataset, collection or teacher, 409 while another generation is running |
+| GET | `/api/datasets/{name}/generate?collection=games` | `unused_chunks`: chunks of the collection this dataset has not been generated from |
+
+### Generating examples
+
+A teacher model reads chunks of a collection and writes question and answer pairs from them. The
+pairs are checked (JSON shape, answer length, language, and optionally by the teacher against the
+text) and the good ones are added with `origin: "generated"` and the document's `source`. Each
+chunk is used once per dataset, so repeated runs continue with new text. Failed chunks stay
+unused. One run at a time, in a background thread.
+
+```json
+POST /api/datasets/game-hints/generate
+{
+  "collection": "games",
+  "teacher": "1",
+  "chunks": 20,
+  "per_chunk": 3,
+  "languages": ["uk", "en"],
+  "instructions": "A one-line tip, then numbered steps.",
+  "system_prompt": "You are a helpful game guide.",
+  "unanswerable": true,
+  "verify": true,
+  "min_answer_chars": 20,
+  "max_answer_chars": 2000
+}
+```
+
+`teacher` is a `ref` from `GET /api/teachers`. Only `collection` and `teacher` are required.
+`languages` empty means the language of each text; `unanswerable` adds a question the text does
+not answer with an honest answer; `verify` makes a second request per chunk to drop unsupported
+pairs. Up to three examples of the dataset that are not generated are shown to the teacher as
+style samples.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/api/generations` | Runs since the engine started |
+| GET | `/api/generations/{id}` | `state` (`running`, `done`, `cancelled`, `error`), `chunks_total`, `chunks_done`, `generated`, `added`, `duplicates`, `rejected` (reason → count), `failed_chunks`, `current` (document being read), `waiting` (seconds of a rate-limit pause), the last 50 `log` lines, `error`, `options` |
+| POST | `/api/generations/{id}/cancel` | Stops after the chunk in progress |
+
+### Teachers
+
+Saved API providers, plus installed models as local teachers. Keys are stored in `knowledge.db`
+and never returned: responses only have `has_key`.
+
+```json
+POST /api/teachers
+{
+  "name": "Llama 3.3 70B (free)",
+  "kind": "openai",
+  "base_url": "https://openrouter.ai/api/v1",
+  "model": "meta-llama/llama-3.3-70b-instruct:free",
+  "api_key": "sk-or-...",
+  "per_minute": 20
+}
+```
+
+`kind` is `openai` (any OpenAI-compatible `/chat/completions` API; the base URL defaults to
+OpenRouter) or `anthropic` (the Messages API; defaults to `https://api.anthropic.com`). `name`
+defaults to the model. `per_minute` spaces requests out; HTTP 429 answers are waited out
+(`Retry-After`) and retried up to five times.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/api/teachers` | Saved teachers (`id`, `ref`, `name`, `kind`, `base_url`, `model`, `has_key`, `per_minute`), then installed models with `kind: "local"` and `ref: "local:<model id>"` |
+| POST | `/api/teachers` | Saves a teacher; 201 |
+| PUT | `/api/teachers/{id}` | The same body; an empty `api_key` keeps the saved key |
+| DELETE | `/api/teachers/{id}` | 204 |
+| POST | `/api/teachers/models` | The same body (or with `id` to use a saved key): the provider's models as `id`, `name`, `free`, free ones first; 502 with the provider's error |
+| POST | `/api/teachers/test` | The same body: sends "Say OK." and returns `{"reply": "OK"}`; 502 with the reason (rejected key, not reachable, unknown model) |
 
 ## Fine-tuning
 

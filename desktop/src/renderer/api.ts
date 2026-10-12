@@ -98,10 +98,83 @@ export type Example = {
   id: number;
   messages: ChatMessage[];
   split: "train" | "eval";
+  origin: ExampleOrigin;
+  /** For generated examples: the document they were written from. */
+  source: string | null;
   created_at: string;
 };
 
-export type ExampleFilter = { query?: string; split?: "all" | "train" | "eval"; offset?: number; limit?: number };
+export type ExampleOrigin = "manual" | "imported" | "generated";
+
+export type ExampleFilter = {
+  query?: string;
+  split?: "all" | "train" | "eval";
+  origin?: ExampleOrigin;
+  offset?: number;
+  limit?: number;
+};
+
+export type TeacherKind = "local" | "openai" | "anthropic";
+
+/** A model that writes training examples: a saved API provider or an installed model. */
+export type Teacher = {
+  id: number | null;
+  /** What generation takes: a saved teacher's id or "local:<model id>". */
+  ref: string;
+  name: string;
+  kind: TeacherKind;
+  base_url: string;
+  model: string;
+  has_key: boolean;
+  per_minute: number | null;
+  created_at: string | null;
+};
+
+export type TeacherInput = {
+  /** A saved teacher's id: its key is used when api_key is left empty. */
+  id?: number | null;
+  name?: string;
+  kind: "openai" | "anthropic";
+  base_url?: string;
+  model: string;
+  api_key?: string | null;
+  per_minute?: number | null;
+};
+
+export type TeacherModel = { id: string; name: string; free: boolean };
+
+export type GenerationOptions = {
+  collection: string;
+  teacher: string;
+  chunks: number;
+  per_chunk: number;
+  languages: string[];
+  instructions: string;
+  system_prompt: string;
+  unanswerable: boolean;
+  verify: boolean;
+};
+
+export type GenerationJob = {
+  id: string;
+  dataset: string;
+  options: GenerationOptions;
+  state: "running" | "done" | "cancelled" | "error";
+  chunks_total: number;
+  chunks_done: number;
+  generated: number;
+  added: number;
+  duplicates: number;
+  /** Pairs dropped, by reason. */
+  rejected: Record<string, number>;
+  failed_chunks: number;
+  current: string | null;
+  /** Seconds of a rate-limit pause in progress. */
+  waiting: number | null;
+  log: string[];
+  error: string | null;
+  created_at: string;
+};
 
 export type ImportResult = {
   name: string;
@@ -286,6 +359,72 @@ export class EngineClient {
 
   async deleteExample(dataset: string, id: number): Promise<void> {
     await this.send(`/api/datasets/${encodeURIComponent(dataset)}/examples/${id}`, { method: "DELETE" });
+  }
+
+  /** Starts writing examples from a collection's documents with a teacher model. */
+  async generate(dataset: string, options: GenerationOptions): Promise<GenerationJob> {
+    return this.json<GenerationJob>(`/api/datasets/${encodeURIComponent(dataset)}/generate`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(options),
+    });
+  }
+
+  /** How many chunks of a collection the dataset has not been generated from yet. */
+  async unusedChunks(dataset: string, collection: string): Promise<number> {
+    const path = `/api/datasets/${encodeURIComponent(dataset)}/generate?collection=${encodeURIComponent(collection)}`;
+    return (await this.json<{ unused_chunks: number }>(path)).unused_chunks;
+  }
+
+  async generations(): Promise<GenerationJob[]> {
+    return (await this.json<{ data: GenerationJob[] }>("/api/generations")).data;
+  }
+
+  async generation(id: string): Promise<GenerationJob> {
+    return this.json<GenerationJob>(`/api/generations/${id}`);
+  }
+
+  async cancelGeneration(id: string): Promise<void> {
+    await this.send(`/api/generations/${id}/cancel`, { method: "POST" });
+  }
+
+  async teachers(): Promise<Teacher[]> {
+    return (await this.json<{ data: Teacher[] }>("/api/teachers")).data;
+  }
+
+  async saveTeacher(teacher: TeacherInput): Promise<Teacher> {
+    const id = teacher.id;
+    return this.json<Teacher>(id == null ? "/api/teachers" : `/api/teachers/${id}`, {
+      method: id == null ? "POST" : "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(teacher),
+    });
+  }
+
+  async deleteTeacher(id: number): Promise<void> {
+    await this.send(`/api/teachers/${id}`, { method: "DELETE" });
+  }
+
+  /** The provider's models, free ones first. */
+  async teacherModels(teacher: TeacherInput): Promise<TeacherModel[]> {
+    return (
+      await this.json<{ data: TeacherModel[] }>("/api/teachers/models", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(teacher),
+      })
+    ).data;
+  }
+
+  /** Sends a short request; returns the model's reply or throws the provider's error. */
+  async testTeacher(teacher: TeacherInput): Promise<string> {
+    return (
+      await this.json<{ reply: string }>("/api/teachers/test", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(teacher),
+      })
+    ).reply;
   }
 
   async trainingJobs(): Promise<TrainingJob[]> {

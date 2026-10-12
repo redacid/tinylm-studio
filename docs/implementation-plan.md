@@ -245,7 +245,7 @@ qwen3-0.6b on ~1,000 examples on the target machine, and a GPU run.
 - **Done when:** a LoRA fine-tune of a ≤0.6B model on ~1,000 examples completes on CPU and on GPU, and the tuned model is selectable in chat and via the API.
 
 ### Phase 4 – Dataset generation and evaluation
-- Generate Q&A / instruction pairs from uploaded sources with a teacher model (local larger model or an external provider, see open question 1).
+- **Done (2026-10-12):** generate Q&A pairs from a collection's chunks with a teacher model: a local installed model, any OpenAI-compatible API (OpenRouter with free models by default, OpenAI, Groq, Ollama, LM Studio) or Anthropic. Pairs are filtered by shape, length and language and checked against the text by the teacher; an unanswerable question per chunk teaches honest "no information" answers; the dataset's own examples steer the style. Each chunk is used once per dataset, so runs continue where the last one ended. Rate limits are paced (requests per minute) and waited out (429 + `Retry-After`). Examples carry their origin (manual, imported, generated) and source document.
 - Simple evaluation: held-out set, exact-match / LLM-judge score, before/after comparison.
 - **Done when:** a user can go from "folder of documents" to "fine-tuned model with a score report" without writing any data by hand.
 
@@ -269,7 +269,7 @@ qwen3-0.6b on ~1,000 examples on the target machine, and a GPU run.
 
 ## 7. Open questions
 
-1. ~~Meaning of "supports Anthropic and OpenAI APIs".~~ **Decided (2026-10-11):** the model service must expose both OpenAI-compatible and Anthropic-compatible APIs (section 3.3). Still open: whether to also offer Anthropic/OpenAI as opt-in "teacher" providers for dataset generation and evaluation in Phase 4 (recommended, opt-in only).
+1. ~~Meaning of "supports Anthropic and OpenAI APIs".~~ **Decided (2026-10-11):** the model service must expose both OpenAI-compatible and Anthropic-compatible APIs (section 3.3). **Decided (2026-10-12):** teachers for dataset generation can be local models, Anthropic, or any OpenAI-compatible provider (OpenRouter with its free models first); external providers are opt-in, configured by the user with their own key.
 2. ~~Is Rust a hard requirement?~~ **Decided:** Python, with an automatically managed, user-overridable virtual environment.
 3. ~~Languages~~ **Decided:** Ukrainian, Russian and English. Base and embedding models must be multilingual.
 4. ~~Platforms and hardware~~ **Decided:** Linux (Debian-based first, Alpine second), i7-class CPU with 32 GB RAM.

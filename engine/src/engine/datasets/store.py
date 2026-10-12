@@ -15,6 +15,7 @@ from engine.rag.store import KnowledgeStore, now
 
 DATASET_NAME = re.compile(r"^[\w-]{1,64}$")
 Split = Literal["all", "train", "eval"]
+Origin = Literal["manual", "imported", "generated"]
 # A well-mixed 0-99 bucket per example id (Knuth's multiplicative hash).
 BUCKET = "((e.id * 2654435761) % 4294967296 % 100)"
 # Errors reported per import; a broken file would otherwise send thousands of lines.
@@ -32,9 +33,16 @@ CREATE TABLE IF NOT EXISTS examples (
     messages TEXT NOT NULL,  -- JSON list of {role, content}
     sha256 TEXT NOT NULL,
     created_at TEXT NOT NULL,
+    origin TEXT NOT NULL DEFAULT 'manual',  -- manual, imported or generated
+    source TEXT,  -- for generated examples: the document they were written from
     UNIQUE (dataset, sha256)
 );
 """
+# Columns added after the first release, with their definitions.
+LATER_COLUMNS = {
+    "origin": "TEXT NOT NULL DEFAULT 'manual'",
+    "source": "TEXT",
+}
 
 
 class DatasetNotFound(Exception):
@@ -54,6 +62,11 @@ class DatasetStore:
         self.store = store
         self._lock = store._lock
         self.db.executescript(SCHEMA)
+        columns = {r["name"] for r in self.db.execute("PRAGMA table_info(examples)")}
+        for name, definition in LATER_COLUMNS.items():
+            if name not in columns:
+                self.db.execute(f"ALTER TABLE examples ADD COLUMN {name} {definition}")
+        self.db.commit()
 
     @property
     def db(self):
@@ -116,10 +129,12 @@ class DatasetStore:
         split: Split = "all",
         offset: int = 0,
         limit: int | None = None,
+        origin: Origin | None = None,
     ) -> list[dict]:
-        where, params = self._filter(dataset, query, split)
+        where, params = self._filter(dataset, query, split, origin)
         rows = self.db.execute(
-            f"SELECT e.id, e.messages, e.created_at, {BUCKET} < d.eval_percent AS held_out "
+            "SELECT e.id, e.messages, e.created_at, e.origin, e.source, "
+            f"{BUCKET} < d.eval_percent AS held_out "
             f"FROM examples e JOIN datasets d ON d.name = e.dataset WHERE {where} "
             "ORDER BY e.id LIMIT ? OFFSET ?",
             (*params, -1 if limit is None else limit, offset),
@@ -129,21 +144,30 @@ class DatasetStore:
                 "id": r["id"],
                 "messages": json.loads(r["messages"]),
                 "split": "eval" if r["held_out"] else "train",
+                "origin": r["origin"],
+                "source": r["source"],
                 "created_at": r["created_at"],
             }
             for r in rows
         ]
 
-    def count(self, dataset: str, query: str = "", split: Split = "all") -> int:
-        where, params = self._filter(dataset, query, split)
+    def count(
+        self, dataset: str, query: str = "", split: Split = "all", origin: Origin | None = None
+    ) -> int:
+        where, params = self._filter(dataset, query, split, origin)
         return self.db.execute(
             f"SELECT COUNT(*) FROM examples e JOIN datasets d ON d.name = e.dataset WHERE {where}",
             params,
         ).fetchone()[0]
 
-    def _filter(self, dataset: str, query: str, split: Split) -> tuple[str, list]:
+    def _filter(
+        self, dataset: str, query: str, split: Split, origin: Origin | None = None
+    ) -> tuple[str, list]:
         self._require(dataset)
         where, params = ["e.dataset = ?"], [dataset]
+        if origin:
+            where.append("e.origin = ?")
+            params.append(origin)
         if query.strip():
             # Searches the JSON text; casefold also handles Cyrillic, unlike SQLite's lower().
             where.append("instr(casefold(e.messages), ?)")
@@ -154,20 +178,35 @@ class DatasetStore:
             where.append(f"{BUCKET} < d.eval_percent")
         return " AND ".join(where), params
 
-    def add(self, dataset: str, messages: Messages) -> dict:
+    def add(
+        self,
+        dataset: str,
+        messages: Messages,
+        origin: Origin = "manual",
+        source: str | None = None,
+    ) -> dict:
         """Adds one example; the same example twice is stored once (duplicate=True)."""
         messages = validate(messages)
         with self._lock:
             self._require(dataset)
-            added = self._insert(dataset, messages)
+            added = self._insert(dataset, messages, origin, source)
             self.db.commit()
         return {"id": added, "duplicate": added is None}
 
-    def _insert(self, dataset: str, messages: Messages) -> int | None:
+    def _insert(
+        self, dataset: str, messages: Messages, origin: Origin = "manual", source: str | None = None
+    ) -> int | None:
         cursor = self.db.execute(
-            "INSERT OR IGNORE INTO examples (dataset, messages, sha256, created_at) "
-            "VALUES (?, ?, ?, ?)",
-            (dataset, json.dumps(messages, ensure_ascii=False), digest(messages), now()),
+            "INSERT OR IGNORE INTO examples "
+            "(dataset, messages, sha256, created_at, origin, source) VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                dataset,
+                json.dumps(messages, ensure_ascii=False),
+                digest(messages),
+                now(),
+                origin,
+                source,
+            ),
         )
         return cursor.lastrowid if cursor.rowcount else None
 
@@ -210,7 +249,7 @@ class DatasetStore:
                     invalid += 1
                     if len(errors) < MAX_REPORTED_ERRORS:
                         errors.append({"line": record.line, "error": record.error})
-                elif self._insert(dataset, record.messages) is None:
+                elif self._insert(dataset, record.messages, "imported") is None:
                     duplicates += 1
                 else:
                     added += 1
