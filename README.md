@@ -2,9 +2,16 @@
 
 A desktop studio for building small, narrowly specialized language models that run without a powerful GPU.
 
+![Fine-tuning a model on the Training screen](docs/images/training.png)
+
+Chat with local models, let them answer from your files and websites (with sources), collect
+pages and trailers from the web, and fine-tune a small model on your own examples. The
+**[user guide](docs/user-guide.md)** walks through every screen and setting.
+
 - **engine/** – Python service: data ingestion, retrieval, training and inference, exposed through OpenAI- and Anthropic-compatible APIs.
 - **desktop/** – Electron app that starts the engine and drives it over HTTP.
-- **docs/** – architecture and the [implementation plan](docs/implementation-plan.md).
+- **docs/** – the [user guide](docs/user-guide.md), the [API reference](docs/api.md) and the
+  [implementation plan](docs/implementation-plan.md).
 
 ## Requirements
 
@@ -35,6 +42,10 @@ collection in the chat to get answers that cite it:
 make ingest COLLECTION=games FILES=~/Documents/games
 make crawl COLLECTION=games URLS="https://example.com/reviews/"  # run again for the next new pages
 ```
+
+Crawling can go through a proxy (`TINYLM_PROXY=socks5://127.0.0.1:1080` in `.env`) and, for
+sites that need JavaScript, through a real Chrome/Chromium controlled over CDP; see
+[Proxy](docs/user-guide.md#proxy) and [Browser (CDP)](docs/user-guide.md#browser-cdp).
 
 To find sites and trailers instead of typing addresses, start a local SearXNG once (Docker or
 Podman) and search from the Data tab or the command line:
@@ -83,9 +94,23 @@ scripts/setup-engine.sh   # installs the engine into that environment
 `TINYLM_TORCH` picks the PyTorch build: `cpu` (default, small), `auto` (detect GPU),
 a CUDA version such as `cu128`, or `pypi`.
 
-## Tests
+More commands (`make models`, `make bench`, `make searxng-stop`, `make info`, ...) are listed in
+the [user guide](docs/user-guide.md#command-line) and by `make help`.
+
+## Development
 
 ```bash
 make setup-dev   # once: install pytest and ruff into the engine environment
-make check       # lint + tests
+make check       # lint + type check + tests; run before committing
+make test        # engine tests only
+make lint        # ruff for the engine, TypeScript type check for the desktop app
+make format      # auto-format and fix engine code
+make build       # compile the desktop app into desktop/dist
+make clean       # remove build outputs and caches
+make distclean   # also remove node_modules and the managed engine environment
 ```
+
+Training tests build a tiny random model on the spot, so they need no download.
+
+Documentation screenshots in `docs/images/` are taken from the running app with the test model
+and sample data; retake them when a screen changes.

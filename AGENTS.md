@@ -20,5 +20,23 @@ Write the following **in English only**:
 
 Do not mix languages inside code or project documentation. If the user dictates text in Ukrainian or Russian that must end up in the project, translate it into English before committing it.
 
+## Documentation
+
+Documentation is part of every change, not a follow-up:
+
+- A new or changed feature, screen, setting (`TINYLM_*` variable), `make` target, CLI command or
+  API endpoint is documented **in the same commit**:
+  - [README.md](./README.md): what the project does and the quick start;
+  - [docs/user-guide.md](./docs/user-guide.md): how to use each screen and setting, including
+    setup of external pieces such as a proxy, a CDP browser or SearXNG;
+  - [docs/api.md](./docs/api.md): endpoints, request fields and the settings table;
+  - [.env.example](./.env.example): every setting a user is likely to change;
+  - [docs/implementation-plan.md](./docs/implementation-plan.md) and [TODO.md](./TODO.md): what is
+    done and what is left.
+- When a screen is added or changes visibly, add or retake its screenshot in `docs/images/` and
+  show it in the user guide.
+- Before finishing a task, check that nothing the user can now do or configure is missing from
+  the docs.
+
 ## Scope
 These rules apply to every agent, thread and session in the project, and to any sub-agents or workers they start. Pass them on when briefing another agent.

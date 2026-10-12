@@ -1,7 +1,8 @@
 # Engine API
 
 The engine listens on `127.0.0.1:8765` by default (`make run-engine`). The desktop app starts
-its own engine on a free port, shown in the window header.
+its own engine on a free port, shown in the window header. For using the app itself see the
+[user guide](user-guide.md).
 
 ## Authentication
 
