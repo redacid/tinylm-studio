@@ -20,6 +20,8 @@ For the HTTP API see [api.md](api.md); for the design and roadmap see the
   - [Hardware: threads and GPU](#hardware)
 - [Where data is stored](#where-data-is-stored)
 - [Command line](#command-line)
+- [Troubleshooting](#troubleshooting)
+  - [A gated model does not download (401 / 403)](#a-gated-model-does-not-download)
 
 ## Start
 
@@ -62,11 +64,8 @@ can use them (see [api.md](api.md)).
   `.env` as `HF_TOKEN=...`. A token also makes downloads faster. `.env` is read by `make`, so
   start the app with `make run` (or export `HF_TOKEN` yourself). If the token is missing,
   the gated models are marked in red.
-- "Hugging Face refused access ... the token was sent" means the token reached Hugging Face but
-  its account may not download the model yet: open the model page (the **Model page** link),
-  sign in with the same account and accept the license. A *fine-grained* token also needs the
-  permission "Read access to contents of all public gated repos you can access"; a classic
-  *Read* token works as is.
+- If a gated model does not download, see
+  [Troubleshooting](#a-gated-model-does-not-download).
 - **Fine-tuned models** show the base model, the dataset and the final loss. Deleting one
   removes its folder; the base model stays.
 - Any GGUF file or Hugging Face model folder copied into `<data dir>/models/<name>/` appears too.
@@ -362,3 +361,52 @@ targets):
 More options are available directly, e.g. `python -m engine crawl --help`
 (`--max-depth`, `--per-minute`, `--browser`, `--ignore-robots`) and `python -m engine search --help`
 (`--limit`, `--language`).
+
+## Troubleshooting
+
+### A gated model does not download
+
+Gemma and Llama models are *gated*: Hugging Face serves them only to an account that has
+accepted the model's license, and only when the download sends that account's token. The
+Models screen shows the reason under the model. Older versions showed Hugging Face's raw error,
+for example:
+
+```text
+403 Client Error. Cannot access gated repo for url
+https://huggingface.co/google/gemma-3-1b-it/resolve/.../tokenizer.json.
+Access to model google/gemma-3-1b-it is restricted and you are not in the authorized list.
+Visit https://huggingface.co/google/gemma-3-1b-it to ask for access.
+```
+
+The HTTP status tells the two cases apart:
+
+| Status | Shown as | Meaning |
+|---|---|---|
+| 401 | "... is gated and the engine has no Hugging Face token" | The download sent no token. |
+| 403 | "Hugging Face refused access ... the token was sent" ("you are not in the authorized list") | The token arrived, but its account may not download this model yet. |
+
+**401, no token:**
+
+1. Create a token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
+   (type *Read*) and put it into `.env` in the repository: `HF_TOKEN=hf_...`.
+   `TINYLM_HF_TOKEN` works too; a token saved by `hf auth login` is also picked up.
+2. Start the app with `make run` (or the engine with `make run-engine`). Only `make` reads
+   `.env`; when the app is started another way, export `HF_TOKEN` in that shell first.
+3. The Models screen marks gated models in red while the engine finds no token, so you can
+   check without downloading.
+
+**403, the token was sent but access is refused:**
+
+1. Open the model's page (the **Model page** link under the model on the Models screen),
+   signed in with **the same account the token belongs to**, and accept the license
+   ("Acknowledge license" / "Agree and access repository"). For Gemma access is granted at
+   once; for some Llama models the request waits for approval, shown on the same page.
+2. If the token is *fine-grained*, edit it at
+   [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) and enable
+   "Read access to contents of all public gated repos you can access". Without it the token is
+   refused even after the license is accepted. A classic *Read* token needs nothing more.
+3. Press **Download** again; there is no need to restart the app.
+
+Each gated model has its own license: accepting Gemma 3 4B does not give access to Gemma 3 1B
+or to Llama.
+
