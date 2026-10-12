@@ -135,3 +135,17 @@ th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border);
 .teacher-form label { display: flex; gap: 8px; align-items: center; }
 .teacher-form label > span:first-child { flex: 0 0 140px; }
 .teacher-form label input:not([type="checkbox"]), .teacher-form label select { flex: 1; min-width: 0; }
+.badge.cancelled, .badge.interrupted { border-color: var(--muted); }
+.evaluation { display: flex; flex-direction: column; gap: 10px; }
+.evaluation .summary td.best { font-weight: 600; color: var(--ok); }
+.meter { display: inline-block; width: 80px; height: 6px; border-radius: 3px; background: var(--assistant); vertical-align: middle; margin-left: 6px; overflow: hidden; }
+.meter span { display: block; height: 100%; background: var(--accent); }
+.evaluation .turn.answer .role { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.evaluation .turn.answer { border-top: 1px dashed var(--border); padding-top: 4px; margin-top: 2px; }
+.score { font-weight: 600; }
+.score.s1, .score.s2 { color: var(--bad); }
+.score.s3 { color: var(--accent); }
+.score.s4, .score.s5 { color: var(--ok); }
+.model-choices { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 4px; }
+.training-form .crawl-options input[type="number"] { width: 80px; margin-left: 4px; }
+.evaluation .turn .role { flex-basis: 128px; }

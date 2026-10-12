@@ -185,6 +185,55 @@ export type ImportResult = {
   error?: string;
 };
 
+export type EvaluationOptions = {
+  dataset: string;
+  models: string[];
+  /** A teacher's ref; null scores by similarity only. */
+  judge: string | null;
+  limit: number;
+  max_tokens: number;
+};
+
+export type EvaluationAnswer = {
+  text: string;
+  seconds: number;
+  /** chrF against the reference, 0-100. */
+  similarity: number;
+  /** The judge's score, 1-5. */
+  score: number | null;
+  reason: string | null;
+};
+
+export type EvaluationSummary = {
+  answers: number;
+  similarity: number | null;
+  judged: number;
+  score: number | null;
+  seconds: number | null;
+  chars: number | null;
+};
+
+export type Evaluation = {
+  id: string;
+  options: EvaluationOptions;
+  state: "running" | "done" | "cancelled" | "error" | "interrupted";
+  created_at: string;
+  finished_at: string | null;
+  error: string | null;
+  phase: "answering" | "judging" | "";
+  current: string | null;
+  done: number;
+  total: number;
+  summary: Record<string, EvaluationSummary>;
+  /** Only in a single report. */
+  examples?: {
+    messages: ChatMessage[];
+    reference: string;
+    answers: Record<string, EvaluationAnswer>;
+    judge_error?: string;
+  }[];
+};
+
 export type TrainingSettings = {
   /** The new model's name. */
   name: string;
@@ -425,6 +474,30 @@ export class EngineClient {
         body: JSON.stringify(teacher),
       })
     ).reply;
+  }
+
+  async evaluations(): Promise<Evaluation[]> {
+    return (await this.json<{ data: Evaluation[] }>("/api/evaluations")).data;
+  }
+
+  async evaluation(id: string): Promise<Evaluation> {
+    return this.json<Evaluation>(`/api/evaluations/${id}`);
+  }
+
+  async startEvaluation(options: EvaluationOptions): Promise<Evaluation> {
+    return this.json<Evaluation>("/api/evaluations", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(options),
+    });
+  }
+
+  async stopEvaluation(id: string): Promise<void> {
+    await this.send(`/api/evaluations/${id}/stop`, { method: "POST" });
+  }
+
+  async deleteEvaluation(id: string): Promise<void> {
+    await this.send(`/api/evaluations/${id}`, { method: "DELETE" });
   }
 
   async trainingJobs(): Promise<TrainingJob[]> {

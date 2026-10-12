@@ -8,6 +8,7 @@ from engine.api import (
     admin,
     anthropic,
     datasets,
+    evaluations,
     generations,
     knowledge,
     openai,
@@ -21,6 +22,7 @@ from engine.api.deps import AuthError, is_anthropic
 from engine.config import Settings
 from engine.datasets.generate import GenerationManager, Generator
 from engine.datasets.store import DatasetStore
+from engine.evaluation.evaluate import EvaluationManager
 from engine.models.manager import ModelManager
 from engine.rag.embeddings import HashEmbedder, SentenceTransformerEmbedder
 from engine.rag.store import KnowledgeStore
@@ -79,6 +81,12 @@ def create_app(
     app.state.generations = GenerationManager(
         Generator(app.state.knowledge, app.state.datasets, app.state.teachers)
     )
+    app.state.evaluations = EvaluationManager(
+        settings.workspace_dir / "evaluations",
+        app.state.datasets,
+        app.state.models,
+        app.state.teachers,
+    )
     app.state.training = TrainingManager(
         settings.workspace_dir / "training", settings.models_dir, app.state.datasets
     )
@@ -110,4 +118,5 @@ def create_app(
     app.include_router(training.router)
     app.include_router(teachers.router)
     app.include_router(generations.router)
+    app.include_router(evaluations.router)
     return app

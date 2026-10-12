@@ -3,6 +3,7 @@ import { EngineClient } from "./api";
 import { Chat } from "./Chat";
 import { Data } from "./Data";
 import { Datasets } from "./Datasets";
+import { EvaluationScreen } from "./Evaluation";
 import { Models } from "./Models";
 import { Training } from "./Training";
 import type { EngineState } from "./types";
@@ -15,13 +16,14 @@ const PHASE_LABELS: Record<EngineState["phase"], string> = {
   stopped: "Engine stopped",
 };
 
-type Tab = "chat" | "data" | "datasets" | "training" | "models";
+type Tab = "chat" | "data" | "datasets" | "training" | "evaluation" | "models";
 
 const TAB_LABELS: Record<Tab, string> = {
   chat: "Chat",
   data: "Data",
   datasets: "Datasets",
   training: "Training",
+  evaluation: "Evaluation",
   models: "Models",
 };
 
@@ -67,6 +69,8 @@ export function App() {
           <Datasets client={client} />
         ) : tab === "training" ? (
           <Training client={client} onNeedModel={() => setTab("models")} />
+        ) : tab === "evaluation" ? (
+          <EvaluationScreen client={client} />
         ) : (
           <Models client={client} />
         )}

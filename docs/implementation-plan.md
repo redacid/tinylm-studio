@@ -246,7 +246,7 @@ qwen3-0.6b on ~1,000 examples on the target machine, and a GPU run.
 
 ### Phase 4 – Dataset generation and evaluation
 - **Done (2026-10-12):** generate Q&A pairs from a collection's chunks with a teacher model: a local installed model, any OpenAI-compatible API (OpenRouter with free models by default, OpenAI, Groq, Ollama, LM Studio) or Anthropic. Pairs are filtered by shape, length and language and checked against the text by the teacher; an unanswerable question per chunk teaches honest "no information" answers; the dataset's own examples steer the style. Each chunk is used once per dataset, so runs continue where the last one ended. Rate limits are paced (requests per minute) and waited out (429 + `Retry-After`). Examples carry their origin (manual, imported, generated) and source document.
-- Simple evaluation: held-out set, exact-match / LLM-judge score, before/after comparison.
+- **Done (2026-10-12):** evaluation. Up to four models answer a dataset's held-out examples; answers are scored by chrF similarity and, optionally, by a teacher acting as judge (1–5 with a reason, all answers to a question judged together under shuffled labels). Reports are kept per run and shown side by side on the Evaluation screen.
 - **Done when:** a user can go from "folder of documents" to "fine-tuned model with a score report" without writing any data by hand.
 
 ### Phase 5 – Performance and distribution

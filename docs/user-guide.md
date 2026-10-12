@@ -12,6 +12,7 @@ For the HTTP API see [api.md](api.md); for the design and roadmap see the
   - [Generating examples from your documents](#generating-examples)
 - [Teachers: OpenRouter, Anthropic and local models](#teachers)
 - [Training](#training)
+- [Evaluation](#evaluation)
 - [Settings](#settings)
   - [Proxy for crawling and search](#proxy)
   - [Crawling through a real browser (CDP)](#browser-cdp)
@@ -228,6 +229,39 @@ Training runs in its own process, one run at a time. **Stop** saves a checkpoint
 LoRA on a 0.6B model takes on the order of 15 seconds per step on 4 cores (less on more
 cores), so 1,000 examples × 3 epochs take hours, not days.
 
+## Evaluation
+
+![Comparing the base model with the fine-tuned one](images/evaluation.png)
+
+Evaluation shows whether fine-tuning helped: every chosen model answers the held-out questions
+of a dataset (the examples kept out of training by **Evaluation %**), and the answers are
+compared with the dataset's own answers.
+
+![Starting an evaluation](images/evaluation-form.png)
+
+1. Open **Evaluation** → **New evaluation** and pick a dataset. The fine-tuned models of that
+   dataset and their base models are selected already; add others to compare (up to four).
+2. Optionally pick a **judge**: a teacher from the Models screen ([Teachers](#teachers)). Without
+   one, answers are scored by similarity only.
+3. **Examples** limits how many held-out questions are used; **Max answer tokens** caps each
+   answer. Press **Start evaluation**.
+
+The report has one row per model:
+
+- **Judge score**, 1 to 5: the judge reads the question, the expected answer and every model's
+  answer and scores each one (5 is as good as the expected answer, 1 is wrong or invented). The
+  answers are shown to it under shuffled letters, so it does not know which model wrote what.
+- **Similarity**, 0 to 100 (chrF): how much of the expected answer's text the answer repeats,
+  by character sequences, so Ukrainian and Russian word forms still count. It needs no judge
+  but rewards wording, not correctness: an answer in the right format with a wrong number still
+  scores high. Use it to see that a model picked up the style; trust the judge for content.
+- **Seconds per answer** and **answer length**.
+
+Below, every question shows the expected answer and each model's answer with its scores and the
+judge's reason, so you can see *what* changed. Models answer one after another on this
+computer, the judge after all answers are written. **Stop** keeps the report of what was done;
+reports are kept until you delete them.
+
 ## Settings
 
 Put these into `.env` (see [.env.example](../.env.example)); the full list is in
@@ -292,6 +326,7 @@ Everything lives in `~/.local/share/tinylm-studio` (`TINYLM_DATA_DIR` to change)
 | `models/` | Downloaded and fine-tuned models, one folder each |
 | `workspace/knowledge.db` | Collections, documents, saved websites, datasets and teachers with their API keys (SQLite) |
 | `workspace/training/` | Training runs: settings, progress, logs and checkpoints |
+| `workspace/evaluations/` | Evaluation reports, one JSON file each |
 | `workspace/benchmarks/` | Reports of `make bench` |
 | `embeddings/` | The embedding model used to search collections |
 | `searxng/` | Settings of the local SearXNG |

@@ -29,8 +29,11 @@ Model changes:
       (Llama 3.3 70B, Qwen3, Gemma 3 27B, DeepSeek V3) on quality of uk/ru pairs and on how often
       the check drops pairs; pick a recommended default.
 - [ ] Local teacher on the target machine: minutes per chunk with gemma-3-4b-gguf.
-- [ ] Evaluation: score the base model against the fine-tuned one on the held-out examples,
-      judged by a teacher, with a report per run (the rest of Phase 4).
+- [ ] Evaluation on the target machine: qwen3-0.6b against its fine-tune on a generated
+      dataset, judged by an OpenRouter free model; check that judge scores agree with a manual
+      read of 20 answers.
+- [ ] Evaluate a fine-tuned model right from the Training screen when a run finishes.
+- [ ] Optional: a second judge, or the same judge twice, to measure how stable the scores are.
 - [ ] Optional: multi-turn examples (follow-up questions) and paraphrased questions.
 
 ## Fine-tuning (Phase 3)
