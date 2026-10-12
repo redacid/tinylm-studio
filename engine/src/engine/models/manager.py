@@ -70,6 +70,13 @@ class ModelManager:
             p for p in self.models_dir.iterdir() if p.is_dir() and not p.name.startswith(".")
         )
 
+    def has_token(self) -> bool:
+        """Whether downloads send a Hugging Face token: from the settings, HF_TOKEN or a saved
+        `hf auth login`."""
+        from huggingface_hub import get_token
+
+        return bool(self.hf_token or get_token())
+
     def catalog(self) -> list[dict]:
         installed = set(self.installed())
         return [
@@ -112,7 +119,7 @@ class ModelManager:
             job.state = "done"
         except Exception as error:  # surfaced to the UI as text
             log.exception("Download of %s failed", spec.id)
-            job.state, job.error = "error", str(error)
+            job.state, job.error = "error", download_error(spec.repo, error)
 
     def runtime(self, model_id: str) -> Runtime:
         """Return a runtime for the model, unloading any other model first."""
@@ -168,6 +175,29 @@ class ModelManager:
             if self._loaded and self._loaded[0] == model_id:
                 self._loaded = None
             shutil.rmtree(path)
+
+
+def download_error(repo: str, error: Exception) -> str:
+    """Explains the usual reasons for a refused download of a gated model."""
+    from huggingface_hub.errors import GatedRepoError
+
+    if not isinstance(error, GatedRepoError):
+        return str(error)
+    page = f"https://huggingface.co/{repo}"
+    response = getattr(error, "response", None)
+    if response is not None and response.status_code == 401:
+        return (
+            f"{repo} is gated and the engine has no Hugging Face token. Put HF_TOKEN=... into "
+            f".env and start the app with make, or set TINYLM_HF_TOKEN; then accept the "
+            f"license at {page}."
+        )
+    return (
+        f"Hugging Face refused access to {repo}: the token was sent, but its account has no "
+        f"access yet. Open {page} while signed in and accept the license (access is granted "
+        "at once for Gemma; a request may wait for approval for other models). A fine-grained "
+        'token also needs the permission "Read access to contents of all public gated repos '
+        'you can access".'
+    )
 
 
 def adapter_base(path: Path) -> str:

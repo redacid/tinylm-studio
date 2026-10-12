@@ -1,5 +1,5 @@
 // Electron main process: owns the window and the engine lifecycle.
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, shell } from "electron";
 import { join } from "node:path";
 import { Engine } from "./engine";
 
@@ -14,6 +14,11 @@ function createWindow() {
     height: 750,
     title: "tinylm-studio",
     webPreferences: { preload: join(__dirname, "..", "preload", "preload.js") },
+  });
+  // Links such as a model's Hugging Face page open in the system browser.
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith("https://")) shell.openExternal(url);
+    return { action: "deny" };
   });
   window.loadFile(join(__dirname, "..", "renderer", "index.html"));
 }

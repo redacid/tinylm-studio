@@ -16,6 +16,7 @@ def model_catalog(models: ModelManager = Depends(manager)) -> dict:
         "trainable": models.trainable(),
         "catalog": models.catalog(),
         "default": DEFAULT_MODEL,
+        "hf_token": models.has_token(),
     }
 
 

@@ -88,3 +88,27 @@ def test_transformers_runtime_serves_both_apis(tiny_model):
     assert anthropic_reply["stop_reason"] in {"end_turn", "max_tokens"}
     # Same greedy decoding through both protocols gives the same answer.
     assert anthropic_reply["content"][0]["text"] == openai_reply["choices"][0]["message"]["content"]
+
+
+def test_hugging_face_token_and_gated_errors(monkeypatch, tmp_path):
+    import httpx
+    from huggingface_hub.errors import GatedRepoError
+
+    from engine.config import Settings
+    from engine.models.manager import download_error
+
+    monkeypatch.setenv("HF_TOKEN", "hf_from_env")
+    assert Settings(data_dir=tmp_path).hf_token == "hf_from_env"
+    monkeypatch.setenv("TINYLM_HF_TOKEN", "hf_tinylm")
+    assert Settings(data_dir=tmp_path).hf_token == "hf_tinylm"
+
+    def gated(status: int) -> GatedRepoError:
+        request = httpx.Request("GET", "https://huggingface.co/google/gemma-3-1b-it")
+        return GatedRepoError("gated", response=httpx.Response(status, request=request))
+
+    assert "no Hugging Face token" in download_error("google/gemma-3-1b-it", gated(401))
+    refused = download_error("google/gemma-3-1b-it", gated(403))
+    assert (
+        "accept the license" in refused and "https://huggingface.co/google/gemma-3-1b-it" in refused
+    )
+    assert download_error("x/y", RuntimeError("disk full")) == "disk full"

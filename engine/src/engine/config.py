@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from typing import Literal
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from engine.rag.embeddings import DEFAULT_EMBEDDING_MODEL
@@ -16,7 +17,7 @@ def default_data_dir() -> Path:
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="TINYLM_")
+    model_config = SettingsConfigDict(env_prefix="TINYLM_", populate_by_name=True)
 
     host: str = "127.0.0.1"
     port: int = 8765
@@ -27,7 +28,8 @@ class Settings(BaseSettings):
     enable_echo: bool = False
     # Browser origins allowed to call the API; the desktop app sets this for its renderer.
     cors_origins: list[str] = []
-    hf_token: str | None = None
+    # Hugging Face token; the standard HF_TOKEN works too.
+    hf_token: str | None = Field(None, validation_alias=AliasChoices("TINYLM_HF_TOKEN", "HF_TOKEN"))
     # CPU threads for inference; default is physical cores, at most 8.
     threads: int | None = None
     # Penalizes repeated tokens; small models loop without it.

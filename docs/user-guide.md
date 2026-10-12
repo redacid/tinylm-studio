@@ -59,7 +59,14 @@ can use them (see [api.md](api.md)).
   PyTorch weights (e.g. `qwen3-0.6b`) are slower to chat with but are the ones that can be
   fine-tuned.
 - Gemma and Llama models are gated: accept their license on Hugging Face and put your token into
-  `.env` as `HF_TOKEN=...`. A token also makes downloads faster.
+  `.env` as `HF_TOKEN=...`. A token also makes downloads faster. `.env` is read by `make`, so
+  start the app with `make run` (or export `HF_TOKEN` yourself). If the token is missing,
+  the gated models are marked in red.
+- "Hugging Face refused access ... the token was sent" means the token reached Hugging Face but
+  its account may not download the model yet: open the model page (the **Model page** link),
+  sign in with the same account and accept the license. A *fine-grained* token also needs the
+  permission "Read access to contents of all public gated repos you can access"; a classic
+  *Read* token works as is.
 - **Fine-tuned models** show the base model, the dataset and the final loss. Deleting one
   removes its folder; the base model stays.
 - Any GGUF file or Hugging Face model folder copied into `<data dir>/models/<name>/` appears too.

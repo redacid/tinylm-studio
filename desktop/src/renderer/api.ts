@@ -330,7 +330,12 @@ export class EngineClient {
   }
 
   async catalog(): Promise<CatalogEntry[]> {
-    return (await this.json<{ catalog: CatalogEntry[] }>("/api/models")).catalog;
+    return (await this.catalogInfo()).catalog;
+  }
+
+  /** The catalog and whether downloads send a Hugging Face token. */
+  async catalogInfo(): Promise<{ catalog: CatalogEntry[]; hf_token: boolean }> {
+    return this.json("/api/models");
   }
 
   async download(modelId: string): Promise<void> {

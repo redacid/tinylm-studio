@@ -112,7 +112,7 @@ Interactive docs: `http://127.0.0.1:8765/docs`.
   - **GGUF** (`*.gguf`, quantized) runs with llama.cpp: the fast option on CPU and the default.
   - **Hugging Face** (`config.json` + safetensors) runs with PyTorch; used as a base for fine-tuning.
 - Any such model folder copied into `<data dir>/models/` is served under the folder name.
-- Gated models (Gemma, Llama) need `TINYLM_HF_TOKEN` and an accepted license on Hugging Face.
+- Gated models (Gemma, Llama) need a token (`TINYLM_HF_TOKEN` or `HF_TOKEN`) and an accepted license on Hugging Face. `GET /api/models` reports `hf_token`: whether downloads send a token (from the settings, `HF_TOKEN` or a saved `hf auth login`). A refused download explains the cause: no token (HTTP 401) or a token whose account has no access to the model yet (HTTP 403).
 - `TINYLM_ENABLE_ECHO=true` (or `make run-engine ECHO=1`) adds an `echo` model that needs no
   weights, for testing clients and the UI.
 
@@ -366,7 +366,7 @@ POST /api/evaluations
 | `TINYLM_DATA_DIR` | `~/.local/share/tinylm-studio` | Models and workspace |
 | `TINYLM_HOST` / `TINYLM_PORT` | `127.0.0.1` / `8765` | Listen address |
 | `TINYLM_API_KEY` | none | Require an API key |
-| `TINYLM_HF_TOKEN` | none | Hugging Face token: needed for gated models, gives faster downloads (the standard `HF_TOKEN` also works) |
+| `TINYLM_HF_TOKEN` | none | Hugging Face token: needed for gated models, gives faster downloads (`HF_TOKEN` works too) |
 | `TINYLM_ENABLE_ECHO` | `false` | Offer the `echo` test model |
 | `TINYLM_CORS_ORIGINS` | `[]` | Allowed browser origins (JSON list) |
 | `TINYLM_THREADS` | physical cores, at most 8 | CPU threads for inference |

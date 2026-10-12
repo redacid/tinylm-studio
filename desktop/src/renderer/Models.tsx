@@ -5,13 +5,15 @@ import { Teachers } from "./Teachers";
 export function Models({ client }: { client: EngineClient }) {
   const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
   const [trained, setTrained] = useState<TrainedModel[]>([]);
+  const [hfToken, setHfToken] = useState(true);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(
     () =>
-      Promise.all([client.catalog(), client.trainedModels()]).then(([c, t]) => {
-        setCatalog(c);
+      Promise.all([client.catalogInfo(), client.trainedModels()]).then(([c, t]) => {
+        setCatalog(c.catalog);
+        setHfToken(c.hf_token);
         setTrained(t);
       }, (e) => setError(String(e))),
     [client],
@@ -96,7 +98,16 @@ export function Models({ client }: { client: EngineClient }) {
               <td>{m.params}</td>
               <td>
                 {m.description}
-                {m.gated && <div className="muted">Requires a Hugging Face token (TINYLM_HF_TOKEN).</div>}
+                {m.gated && !m.installed && (
+                  <div className={hfToken ? "muted" : "error"}>
+                    {hfToken
+                      ? "Gated: accept the license on Hugging Face first."
+                      : "Gated: needs a Hugging Face token (HF_TOKEN in .env) and an accepted license."}{" "}
+                    <a href={`https://huggingface.co/${m.repo}`} target="_blank" rel="noreferrer">
+                      Model page
+                    </a>
+                  </div>
+                )}
                 {m.download?.state === "error" && <div className="error">{m.download.error}</div>}
               </td>
               <td>
