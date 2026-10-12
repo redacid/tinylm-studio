@@ -269,6 +269,8 @@ in free memory and disk while it runs.
   should score the same; Q4_K_M a little lower.
 - If the base model's tokenizer is unknown to llama.cpp, the export still finishes and says so;
   the catalog's base models are all known.
+- "Export failed: ModuleNotFoundError ..." means the engine's environment is older than the
+  code; see [An export fails with ModuleNotFoundError](#an-export-fails-with-modulenotfounderror).
 
 ## Evaluation
 
@@ -446,4 +448,24 @@ The HTTP status tells the two cases apart:
 
 Each gated model has its own license: accepting Gemma 3 4B does not give access to Gemma 3 1B
 or to Llama.
+
+### An export fails with ModuleNotFoundError
+
+For example, under the model on the Models screen:
+
+```text
+Export failed: ModuleNotFoundError: No module named 'sentencepiece'
+```
+
+The engine's Python environment lacks a package the code needs: the app installs the engine
+only on its first start, so packages added later (here `sentencepiece`, added with GGUF export)
+are not there until the environment is updated.
+
+1. Stop the app and run `make setup-engine` in the repository. It installs what
+   `engine/pyproject.toml` lists into the app's environment and keeps what is already there.
+2. Start the app with `make run` and press **Export to GGUF** again.
+
+Qwen models (all the catalog's Qwen 3 models) no longer need `sentencepiece` to export: their
+tokenizer is `tokenizer.json`, and the export uses it directly. Models with a SentencePiece
+tokenizer (`tokenizer.model`, e.g. Gemma) still need the package.
 

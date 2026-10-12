@@ -189,3 +189,20 @@ def test_export_and_chat(fine_tuned, settings, quantization):
     assert name in [m["id"] for m in client.get("/v1/models").json()["data"]]
     again = client.post("/api/models/tiny-hints/export", json={})
     assert again.status_code == 422 and "base model tiny is not installed" in again.json()["detail"]
+
+
+@pytest.mark.skipif(not LLAMA_CPP_DIR, reason="set TINYLM_TEST_LLAMA_CPP_DIR to llama.cpp")
+def test_convert_without_sentencepiece(tiny_model, tmp_path, monkeypatch):
+    """Qwen models have no tokenizer.model, so they convert without the sentencepiece package."""
+    import sys
+
+    from engine.export.worker import convert, error_message
+
+    monkeypatch.setitem(sys.modules, "sentencepiece", None)  # makes the import fail
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    output = tmp_path / "tiny.gguf"
+    convert(Path(LLAMA_CPP_DIR), tiny_model, output, warn=lambda message: None)
+    assert output.stat().st_size > 0
+
+    message = error_message(ModuleNotFoundError("No module named 'x'"))
+    assert "make setup-engine" in message

@@ -54,6 +54,7 @@ def convert(llama_cpp: Path, model: Path, output: Path, warn) -> None:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     allow_unknown_tokenizer(warn)
+    skip_missing_sentencepiece()
     argv = sys.argv
     sys.argv = ["convert_hf_to_gguf.py", str(model), "--outfile", str(output), "--outtype", "f16"]
     try:
@@ -82,6 +83,36 @@ def allow_unknown_tokenizer(warn) -> None:
             return "default"
 
     base.TextModel.get_vocab_base_pre = get_vocab_base_pre
+
+
+def skip_missing_sentencepiece() -> None:
+    """Some converters (Qwen's among them) try a SentencePiece tokenizer first and fall back to
+    tokenizer.json when there is no tokenizer.model, but they import sentencepiece before looking.
+    Look first, so models without tokenizer.model convert even when sentencepiece is missing."""
+    try:
+        import conversion.base as base
+    except ImportError:
+        return
+    create = base.TextModel._create_vocab_sentencepiece
+
+    def _create_vocab_sentencepiece(self):
+        path = self.dir_model / "tokenizer.model"
+        if not path.is_file():
+            raise FileNotFoundError(f"File not found: {path}")
+        if importlib.util.find_spec("sentencepiece") is None:
+            raise ModuleNotFoundError(
+                "This model's tokenizer needs the sentencepiece package.", name="sentencepiece"
+            )
+        return create(self)
+
+    base.TextModel._create_vocab_sentencepiece = _create_vocab_sentencepiece
+
+
+def error_message(error: Exception) -> str:
+    message = f"{type(error).__name__}: {error}"
+    if isinstance(error, ModuleNotFoundError):
+        message += " The engine is missing a package; run 'make setup-engine' to update it."
+    return message
 
 
 def quantize(source: Path, output: Path, quantization: str, threads: int) -> None:
@@ -162,7 +193,7 @@ def main() -> None:
         export(config, events, job_dir)
     except Exception as e:
         log.exception("Export failed")
-        events.write("error", message=f"{type(e).__name__}: {e}")
+        events.write("error", message=error_message(e))
         shutil.rmtree(job_dir / "tmp", ignore_errors=True)
         sys.exit(1)
 
