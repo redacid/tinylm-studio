@@ -45,6 +45,11 @@ make search Q="elden ring review" ADD=games
 make search Q="elden ring trailer" VIDEO=1 ADD=games
 ```
 
+To teach a model your answer style, fine-tune it with LoRA: download a model with PyTorch
+weights (`make download MODEL=qwen3-0.6b`), import examples on the Datasets tab (JSONL or CSV;
+[docs/examples/game-hints.jsonl](docs/examples/game-hints.jsonl) is a small sample), start a run
+on the Training tab and pick the new model in the chat. See [docs/api.md](docs/api.md#fine-tuning).
+
 Engine only, for API clients (see [docs/api.md](docs/api.md)):
 
 ```bash

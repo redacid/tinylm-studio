@@ -13,6 +13,7 @@ router = APIRouter(prefix="/api", dependencies=[Depends(require_api_key)], tags=
 def model_catalog(models: ModelManager = Depends(manager)) -> dict:
     return {
         "installed": models.installed(),
+        "trainable": models.trainable(),
         "catalog": models.catalog(),
         "default": DEFAULT_MODEL,
     }
@@ -22,5 +23,19 @@ def model_catalog(models: ModelManager = Depends(manager)) -> dict:
 def download_model(model_id: str, models: ModelManager = Depends(manager)) -> dict:
     try:
         return models.download(model_id).to_dict()
+    except ModelNotFound:
+        raise HTTPException(404, f"Unknown model '{model_id}'") from None
+
+
+@router.get("/models/trained")
+def trained_models(models: ModelManager = Depends(manager)) -> dict:
+    """Fine-tuned models with their base model, dataset, final loss and training settings."""
+    return {"data": models.trained()}
+
+
+@router.delete("/models/{model_id}", status_code=204)
+def delete_model(model_id: str, models: ModelManager = Depends(manager)) -> None:
+    try:
+        models.delete(model_id)
     except ModelNotFound:
         raise HTTPException(404, f"Unknown model '{model_id}'") from None

@@ -4,12 +4,14 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from engine import __version__
-from engine.api import admin, anthropic, knowledge, openai, search, system, web
+from engine.api import admin, anthropic, datasets, knowledge, openai, search, system, training, web
 from engine.api.deps import AuthError, is_anthropic
 from engine.config import Settings
+from engine.datasets.store import DatasetStore
 from engine.models.manager import ModelManager
 from engine.rag.embeddings import HashEmbedder, SentenceTransformerEmbedder
 from engine.rag.store import KnowledgeStore
+from engine.training.jobs import TrainingManager
 from engine.web.crawler import Crawler, CrawlManager
 from engine.web.search import BraveSearch, SearchError, SearchProvider, SearxngSearch
 
@@ -58,6 +60,10 @@ def create_app(
     app.state.crawls = CrawlManager(crawler(settings, app.state.knowledge))
     # A new search client per request, so a changed setting or a missing key shows up at once.
     app.state.searcher = lambda: searcher(settings)
+    app.state.datasets = DatasetStore(app.state.knowledge)
+    app.state.training = TrainingManager(
+        settings.workspace_dir / "training", settings.models_dir, app.state.datasets
+    )
 
     if settings.cors_origins:
         app.add_middleware(
@@ -82,4 +88,6 @@ def create_app(
     app.include_router(knowledge.router)
     app.include_router(web.router)
     app.include_router(search.router)
+    app.include_router(datasets.router)
+    app.include_router(training.router)
     return app

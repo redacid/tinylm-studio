@@ -224,7 +224,20 @@ grounded answers with sources through both APIs, Data screen and cited answers i
 - Data screen in the UI.
 - **Done when:** a user drops a folder of documents, or a list of gaming sites, and gets cited answers about them through both the UI and the APIs.
 
-### Phase 3 – Fine-tuning
+### Phase 3 – Fine-tuning (in progress)
+
+Done: datasets (JSONL/JSON/CSV import in OpenAI, ShareGPT, Alpaca and prompt/completion shapes,
+validation with line numbers, a stable train/held-out split, search, editing) and the Datasets
+screen; LoRA training with transformers + peft in a separate worker process, only the assistant
+answers learned, checkpoints, stop and resume, progress as server-sent events; fine-tuned models
+served as base + adapter (merged on load) in chat and through both APIs; Training screen with a
+live loss chart; fine-tuned models listed on the Models screen.
+
+Measured in the cloud on 4 cores with a randomly initialized model of Qwen3-0.6B's size (fp32,
+LoRA rank 16, examples of ~390 tokens): batches of 4 took 18 s per step and 14 GB of RAM;
+1 example × 4 accumulated steps took 15 s per step and 6.3 GB, so that is the default. At that
+rate 1,000 examples × 3 epochs (750 steps) take about 3 hours on 4 cores. Still to do: a real run of
+qwen3-0.6b on ~1,000 examples on the target machine, and a GPU run.
 - Dataset import (JSONL/CSV), validation, train/eval split, preview/edit in UI.
 - LoRA SFT job runner (one job at a time, background process), progress via SSE, cancel/resume from checkpoint.
 - Model registry: base + adapter; serving adapters through the same APIs.

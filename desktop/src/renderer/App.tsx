@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { EngineClient } from "./api";
 import { Chat } from "./Chat";
 import { Data } from "./Data";
+import { Datasets } from "./Datasets";
 import { Models } from "./Models";
+import { Training } from "./Training";
 import type { EngineState } from "./types";
 
 const PHASE_LABELS: Record<EngineState["phase"], string> = {
@@ -13,9 +15,15 @@ const PHASE_LABELS: Record<EngineState["phase"], string> = {
   stopped: "Engine stopped",
 };
 
-type Tab = "chat" | "data" | "models";
+type Tab = "chat" | "data" | "datasets" | "training" | "models";
 
-const TAB_LABELS: Record<Tab, string> = { chat: "Chat", data: "Data", models: "Models" };
+const TAB_LABELS: Record<Tab, string> = {
+  chat: "Chat",
+  data: "Data",
+  datasets: "Datasets",
+  training: "Training",
+  models: "Models",
+};
 
 export function App() {
   const [engine, setEngine] = useState<EngineState>({ phase: "starting", port: 0 });
@@ -55,6 +63,10 @@ export function App() {
           <Chat client={client} onNeedModel={() => setTab("models")} />
         ) : tab === "data" ? (
           <Data client={client} />
+        ) : tab === "datasets" ? (
+          <Datasets client={client} />
+        ) : tab === "training" ? (
+          <Training client={client} onNeedModel={() => setTab("models")} />
         ) : (
           <Models client={client} />
         )}

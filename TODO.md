@@ -22,3 +22,13 @@ Model changes:
 - [ ] Compare answer quality of Qwen3 1.7B (~11 tok/s) with Gemma 3 4B (~8 tok/s) on the game scenario.
 - [ ] Investigate trimming Gemma 3's 262k vocabulary to uk/ru/en tokens (smaller output layer; risky).
 - [ ] Layer pruning only together with fine-tuning or distillation (Phase 3).
+
+## Fine-tuning (Phase 3)
+
+- [ ] Real run on the target machine: qwen3-0.6b on ~1,000 examples, 3 epochs; note time per
+      step and peak RAM (cloud estimate with a random model of the same size: 15 s/step on
+      4 cores, 6.3 GB).
+- [ ] GPU run (CUDA PyTorch build, `TINYLM_TORCH=auto`).
+- [ ] Gradient checkpointing as an option for longer examples (less memory, ~30% slower).
+- [ ] Export a fine-tuned model to GGUF (merge + convert + quantize) so it runs through llama.cpp
+      as fast as the other GGUF models (Phase 5).

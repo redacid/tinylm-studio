@@ -95,3 +95,34 @@ th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border);
 .search .mark.ok { color: var(--good, #1a7f37); }
 .search .mark.bad { color: var(--bad); }
 .search .mark.muted { color: var(--muted); }
+.data .actions { flex-wrap: wrap; }
+.data .actions input.narrow { width: 64px; }
+.badge { display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 10px; border: 1px solid var(--border); color: var(--muted); }
+.badge.eval, .badge.running, .badge.stopping { border-color: var(--accent); color: var(--accent); }
+.badge.done { border-color: var(--ok); color: var(--ok); }
+.badge.error { border-color: var(--bad); color: var(--bad); }
+.example { border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; margin-bottom: 8px; }
+.example-head { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
+.turn { display: flex; gap: 8px; padding: 2px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.turn .role { flex: 0 0 72px; color: var(--muted); font-size: 12px; padding-top: 2px; }
+.turn.assistant .text { color: var(--ok); }
+.example-editor { border: 1px solid var(--accent); border-radius: 8px; padding: 12px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px; }
+.message-edit { display: flex; gap: 8px; align-items: flex-start; }
+.message-edit textarea { flex: 1; min-height: 56px; resize: vertical; }
+.training { padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+.training-form { border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.training-form input[type="number"] { width: 96px; margin-left: 4px; }
+.job { border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+.job pre { white-space: pre-wrap; max-height: 240px; overflow-y: auto; margin: 0; }
+.progress { height: 6px; border-radius: 3px; background: var(--assistant); overflow: hidden; }
+.progress div { height: 100%; background: var(--accent); }
+.loss-chart { width: 100%; max-width: 760px; height: auto; font-size: 11px; }
+.loss-chart text { fill: var(--muted); }
+.loss-chart .grid { stroke: var(--border); stroke-width: 1; }
+.loss-chart polyline { fill: none; stroke-width: 1.5; }
+.loss-chart polyline.train { stroke: var(--accent); }
+.loss-chart polyline.held { stroke: var(--ok); stroke-dasharray: 4 3; }
+.loss-chart circle.held { fill: var(--ok); }
+.loss-chart tspan.train { fill: var(--accent); }
+.loss-chart tspan.held { fill: var(--ok); }
+.data section pre { white-space: pre-wrap; overflow-wrap: anywhere; }

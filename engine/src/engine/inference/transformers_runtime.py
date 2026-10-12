@@ -40,6 +40,7 @@ class TransformersRuntime:
         device: str | None = None,
         threads: int | None = None,
         repetition_penalty: float = 1.1,
+        adapter: Path | None = None,
     ):
         import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -51,8 +52,14 @@ class TransformersRuntime:
         self.threads = torch.get_num_threads()
         dtype = torch.float32 if self.device == "cpu" else torch.float16
         log.info("Loading %s on %s (%d threads)", model_path, self.device, self.threads)
-        self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+        self.tokenizer = AutoTokenizer.from_pretrained(adapter or model_path)
         self.model = AutoModelForCausalLM.from_pretrained(model_path, dtype=dtype)
+        if adapter:
+            from peft import PeftModel
+
+            # Merged into the weights once, so answers are as fast as with the base model.
+            log.info("Applying fine-tuned adapter %s", adapter)
+            self.model = PeftModel.from_pretrained(self.model, adapter).merge_and_unload()
         self.model.to(self.device).eval()
         # One generation at a time: a small machine has no headroom for parallel decoding.
         self._lock = threading.Lock()

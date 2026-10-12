@@ -2,10 +2,13 @@
 
 A model is any folder under <data_dir>/models that contains either a config.json (Hugging Face
 format, run with PyTorch) or a .gguf file (run with llama.cpp), so users can also drop in their
-own models by copying a folder there.
+own models by copying a folder there. Fine-tuned models are LoRA adapters: a folder with
+adapter_config.json and a tinylm.json naming the installed base model they apply to.
 """
 
+import json
 import logging
+import shutil
 import threading
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -52,13 +55,20 @@ class ModelManager:
         self._lock = threading.Lock()
 
     def installed(self) -> list[str]:
-        # Hidden folders are unfinished downloads.
-        ids = sorted(
+        """Models that can answer; a fine-tuned model needs its base model installed too."""
+        ids = [
             p.name
-            for p in self.models_dir.iterdir()
-            if p.is_dir() and not p.name.startswith(".") and model_format(p)
-        )
+            for p in self._folders()
+            if (fmt := model_format(p)) in ("hf", "gguf")
+            or (fmt == "adapter" and model_format(self.models_dir / adapter_base(p)) == "hf")
+        ]
         return ([ECHO_MODEL] if self.enable_echo else []) + ids
+
+    def _folders(self) -> list[Path]:
+        # Hidden folders are unfinished downloads and training runs.
+        return sorted(
+            p for p in self.models_dir.iterdir() if p.is_dir() and not p.name.startswith(".")
+        )
 
     def catalog(self) -> list[dict]:
         installed = set(self.installed())
@@ -122,6 +132,13 @@ class ModelManager:
                 from engine.inference.llamacpp_runtime import LlamaCppRuntime
 
                 runtime: Runtime = LlamaCppRuntime(path, **self.runtime_options)
+            elif fmt == "adapter":
+                from engine.inference.transformers_runtime import TransformersRuntime
+
+                base = self.models_dir / adapter_base(path)
+                if model_format(base) != "hf":
+                    raise ModelNotFound(f"{model_id} needs its base model {base.name}")
+                runtime = TransformersRuntime(base, adapter=path, **self.runtime_options)
             else:
                 from engine.inference.transformers_runtime import TransformersRuntime
 
@@ -129,13 +146,42 @@ class ModelManager:
             self._loaded = (model_id, runtime)
             return runtime
 
+    def trainable(self) -> list[str]:
+        """Installed models that can be fine-tuned: PyTorch (Hugging Face) weights."""
+        return [p.name for p in self._folders() if model_format(p) == "hf"]
+
+    def trained(self) -> list[dict]:
+        """Fine-tuned models (adapters) with what they were trained from."""
+        models = []
+        for path in self._folders():
+            if model_format(path) == "adapter":
+                info = json.loads((path / "tinylm.json").read_text())
+                installed = model_format(self.models_dir / info["base"]) == "hf"
+                models.append({"id": path.name, **info, "base_installed": installed})
+        return models
+
+    def delete(self, model_id: str) -> None:
+        path = self.models_dir / model_id
+        if model_id.startswith(".") or "/" in model_id or model_format(path) is None:
+            raise ModelNotFound(model_id)
+        with self._lock:
+            if self._loaded and self._loaded[0] == model_id:
+                self._loaded = None
+            shutil.rmtree(path)
+
+
+def adapter_base(path: Path) -> str:
+    return json.loads((path / "tinylm.json").read_text())["base"]
+
 
 def model_format(path: Path) -> str | None:
-    """Return "gguf" or "hf" for a model folder, or None if it holds no model."""
+    """Return "gguf", "hf" or "adapter" for a model folder, or None if it holds no model."""
     if not path.is_dir():
         return None
     if any(path.glob("*.gguf")):
         return "gguf"
+    if (path / "adapter_config.json").is_file() and (path / "tinylm.json").is_file():
+        return "adapter"
     if (path / "config.json").is_file():
         return "hf"
     return None

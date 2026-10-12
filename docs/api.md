@@ -90,8 +90,10 @@ Not supported yet: tool use / function calling, images, logprobs, `n > 1`, batch
 |---|---|---|
 | GET | `/health` | Liveness and version |
 | GET | `/api/system` | Python path and hardware |
-| GET | `/api/models` | Catalog with install and download state |
+| GET | `/api/models` | Catalog with install and download state; `trainable`: installed models that can be fine-tuned |
 | POST | `/api/models/{id}/download` | Starts a background download from Hugging Face |
+| GET | `/api/models/trained` | Fine-tuned models: `base`, `dataset`, `loss`, `eval_loss`, `settings`, `base_installed` |
+| DELETE | `/api/models/{id}` | Deletes an installed model folder |
 | GET | `/api/collections` | Collections with document and chunk counts |
 | POST | `/api/collections` | `{"name": "games"}`: letters, digits, `_`, `-` |
 | DELETE | `/api/collections/{name}` | Deletes the collection and its documents |
@@ -198,6 +200,66 @@ What to do with the results:
 |---|---|---|
 | POST | `/api/search` | `{"query": "...", "kind": "web" or "video", "limit": 10, "language": "uk"}` (language optional): `provider` and results with `title`, `url`, `snippet`, `site`, `thumbnail`, `source`; 503 with the reason when the provider is not reachable or not set up |
 | POST | `/api/collections/{name}/links` | `{"links": [{"title": "...", "url": "https://...", "snippet": "...", "kind": "video"}]}` |
+
+## Datasets
+
+A dataset holds training examples: conversations whose assistant answers the model learns to
+write. Examples live in `knowledge.db` next to the collections.
+
+- Import JSONL, a JSON array or CSV. Each record is one of:
+  - `{"messages": [{"role": "system" | "user" | "assistant", "content": "..."}, ...]}` (OpenAI chat;
+    the last message must be the assistant's answer),
+  - `{"conversations": [{"from": "human" | "gpt", "value": "..."}, ...]}` (ShareGPT),
+  - `{"instruction": "...", "input": "...", "output": "..."}` (Alpaca),
+  - `{"prompt": "...", "completion": "..."}` or `{"question": "...", "answer": "..."}`,
+
+  optionally with `"system": "..."`. CSV files use the same names as column headers. Bad records
+  are skipped and reported with their line numbers; the same example twice is stored once.
+- `eval_percent` (default 10, at most 50) of the examples are held out from training to measure
+  the model on data it has not seen. The split is fixed per example, so adding, editing or
+  deleting other examples does not move an example between the parts.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/api/datasets` | Datasets with `examples`, `train` and `eval` counts |
+| POST | `/api/datasets` | `{"name": "game-hints", "eval_percent": 10}` |
+| PATCH | `/api/datasets/{name}` | `{"eval_percent": 20}` |
+| DELETE | `/api/datasets/{name}` | Deletes the dataset and its examples |
+| POST | `/api/datasets/{name}/import` | Multipart upload, field `files`: `added`, `duplicates`, `invalid` and the first `errors` (`line`, `error`) per file |
+| GET | `/api/datasets/{name}/examples` | `?query=&split=all\|train\|eval&offset=0&limit=20`: one page of examples and the matching `total` |
+| POST | `/api/datasets/{name}/examples` | `{"messages": [...]}` |
+| PUT | `/api/datasets/{name}/examples/{id}` | `{"messages": [...]}` |
+| DELETE | `/api/datasets/{name}/examples/{id}` | Deletes one example |
+
+## Fine-tuning
+
+A training run teaches a base model with PyTorch weights (e.g. `qwen3-0.6b`) the answers of a
+dataset with LoRA: small adapter matrices are trained while the model itself stays frozen. Only
+the assistant's answers (with the chat template's end-of-turn marker) are learned; system and
+user messages are context.
+
+- One run at a time, in its own process (`python -m engine.training.worker`), so the engine
+  stays responsive. On CPU it uses all physical cores (`threads` to change); `device: "auto"`
+  picks an NVIDIA GPU (bf16 or fp16) when PyTorch sees one.
+- Checkpoints are saved about ten times per run (`save_steps` to change). Stop saves one at the
+  next step; a stopped, failed or interrupted run (the engine was closed) resumes from its last
+  checkpoint.
+- The result is a new model folder `<data dir>/models/<name>` with the adapter, the tokenizer and
+  `tinylm.json` (base model, dataset, losses, settings). It is offered in chat and through both
+  APIs under its name as long as its base model is installed; the adapter is merged into the base
+  model's weights when it is loaded, so it answers as fast as the base model through PyTorch.
+- Run files: `<data dir>/workspace/training/<id>/` (`job.json`, `events.jsonl`, `worker.log`,
+  `checkpoints/`).
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/api/training/jobs` | `{"name": "game-hints-0.6b", "base": "qwen3-0.6b", "dataset": "game-hints"}` plus optional `epochs` (3), `learning_rate` (2e-4), `lora_rank` (16), `lora_alpha` (2 × rank), `lora_dropout` (0.05), `max_length` (1024 tokens; longer examples are cut), `batch_size` (1), `gradient_accumulation` (4: examples per optimizer step = batch × accumulation), `device` (`auto`, `cpu`, `cuda`, `mps`), `threads`, `save_steps`; 409 while another run is going |
+| GET | `/api/training/jobs` | Runs with `state` (`running`, `stopping`, `stopped`, `done`, `error`, `interrupted`), `step`, `total_steps`, `epoch`, `loss`, `eval_loss`, `eta_seconds`, `resumable` |
+| GET | `/api/training/jobs/{id}` | The same plus `history` (`step`, `loss`, `eval_loss`) and, for a failed run, the end of the worker's `log` |
+| GET | `/api/training/jobs/{id}/events` | Server-sent events: `start`, `step`, `eval`, `checkpoint`, `stopped`, `done`, `error` from the worker and `state` changes; ends when the run is no longer going |
+| POST | `/api/training/jobs/{id}/stop` | Saves a checkpoint and stops at the next step |
+| POST | `/api/training/jobs/{id}/resume` | Continues from the last checkpoint |
+| DELETE | `/api/training/jobs/{id}` | Deletes a run that is not going, with its checkpoints (not the finished model) |
 
 ## Settings
 

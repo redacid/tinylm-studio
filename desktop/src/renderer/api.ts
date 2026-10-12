@@ -84,6 +84,94 @@ export type SearchResult = {
   site: string;
 };
 
+export type Dataset = {
+  name: string;
+  examples: number;
+  train: number;
+  eval: number;
+  /** Share of examples held out to measure the model on data it was not trained on. */
+  eval_percent: number;
+  created_at: string;
+};
+
+export type Example = {
+  id: number;
+  messages: ChatMessage[];
+  split: "train" | "eval";
+  created_at: string;
+};
+
+export type ExampleFilter = { query?: string; split?: "all" | "train" | "eval"; offset?: number; limit?: number };
+
+export type ImportResult = {
+  name: string;
+  added?: number;
+  duplicates?: number;
+  invalid?: number;
+  errors?: { line: number; error: string }[];
+  error?: string;
+};
+
+export type TrainingSettings = {
+  /** The new model's name. */
+  name: string;
+  base: string;
+  dataset: string;
+  epochs: number;
+  learning_rate: number;
+  lora_rank: number;
+  max_length: number;
+  batch_size: number;
+  gradient_accumulation: number;
+  device: "auto" | "cpu" | "cuda" | "mps";
+};
+
+export type LossPoint = { step: number; loss?: number; eval_loss?: number };
+
+export type TrainingJob = {
+  id: string;
+  settings: TrainingSettings;
+  state: "running" | "stopping" | "stopped" | "done" | "error" | "interrupted";
+  created_at: string;
+  finished_at: string | null;
+  error: string | null;
+  step: number;
+  total_steps: number | null;
+  epoch: number;
+  loss: number | null;
+  eval_loss: number | null;
+  device: string | null;
+  train_examples: number | null;
+  eval_examples: number | null;
+  /** Examples left out because their answer starts beyond max_length tokens. */
+  dropped: number;
+  checkpoint_step: number | null;
+  resumable: boolean;
+  eta_seconds: number | null;
+  history?: LossPoint[];
+  log?: string;
+};
+
+/** One event of a training run's progress stream. */
+export type TrainingEvent =
+  | { type: "start"; step: number; total_steps: number; device: string; train_examples: number; eval_examples: number }
+  | { type: "step"; step: number; epoch: number; loss: number; learning_rate: number }
+  | { type: "eval"; step: number; eval_loss: number }
+  | { type: "checkpoint" | "stopped" | "done"; step: number }
+  | { type: "error"; message: string }
+  | { type: "state"; state: TrainingJob["state"]; error: string | null };
+
+export type TrainedModel = {
+  id: string;
+  base: string;
+  base_installed: boolean;
+  dataset: string;
+  created_at: string;
+  loss: number | null;
+  eval_loss: number | null;
+  settings: Record<string, number>;
+};
+
 /** Per-answer figures reported by the engine (same names as llama.cpp server's `timings`). */
 export type Timings = {
   load_ms: number;
@@ -125,6 +213,123 @@ export class EngineClient {
 
   async download(modelId: string): Promise<void> {
     await this.json(`/api/models/${encodeURIComponent(modelId)}/download`, { method: "POST" });
+  }
+
+  /** Installed models that can be fine-tuned (PyTorch weights). */
+  async trainableModels(): Promise<string[]> {
+    return (await this.json<{ trainable: string[] }>("/api/models")).trainable;
+  }
+
+  async trainedModels(): Promise<TrainedModel[]> {
+    return (await this.json<{ data: TrainedModel[] }>("/api/models/trained")).data;
+  }
+
+  async deleteModel(modelId: string): Promise<void> {
+    await this.send(`/api/models/${encodeURIComponent(modelId)}`, { method: "DELETE" });
+  }
+
+  async datasets(): Promise<Dataset[]> {
+    return (await this.json<{ data: Dataset[] }>("/api/datasets")).data;
+  }
+
+  async createDataset(name: string, evalPercent: number): Promise<Dataset> {
+    return this.json<Dataset>("/api/datasets", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name, eval_percent: evalPercent }),
+    });
+  }
+
+  async updateDataset(name: string, evalPercent: number): Promise<Dataset> {
+    return this.json<Dataset>(`/api/datasets/${encodeURIComponent(name)}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ eval_percent: evalPercent }),
+    });
+  }
+
+  async deleteDataset(name: string): Promise<void> {
+    await this.send(`/api/datasets/${encodeURIComponent(name)}`, { method: "DELETE" });
+  }
+
+  /** Adds the examples of a JSONL, JSON or CSV file; bad records come back with line numbers. */
+  async importExamples(dataset: string, file: File): Promise<ImportResult> {
+    const form = new FormData();
+    form.append("files", file, file.name);
+    const path = `/api/datasets/${encodeURIComponent(dataset)}/import`;
+    return (await this.json<{ data: ImportResult[] }>(path, { method: "POST", body: form })).data[0];
+  }
+
+  async examples(dataset: string, filter: ExampleFilter = {}): Promise<{ data: Example[]; total: number }> {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(filter)) {
+      if (value !== undefined && value !== "") params.set(key, String(value));
+    }
+    return this.json(`/api/datasets/${encodeURIComponent(dataset)}/examples?${params}`);
+  }
+
+  async addExample(dataset: string, messages: ChatMessage[]): Promise<{ id: number | null; duplicate: boolean }> {
+    return this.json(`/api/datasets/${encodeURIComponent(dataset)}/examples`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ messages }),
+    });
+  }
+
+  async editExample(dataset: string, id: number, messages: ChatMessage[]): Promise<void> {
+    await this.send(`/api/datasets/${encodeURIComponent(dataset)}/examples/${id}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ messages }),
+    });
+  }
+
+  async deleteExample(dataset: string, id: number): Promise<void> {
+    await this.send(`/api/datasets/${encodeURIComponent(dataset)}/examples/${id}`, { method: "DELETE" });
+  }
+
+  async trainingJobs(): Promise<TrainingJob[]> {
+    return (await this.json<{ data: TrainingJob[] }>("/api/training/jobs")).data;
+  }
+
+  /** A run with its full loss history (and the worker's log when it failed). */
+  async trainingJob(id: string): Promise<TrainingJob> {
+    return this.json<TrainingJob>(`/api/training/jobs/${id}`);
+  }
+
+  async startTraining(settings: TrainingSettings): Promise<TrainingJob> {
+    return this.json<TrainingJob>("/api/training/jobs", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(settings),
+    });
+  }
+
+  async stopTraining(id: string): Promise<void> {
+    await this.send(`/api/training/jobs/${id}/stop`, { method: "POST" });
+  }
+
+  async resumeTraining(id: string): Promise<void> {
+    await this.send(`/api/training/jobs/${id}/resume`, { method: "POST" });
+  }
+
+  async deleteTrainingJob(id: string): Promise<void> {
+    await this.send(`/api/training/jobs/${id}`, { method: "DELETE" });
+  }
+
+  /** Follows a training run's progress (server-sent events) until it ends or signal aborts. */
+  async trainingEvents(id: string, onEvent: (event: TrainingEvent) => void, signal?: AbortSignal) {
+    const response = await this.send(`/api/training/jobs/${id}/events`, { signal });
+    const reader = response.body!.pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) return;
+      buffer += value;
+      const events = buffer.split("\n\n");
+      buffer = events.pop() ?? "";
+      for (const event of events) onEvent(JSON.parse(event.replace(/^data: /, "")));
+    }
   }
 
   async collections(): Promise<Collection[]> {
