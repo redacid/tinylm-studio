@@ -283,8 +283,29 @@ export type TrainingEvent =
   | { type: "error"; message: string }
   | { type: "state"; state: TrainingJob["state"]; error: string | null };
 
+export type Quantization = "Q8_0" | "Q4_K_M" | "F16";
+
+export type ExportJob = {
+  id: string;
+  model: string;
+  name: string;
+  quantization: Quantization;
+  state: "running" | "done" | "error" | "interrupted";
+  step: string | null;
+  steps: string[];
+  notes: string[];
+  error: string | null;
+  size: number | null;
+  created_at: string;
+  finished_at: string | null;
+};
+
 export type TrainedModel = {
   id: string;
+  /** "adapter": LoRA weights that need the base model; "gguf": a standalone export for llama.cpp. */
+  format: "adapter" | "gguf";
+  quantization?: string;
+  exported_from?: string;
   base: string;
   base_installed: boolean;
   dataset: string;
@@ -349,6 +370,19 @@ export class EngineClient {
 
   async trainedModels(): Promise<TrainedModel[]> {
     return (await this.json<{ data: TrainedModel[] }>("/api/models/trained")).data;
+  }
+
+  /** Merges a fine-tuned model into its base model and writes one GGUF file for llama.cpp. */
+  async exportModel(modelId: string, quantization: Quantization, name?: string): Promise<ExportJob> {
+    return this.json<ExportJob>(`/api/models/${encodeURIComponent(modelId)}/export`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ quantization, name: name || null }),
+    });
+  }
+
+  async exports(): Promise<ExportJob[]> {
+    return (await this.json<{ data: ExportJob[] }>("/api/exports")).data;
   }
 
   async deleteModel(modelId: string): Promise<void> {

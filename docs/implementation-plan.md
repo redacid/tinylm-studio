@@ -250,7 +250,7 @@ qwen3-0.6b on ~1,000 examples on the target machine, and a GPU run.
 - **Done when:** a user can go from "folder of documents" to "fine-tuned model with a score report" without writing any data by hand.
 
 ### Phase 5 – Performance and distribution
-- Merge + GGUF export + quantization; llama.cpp runtime as the default for trained models.
+- **Done (2026-10-12):** merge + GGUF export + quantization (Q8_0, Q4_K_M, F16) of fine-tuned models with llama.cpp's own converter (from the llama-cpp-python source package, so versions match) and quantizer; exported models are served through llama.cpp.
 - Hardware auto-tuning; optional GPU PyTorch download.
 - Installers (AppImage/deb, dmg, exe), code signing, auto-update.
 - **Done when:** a non-developer installs the app from a release and completes the full flow.

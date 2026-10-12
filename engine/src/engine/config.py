@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     # Brave Search API (needs brave_api_key).
     search_provider: Literal["searxng", "brave"] = "searxng"
     searxng_url: str = "http://127.0.0.1:8888"
+    # A llama.cpp checkout whose convert_hf_to_gguf.py exports fine-tuned models to GGUF; by
+    # default the converter of the installed llama-cpp-python is downloaded once from PyPI.
+    llama_cpp_dir: Path | None = None
     brave_api_key: str | None = None
 
     @property

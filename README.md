@@ -8,7 +8,8 @@ Chat with local models, let them answer from your files and websites (with sourc
 pages and trailers from the web, generate training examples from your documents with a larger
 teacher model (local, OpenRouter including its free models, any OpenAI-compatible API, or
 Anthropic), fine-tune a small model on them, and compare it with the base model on held-out
-questions, scored by a judge model. The
+questions, scored by a judge model. A fine-tuned model is exported to GGUF to run as fast as
+any llama.cpp model. The
 **[user guide](docs/user-guide.md)** walks through every screen and setting.
 
 - **engine/** – Python service: data ingestion, retrieval, training and inference, exposed through OpenAI- and Anthropic-compatible APIs.
@@ -64,7 +65,9 @@ make search Q="elden ring trailer" VIDEO=1 ADD=games
 To teach a model your answer style, fine-tune it with LoRA: download a model with PyTorch
 weights (`make download MODEL=qwen3-0.6b`), import examples on the Datasets tab (JSONL or CSV;
 [docs/examples/game-hints.jsonl](docs/examples/game-hints.jsonl) is a small sample), start a run
-on the Training tab and pick the new model in the chat. See [docs/api.md](docs/api.md#fine-tuning).
+on the Training tab and pick the new model in the chat. **Export to GGUF** on the Models tab
+then makes it as fast as the other llama.cpp models. See
+[the user guide](docs/user-guide.md#training) and [docs/api.md](docs/api.md#fine-tuning).
 
 Engine only, for API clients (see [docs/api.md](docs/api.md)):
 

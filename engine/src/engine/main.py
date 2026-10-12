@@ -9,6 +9,7 @@ from engine.api import (
     anthropic,
     datasets,
     evaluations,
+    exports,
     generations,
     knowledge,
     openai,
@@ -23,6 +24,7 @@ from engine.config import Settings
 from engine.datasets.generate import GenerationManager, Generator
 from engine.datasets.store import DatasetStore
 from engine.evaluation.evaluate import EvaluationManager
+from engine.export.jobs import ExportManager
 from engine.models.manager import ModelManager
 from engine.rag.embeddings import HashEmbedder, SentenceTransformerEmbedder
 from engine.rag.store import KnowledgeStore
@@ -87,6 +89,13 @@ def create_app(
         app.state.models,
         app.state.teachers,
     )
+    app.state.exports = ExportManager(
+        settings.workspace_dir / "exports",
+        settings.models_dir,
+        settings.data_dir / "tools",
+        settings.llama_cpp_dir,
+        settings.threads,
+    )
     app.state.training = TrainingManager(
         settings.workspace_dir / "training", settings.models_dir, app.state.datasets
     )
@@ -119,4 +128,5 @@ def create_app(
     app.include_router(teachers.router)
     app.include_router(generations.router)
     app.include_router(evaluations.router)
+    app.include_router(exports.router)
     return app

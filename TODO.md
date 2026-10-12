@@ -43,5 +43,5 @@ Model changes:
       4 cores, 6.3 GB).
 - [ ] GPU run (CUDA PyTorch build, `TINYLM_TORCH=auto`).
 - [ ] Gradient checkpointing as an option for longer examples (less memory, ~30% slower).
-- [ ] Export a fine-tuned model to GGUF (merge + convert + quantize) so it runs through llama.cpp
-      as fast as the other GGUF models (Phase 5).
+- [ ] Export qwen3-0.6b fine-tune to GGUF on the target machine (Q8_0 and Q4_K_M): time of the
+      export, tokens/s against the adapter through PyTorch, and Evaluation scores of all three.

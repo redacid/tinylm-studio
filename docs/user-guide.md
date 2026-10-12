@@ -12,6 +12,7 @@ For the HTTP API see [api.md](api.md); for the design and roadmap see the
   - [Generating examples from your documents](#generating-examples)
 - [Teachers: OpenRouter, Anthropic and local models](#teachers)
 - [Training](#training)
+  - [Exporting a fine-tuned model to GGUF](#exporting-to-gguf)
 - [Evaluation](#evaluation)
 - [Settings](#settings)
   - [Proxy for crawling and search](#proxy)
@@ -67,7 +68,8 @@ can use them (see [api.md](api.md)).
 - If a gated model does not download, see
   [Troubleshooting](#a-gated-model-does-not-download).
 - **Fine-tuned models** show the base model, the dataset and the final loss. Deleting one
-  removes its folder; the base model stays.
+  removes its folder; the base model stays. **Export to GGUF** turns one into a fast llama.cpp
+  model, see [Exporting to GGUF](#exporting-to-gguf).
 - Any GGUF file or Hugging Face model folder copied into `<data dir>/models/<name>/` appears too.
 - **Teachers** at the bottom of the screen are the models that write training examples; see
   [Teachers](#teachers).
@@ -235,6 +237,39 @@ Training runs in its own process, one run at a time. **Stop** saves a checkpoint
 LoRA on a 0.6B model takes on the order of 15 seconds per step on 4 cores (less on more
 cores), so 1,000 examples × 3 epochs take hours, not days.
 
+### Exporting to GGUF
+
+A fine-tuned model is a small LoRA adapter on top of its base model and answers through PyTorch,
+which is several times slower on a CPU than the GGUF models. **Export to GGUF** on the Models
+screen merges the adapter into the base model's weights and writes one GGUF file that llama.cpp
+runs, as fast as any other GGUF model of that size. The result is a new model in the list
+(e.g. `game-hints-0.6b-q8_0`) that does not need its base model any more.
+
+![Exporting a fine-tuned model](images/export-form.png)
+
+Pick the quantization and, optionally, a name:
+
+| Quantization | Size of a 0.6B model | Quality |
+|---|---|---|
+| **Q8_0** (default) | ~0.6 GB | Practically the same as the original |
+| **Q4_K_M** | ~0.4 GB | Smaller and faster, a small loss; good for 1.7B and larger |
+| **F16** | ~1.2 GB | The original weights, the largest |
+
+The export runs in the background in its own process: getting the converter, merging, converting
+and quantizing. It takes a minute or two for a 0.6B model and needs about twice the model's size
+in free memory and disk while it runs.
+
+![The exported model on the Models screen](images/models.png)
+
+- The converter is llama.cpp's own `convert_hf_to_gguf.py`, taken from the source package of the
+  installed llama-cpp-python, so the file matches the llama.cpp that runs it. The first export
+  downloads it from PyPI (about 75 MB, of which 2 MB are kept in `<data dir>/tools/`). Offline,
+  point `TINYLM_LLAMA_CPP_DIR` to a llama.cpp checkout instead.
+- Compare the exported model with the adapter on the [Evaluation](#evaluation) screen: Q8_0
+  should score the same; Q4_K_M a little lower.
+- If the base model's tokenizer is unknown to llama.cpp, the export still finishes and says so;
+  the catalog's base models are all known.
+
 ## Evaluation
 
 ![Comparing the base model with the fine-tuned one](images/evaluation.png)
@@ -333,6 +368,8 @@ Everything lives in `~/.local/share/tinylm-studio` (`TINYLM_DATA_DIR` to change)
 | `workspace/knowledge.db` | Collections, documents, saved websites, datasets and teachers with their API keys (SQLite) |
 | `workspace/training/` | Training runs: settings, progress, logs and checkpoints |
 | `workspace/evaluations/` | Evaluation reports, one JSON file each |
+| `workspace/exports/` | GGUF exports: settings, progress and logs |
+| `tools/` | llama.cpp's GGUF converter, downloaded on the first export |
 | `workspace/benchmarks/` | Reports of `make bench` |
 | `embeddings/` | The embedding model used to search collections |
 | `searxng/` | Settings of the local SearXNG |

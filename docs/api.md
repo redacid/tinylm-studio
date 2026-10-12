@@ -112,6 +112,24 @@ Interactive docs: `http://127.0.0.1:8765/docs`.
   - **GGUF** (`*.gguf`, quantized) runs with llama.cpp: the fast option on CPU and the default.
   - **Hugging Face** (`config.json` + safetensors) runs with PyTorch; used as a base for fine-tuning.
 - Any such model folder copied into `<data dir>/models/` is served under the folder name.
+- `GET /api/models/trained` lists fine-tuned models with `format`: `adapter` (a LoRA adapter,
+  served through PyTorch on top of its base model) or `gguf` (an export, with `quantization`
+  and `exported_from`).
+
+### Exporting to GGUF
+
+`POST /api/models/{id}/export` merges a fine-tuned model's adapter into its base model, converts
+the result with llama.cpp's `convert_hf_to_gguf.py` and quantizes it, in a worker process
+(`python -m engine.export.worker`). The new model folder `<data dir>/models/<name>/` holds
+`<name>.<quantization>.gguf` and `tinylm.json`; it is served through llama.cpp and does not need
+the base model. The converter comes from the source package of the installed llama-cpp-python on
+PyPI (downloaded once into `<data dir>/tools/`) or from `TINYLM_LLAMA_CPP_DIR`.
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/api/models/{id}/export` | `{"quantization": "Q8_0" \| "Q4_K_M" \| "F16", "name": "game-hints-0.6b-q8_0"}` (both optional; the name defaults to `<id>-<quantization>`); 202, 422 for a model that is not fine-tuned, a missing base model or a taken name, 409 while another export is running |
+| GET | `/api/exports` | Exports, oldest first |
+| GET | `/api/exports/{id}` | `state` (`running`, `done`, `error`, `interrupted`), `step` of `steps` (`tools`, `merge`, `convert`, `quantize`, `save`), `notes` (downloads, warnings), `size` of the file in bytes, `error` |
 - Gated models (Gemma, Llama) need a token (`TINYLM_HF_TOKEN` or `HF_TOKEN`) and an accepted license on Hugging Face. `GET /api/models` reports `hf_token`: whether downloads send a token (from the settings, `HF_TOKEN` or a saved `hf auth login`). A refused download explains the cause: no token (HTTP 401) or a token whose account has no access to the model yet (HTTP 403).
 - `TINYLM_ENABLE_ECHO=true` (or `make run-engine ECHO=1`) adds an `echo` model that needs no
   weights, for testing clients and the UI.
@@ -380,3 +398,4 @@ POST /api/evaluations
 | `TINYLM_SEARCH_PROVIDER` | `searxng` | Web search: `searxng` or `brave` |
 | `TINYLM_SEARXNG_URL` | `http://127.0.0.1:8888` | SearXNG address (`make searxng` starts one) |
 | `TINYLM_BRAVE_API_KEY` | none | Brave Search API key, for `TINYLM_SEARCH_PROVIDER=brave` |
+| `TINYLM_LLAMA_CPP_DIR` | none | A llama.cpp checkout whose `convert_hf_to_gguf.py` exports to GGUF; by default the converter is downloaded once from PyPI |

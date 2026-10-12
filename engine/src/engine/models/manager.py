@@ -158,13 +158,15 @@ class ModelManager:
         return [p.name for p in self._folders() if model_format(p) == "hf"]
 
     def trained(self) -> list[dict]:
-        """Fine-tuned models (adapters) with what they were trained from."""
+        """Fine-tuned models with what they were trained from: LoRA adapters ("format":
+        "adapter", they need their base model) and their GGUF exports ("format": "gguf")."""
         models = []
         for path in self._folders():
-            if model_format(path) == "adapter":
+            fmt = model_format(path)
+            if fmt in ("adapter", "gguf") and (path / "tinylm.json").is_file():
                 info = json.loads((path / "tinylm.json").read_text())
-                installed = model_format(self.models_dir / info["base"]) == "hf"
-                models.append({"id": path.name, **info, "base_installed": installed})
+                installed = fmt == "gguf" or model_format(self.models_dir / info["base"]) == "hf"
+                models.append({"id": path.name, "format": fmt, **info, "base_installed": installed})
         return models
 
     def delete(self, model_id: str) -> None:
