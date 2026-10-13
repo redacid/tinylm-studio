@@ -417,7 +417,7 @@ POST /api/evaluations
 | Variable | Default | Meaning |
 |---|---|---|
 | `TINYLM_DATA_DIR` | `~/.local/share/tinylm-studio` | Models and workspace |
-| `TINYLM_HOST` / `TINYLM_PORT` | `127.0.0.1` / `8765` | Listen address |
+| `TINYLM_HOST` / `TINYLM_PORT` | `127.0.0.1` / `8765` | Listen address; `0.0.0.0` in a container (see [deployment.md](deployment.md)) |
 | `TINYLM_API_KEY` | none | Require an API key |
 | `TINYLM_HF_TOKEN` | none | Hugging Face token: needed for gated models, gives faster downloads (`HF_TOKEN` works too) |
 | `TINYLM_ENABLE_ECHO` | `false` | Offer the `echo` test model |

@@ -73,6 +73,9 @@ The chat's answer length, temperature, repetition penalty, number of sources and
 prompt are on the Settings tab and are kept after a restart, together with the conversation; see
 [Chat settings](docs/user-guide.md#chat-settings).
 
+The engine is meant to run in a container in a Kubernetes cluster; see
+[docs/deployment.md](docs/deployment.md) for what that requires and what is still missing.
+
 Engine only, for API clients (see [docs/api.md](docs/api.md)):
 
 ```bash

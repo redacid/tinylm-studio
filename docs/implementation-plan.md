@@ -14,6 +14,7 @@ Status: approved direction, in progress · Last updated: 2026-10-11
 | Minimum hardware | Intel Core i7-class CPU, 32 GB RAM, no GPU required |
 | Reference scenario | Video game assistant (section 3.8) |
 | Repository | Local git repository for now; remote added later |
+| Engine deployment | A container in a Kubernetes cluster; the desktop app and API clients connect to it. Running it locally from the desktop app stays supported ([deployment.md](deployment.md)) |
 
 ## 1. Goal
 
@@ -253,6 +254,9 @@ qwen3-0.6b on ~1,000 examples on the target machine, and a GPU run.
 - **Done (2026-10-12):** merge + GGUF export + quantization (Q8_0, Q4_K_M, F16) of fine-tuned models with llama.cpp's own converter (from the llama-cpp-python source package, so versions match) and quantizer; exported models are served through llama.cpp.
 - Hardware auto-tuning; optional GPU PyTorch download.
 - Installers (AppImage/deb, dmg, exe), code signing, auto-update.
+- Kubernetes: a container image for the engine, manifests or a Helm chart, the desktop app
+  connecting to a remote engine, CPU and memory limits read from cgroups (see
+  [deployment.md](deployment.md#not-done-yet)).
 - **Done when:** a non-developer installs the app from a release and completes the full flow.
 
 ## 6. Risks

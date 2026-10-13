@@ -38,5 +38,19 @@ Documentation is part of every change, not a follow-up:
 - Before finishing a task, check that nothing the user can now do or configure is missing from
   the docs.
 
+## Deployment target
+
+The engine runs in a container in a Kubernetes cluster (decided 2026-10-13); the desktop app is
+one of its clients. Keep every engine change working there, as described in
+[docs/deployment.md](./docs/deployment.md):
+
+- configuration only through `TINYLM_*` environment variables; no config files, no prompts;
+- all state under `TINYLM_DATA_DIR`; nothing in the user's home folder, `/tmp` or the repository;
+- no assumptions about the user's machine: no local paths, browsers or services on `127.0.0.1`
+  that the engine needs without a setting to point elsewhere;
+- one engine process per data folder; background jobs survive only as long as the pod;
+- update docs/deployment.md when a change adds a setting, a volume path, outgoing network
+  access or a new long-running job.
+
 ## Scope
 These rules apply to every agent, thread and session in the project, and to any sub-agents or workers they start. Pass them on when briefing another agent.
