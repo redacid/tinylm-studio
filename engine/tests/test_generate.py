@@ -252,7 +252,7 @@ def test_generate_examples(library, teacher_server, kind):
     ]
     assert requests == [
         ("write", model, provider, True, "5 pairs written"),
-        ("check", model, provider, True, "2 of 3 pairs supported by the text"),
+        ("check", model, provider, True, "2 of 3 pairs supported by the text; 2 added"),
     ]
 
     # The prompt carried the style: instructions, language and the hand-written example.

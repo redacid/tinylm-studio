@@ -200,7 +200,8 @@ The progress shows chunks read, pairs written and added, duplicates, and why pai
 (wrong language, too short or long, not supported by the text). Below it, every request to
 the teacher is listed, newest first (the last 10; **Show all** for the rest): the time, the
 document, whether it wrote the pairs or checked them, the **model** and **provider** that
-answered, and the result (pairs written, pairs supported by the text) or, in red, the error.
+answered, and the result (pairs written, pairs supported by the text and how many of them
+were added) or, in red, the error.
 Model and provider are what the API reports: OpenRouter can route a request to another model
 than the one asked for (`openrouter/auto`, fallbacks) and to one of several upstream providers,
 and names the provider in its errors too; when an answer names none, the model asked for is

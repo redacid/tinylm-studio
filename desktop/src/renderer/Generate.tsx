@@ -260,7 +260,9 @@ function GenerationProgress({ job }: { job: GenerationJob }) {
       )}
       {job.error && <p className="error">{job.error}</p>}
       {job.requests.length > 0 && <TeacherRequests requests={job.requests} />}
-      {job.log.length > 0 && <pre className="muted">{job.log.slice(-12).join("\n")}</pre>}
+      {job.state !== "running" && job.chunks_total === 0 && (
+        <span className="muted">No chunks of this collection are left unused for this dataset.</span>
+      )}
     </div>
   );
 }

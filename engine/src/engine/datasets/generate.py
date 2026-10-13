@@ -352,6 +352,11 @@ class Generator:
                 added += 1
         job.added += added
         job.duplicates += duplicates
+        # The table of requests shows what each chunk finally gave.
+        request = job.requests[-1]
+        request["result"] += f"; {added} added" + (
+            f", {duplicates} already there" if duplicates else ""
+        )
         self._used(job.dataset, chunk["id"])
         job.note(f"added    {added} from {chunk['name']}")
 
