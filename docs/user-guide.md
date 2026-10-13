@@ -49,6 +49,9 @@ app read it.
 - The line under each answer shows where the time went: loading the model, searching the data,
   reading the prompt (tokens per second) and writing the answer. Use it to see what is slow.
 - **New chat** clears the conversation; **Stop** ends an answer early.
+- The conversation, the unsent text and the chosen model, data and system prompt stay when you
+  switch to another tab, and an answer being written keeps going. Coming back, the chat picks
+  up models and collections added on the other tabs. Closing the app clears the conversation.
 - The **{ }** button in the corner of each message shows the JSON of that exchange with the
   engine. On a question it opens **Sent**: the request body sent to `/v1/chat/completions`, and
   the request as the model got it, with the system prompt and the sources found in the data.

@@ -6,7 +6,16 @@ import { LiveStatus, Progress, Stats } from "./Stats";
 type Turn = ChatMessage & { sources?: Source[]; timings?: Timings; model?: string; trace?: ChatTrace };
 type TraceView = { trace: ChatTrace; side: "sent" | "received" };
 
-export function Chat({ client, onNeedModel }: { client: EngineClient; onNeedModel: () => void }) {
+export function Chat({
+  client,
+  active,
+  onNeedModel,
+}: {
+  client: EngineClient;
+  /** The chat tab is shown; hidden, the chat keeps its conversation. */
+  active: boolean;
+  onNeedModel: () => void;
+}) {
   const [models, setModels] = useState<string[]>([]);
   const [model, setModel] = useState("");
   const [system, setSystem] = useState("");
@@ -20,13 +29,24 @@ export function Chat({ client, onNeedModel }: { client: EngineClient; onNeedMode
   const [traceView, setTraceView] = useState<TraceView | null>(null);
   const abort = useRef<AbortController | null>(null);
 
+  // Reloaded whenever the tab is shown: models and collections may have changed on other tabs.
   useEffect(() => {
+    if (!active) return;
     Promise.all([client.installedModels(), client.defaultModel()]).then(([ids, preferred]) => {
       setModels(ids);
-      setModel((current) => current || (ids.includes(preferred) ? preferred : ids[0]) || "");
+      setModel((current) =>
+        ids.includes(current) ? current : (ids.includes(preferred) ? preferred : ids[0]) || "",
+      );
     }, (e) => setError(String(e)));
-    client.collections().then((list) => setCollections(list.map((c) => c.name)), () => {});
-  }, [client]);
+    client.collections().then(
+      (list) => {
+        const names = list.map((c) => c.name);
+        setCollections(names);
+        setCollection((current) => (names.includes(current) ? current : ""));
+      },
+      () => {},
+    );
+  }, [client, active]);
 
   async function send(event: FormEvent) {
     event.preventDefault();

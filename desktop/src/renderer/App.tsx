@@ -59,11 +59,15 @@ export function App() {
         </span>
       </header>
       <main>
+        {/* The chat stays mounted on the other tabs, so the conversation is kept. */}
+        {client && (
+          <div className="chat-tab" hidden={tab !== "chat"}>
+            <Chat client={client} active={tab === "chat"} onNeedModel={() => setTab("models")} />
+          </div>
+        )}
         {!client ? (
           <p className="muted">Waiting for the engine…</p>
-        ) : tab === "chat" ? (
-          <Chat client={client} onNeedModel={() => setTab("models")} />
-        ) : tab === "data" ? (
+        ) : tab === "chat" ? null : tab === "data" ? (
           <Data client={client} />
         ) : tab === "datasets" ? (
           <Datasets client={client} />

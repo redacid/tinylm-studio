@@ -40,6 +40,8 @@ main { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
 .error { color: var(--bad); }
 .empty { margin: auto; text-align: center; }
 .chat { display: flex; flex-direction: column; height: 100%; }
+.chat-tab { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.chat-tab[hidden] { display: none; }
 .toolbar { display: flex; gap: 8px; padding: 8px 16px; }
 .toolbar .system { flex: 1; }
 .messages { flex: 1; overflow-y: auto; padding: 8px 16px; display: flex; flex-direction: column; gap: 8px; }
