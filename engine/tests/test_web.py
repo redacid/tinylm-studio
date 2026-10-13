@@ -388,6 +388,14 @@ def test_crawl_settings_api(client, settings, site):
     assert wait_for(client, job.json()["id"])["indexed"] == 1
     assert "/robots.txt" not in Site.requests
 
+    # Browser (CDP) in the settings: pages added without use_browser load through it.
+    client.put("/api/crawl/settings", json={"use_browser": True, "cdp_url": "http://127.0.0.1:9"})
+    job = client.post("/api/collections/games/crawl", json={"urls": [f"{site}/b"]}).json()
+    assert job["options"]["use_browser"] is True
+    done = wait_for(client, job["id"])
+    assert "loading pages in the browser at http://127.0.0.1:9" in done["log"]
+    assert done["failed"] == 1 and "Cannot reach the browser" in done["log"][-1]
+
 
 def test_outcome_of_each_start_address(games, site):
     crawl(games, [f"{site}/a"], max_depth=0)

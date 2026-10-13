@@ -23,7 +23,7 @@ class CrawlRequest(BaseModel):
     max_depth: int | None = Field(None, ge=0, le=100)
     # Requests per minute to each site.
     per_minute: float | None = Field(None, gt=0, le=120)
-    use_browser: bool = False
+    use_browser: bool | None = None
     respect_robots: bool = True
 
     @field_validator("urls")
@@ -58,7 +58,7 @@ def with_defaults(body: CrawlRequest, request: Request) -> dict:
     """The request's crawl options, with the crawler settings for those left out."""
     defaults = crawl_settings(request).get()
     fields = body.model_dump(exclude={"name"})
-    for name in ("max_pages", "max_depth", "per_minute"):
+    for name in ("max_pages", "max_depth", "per_minute", "use_browser"):
         if fields[name] is None:
             fields[name] = getattr(defaults, name)
     return fields
@@ -188,6 +188,7 @@ class CrawlSettingsChanges(BaseModel, extra="forbid"):
     per_minute: float | None = None
     max_pages: int | None = None
     max_depth: int | None = None
+    use_browser: bool | None = None
     user_agent: str | None = None
     cdp_url: str | None = None
 

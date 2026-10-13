@@ -144,6 +144,8 @@ class Crawler:
         current = self.settings()
         http = HttpFetcher(self.proxy, current.user_agent)
         browser = CdpFetcher(current.cdp_url) if options.use_browser else None
+        if browser:
+            job.note(f"loading pages in the browser at {current.cdp_url}")
         respect_robots = options.respect_robots and current.respect_robots
         if options.respect_robots and not respect_robots:
             job.note("robots.txt is ignored (Settings > Crawler)")

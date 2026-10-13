@@ -21,6 +21,8 @@ class CrawlSettings(BaseModel):
     # Defaults for new websites and crawls.
     max_pages: int = Field(50, ge=1, le=100000)
     max_depth: int = Field(2, ge=0, le=100)
+    # Load pages in the browser at cdp_url, for new websites and pages added from search.
+    use_browser: bool = False
     user_agent: str = Field(min_length=1, max_length=300)
     cdp_url: str
 
@@ -43,6 +45,7 @@ def env_defaults(settings: Settings) -> dict:
         "per_minute": settings.crawl_per_minute,
         "max_pages": settings.crawl_max_pages,
         "max_depth": settings.crawl_max_depth,
+        "use_browser": settings.crawl_use_browser,
         "user_agent": settings.user_agent,
         "cdp_url": settings.cdp_url,
     }

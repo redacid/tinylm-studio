@@ -54,6 +54,7 @@ export type CrawlerSettings = {
   per_minute: number;
   max_pages: number;
   max_depth: number;
+  use_browser: boolean;
   user_agent: string;
   cdp_url: string;
 };

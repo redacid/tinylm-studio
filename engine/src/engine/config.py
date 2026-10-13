@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     # New pages per crawl and link hops from a start address, for new websites and crawls.
     crawl_max_pages: int = 50
     crawl_max_depth: int = 2
+    # Load pages in the browser at cdp_url by default (for sites that need JavaScript).
+    crawl_use_browser: bool = False
     user_agent: str = DEFAULT_USER_AGENT
     # Web search for finding pages and videos: a self-hosted SearXNG (free, no key), or Brave,
     # Tavily, Exa, Perplexity or Serper (each needs its API key; see engine.web.search).

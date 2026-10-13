@@ -203,8 +203,9 @@ or the Data tab) adds pages of websites to a collection in the background:
   text are remembered too: new links that later appear on them are not seen.
 - **Saved websites** keep the addresses and settings of a crawl so it can be run again, edited
   or deleted (deleting a saved website keeps the pages already added).
-- **Defaults:** `max_pages`, `max_depth` and `per_minute` left out of a crawl or a new website
-  come from the crawler settings (`GET /api/crawl/settings`; 50, 2 and 20 unless changed).
+- **Defaults:** `max_pages`, `max_depth`, `per_minute` and `use_browser` left out of a crawl or
+  a new website come from the crawler settings (`GET /api/crawl/settings`; 50, 2, 20 and
+  `false` unless changed). A crawl through the browser says so in its `log`.
 - **Politeness:** at most `per_minute` requests to each site (with random jitter), robots.txt
   rules and `Crawl-delay` are followed, and an HTTP 429/503 answer pauses that site for its
   `Retry-After` time (60 s by default) before the page is retried. robots.txt is read only when
@@ -232,7 +233,7 @@ or the Data tab) adds pages of websites to a collection in the background:
 | GET | `/api/crawls` | All crawls since the engine started |
 | GET | `/api/crawls/{id}` | Progress: `state`, `website_id`, `fetched` (new pages), `known` (downloaded before), `indexed`, `duplicates`, `skipped`, `failed`, `current`, `log`, and `outcomes`: per start address `added`, `duplicate`, `known`, `skipped` or `failed` (missing: not reached) |
 | POST | `/api/crawls/{id}/cancel` | Stops a crawl after the current page |
-| GET | `/api/crawl/settings` | `respect_robots`, `per_minute`, `max_pages`, `max_depth`, `user_agent`, `cdp_url` |
+| GET | `/api/crawl/settings` | `respect_robots`, `per_minute`, `max_pages`, `max_depth`, `use_browser`, `user_agent`, `cdp_url` |
 | PUT | `/api/crawl/settings` | Any of those fields; fields left out keep their value. Saved in `workspace/crawl-settings.json`, wins over the `TINYLM_*` variables and applies to crawls started afterwards; 422 names a wrong value |
 
 ## Web search
@@ -455,6 +456,7 @@ POST /api/evaluations
 | `TINYLM_CRAWL_PER_MINUTE` | `20` | Default requests per minute to each site |
 | `TINYLM_CRAWL_RESPECT_ROBOTS` | `true` | `false`: robots.txt is not read for any crawl |
 | `TINYLM_CRAWL_MAX_PAGES` / `TINYLM_CRAWL_MAX_DEPTH` | `50` / `2` | Defaults for new crawls and websites |
+| `TINYLM_CRAWL_USE_BROWSER` | `false` | `true`: new crawls and websites load pages in the browser at `TINYLM_CDP_URL` |
 | `TINYLM_USER_AGENT` | `tinylm-studio/0.1 (local research crawler)` | User-Agent of plain HTTP requests |
 | `TINYLM_SEARCH_PROVIDER` | `searxng` | Web search: `searxng`, `brave`, `tavily`, `exa`, `perplexity` or `serper`. This and the search variables below are defaults; the saved search settings win |
 | `TINYLM_SEARXNG_URL` | `http://127.0.0.1:8888` | SearXNG address (`make searxng` starts one) |

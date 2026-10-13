@@ -408,10 +408,11 @@ variables in the table only give the defaults. Changes apply to crawls started a
 | Requests per minute | 20 (`TINYLM_CRAWL_PER_MINUTE`) | To each site, 1 to 120, for new websites and for pages added from search results. |
 | Pages | 50 (`TINYLM_CRAWL_MAX_PAGES`) | New pages a new website downloads per run. |
 | Depth | 2 (`TINYLM_CRAWL_MAX_DEPTH`) | Link hops from the start addresses for a new website. |
+| Fetching | Plain HTTP (`TINYLM_CRAWL_USE_BROWSER`) | **Browser (CDP)**: pages added from search results, and new websites, load in the browser at **Browser address**. A saved website uses its own **Browser (CDP)** box. Setting only the address changes nothing: pages go through the browser only when this or the website's box says so. |
 | User agent | `tinylm-studio/0.1 (local research crawler)` (`TINYLM_USER_AGENT`) | How the crawler introduces itself; robots.txt rules are read for this name. |
 | Browser address (CDP) | `http://127.0.0.1:9222` (`TINYLM_CDP_URL`) | Where the browser for [Browser (CDP)](#browser-cdp) websites listens. |
 
-Pages, depth and requests per minute are only where a new website starts: each saved website
+Pages, depth, requests per minute and fetching are only where a new website starts: each saved website
 keeps its own values, changed in its form on the Data tab.
 
 ### Engine settings (.env)
@@ -437,7 +438,9 @@ SearXNG has its own outgoing proxy setting (`outgoing.proxies` in its `settings.
 ### Browser (CDP)
 
 Some sites build their pages with JavaScript or refuse simple HTTP clients. Tick
-**Browser (CDP)** on a website (or pass `--browser` to `python -m engine crawl`) to load its pages in a real
+**Browser (CDP)** on a website, choose **Browser (CDP)** under Fetching in
+[Crawler settings](#crawler-settings) for pages added from search, or pass `--browser` to
+`python -m engine crawl`, to load pages in a real
 browser that the engine controls over the Chrome DevTools Protocol.
 
 The quickest is a headless Chrome in Docker or Podman:

@@ -96,7 +96,13 @@ export function Websites({
             use_browser: website.use_browser,
           }
         : defaults
-          ? { ...NEW_SITE, max_pages: defaults.max_pages, max_depth: defaults.max_depth, per_minute: defaults.per_minute }
+          ? {
+              ...NEW_SITE,
+              max_pages: defaults.max_pages,
+              max_depth: defaults.max_depth,
+              per_minute: defaults.per_minute,
+              use_browser: defaults.use_browser,
+            }
           : NEW_SITE,
     );
   }

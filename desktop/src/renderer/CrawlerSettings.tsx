@@ -9,6 +9,7 @@ const draftOf = (s: CrawlerSettings): Draft => ({
   per_minute: String(s.per_minute),
   max_pages: String(s.max_pages),
   max_depth: String(s.max_depth),
+  use_browser: s.use_browser,
   user_agent: s.user_agent,
   cdp_url: s.cdp_url,
 });
@@ -65,6 +66,7 @@ export function CrawlerSettingsForm({
         per_minute: Number(draft!.per_minute),
         max_pages: Number(draft!.max_pages),
         max_depth: Number(draft!.max_depth),
+        use_browser: draft!.use_browser as boolean,
         user_agent: String(draft!.user_agent),
         cdp_url: String(draft!.cdp_url),
       };
@@ -171,6 +173,39 @@ export function CrawlerSettingsForm({
       </p>
 
       <h4>Fetching</h4>
+      <div className="provider-list">
+        <label className={`provider ${draft.use_browser ? "" : "active"}`}>
+          <input
+            type="radio"
+            name="fetch"
+            checked={!draft.use_browser}
+            onChange={() => set({ use_browser: false })}
+          />
+          <span>
+            <strong>Plain HTTP</strong>
+            <small className="muted">Fast, and enough for most sites.</small>
+          </span>
+        </label>
+        <label className={`provider ${draft.use_browser ? "active" : ""}`}>
+          <input
+            type="radio"
+            name="fetch"
+            checked={!!draft.use_browser}
+            onChange={() => set({ use_browser: true })}
+          />
+          <span>
+            <strong>Browser (CDP)</strong>
+            <small className="muted">
+              Pages load in the browser at the address below, for sites that
+              need JavaScript or block simple clients. Slower.
+            </small>
+          </span>
+        </label>
+      </div>
+      <p className="muted">
+        Used for pages added from search results and as the start for new
+        websites; a saved website uses its own Browser (CDP) box.
+      </p>
       <Field
         label="User agent"
         hint="How the crawler introduces itself to sites, and the name robots.txt rules are read for."
@@ -179,7 +214,7 @@ export function CrawlerSettingsForm({
       </Field>
       <Field
         label="Browser address (CDP)"
-        hint="Chrome's DevTools endpoint, for websites with Browser (CDP) on: sites that need JavaScript. make chrome starts one in Docker."
+        hint="Chrome's DevTools endpoint, used only when pages load through the browser. make chrome starts one in Docker."
       >
         {text("cdp_url")}
       </Field>

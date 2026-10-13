@@ -128,7 +128,7 @@ def crawl(settings: Settings, args: argparse.Namespace) -> None:
         max_pages=args.max_pages or defaults.max_pages,
         max_depth=defaults.max_depth if args.max_depth is None else args.max_depth,
         per_minute=args.per_minute or defaults.per_minute,
-        use_browser=args.browser,
+        use_browser=defaults.use_browser if args.browser is None else args.browser,
         respect_robots=not args.ignore_robots,
     )
     run_crawl(settings, args.collection, options)
@@ -247,7 +247,11 @@ def main() -> None:
     p.add_argument("--max-pages", type=int, help="new pages to download (earlier ones are skipped)")
     p.add_argument("--max-depth", type=int, help="link hops from a start address")
     p.add_argument("--per-minute", type=float, help="requests per minute to each site")
-    p.add_argument("--browser", action="store_true", help="fetch through the browser at CDP_URL")
+    p.add_argument(
+        "--browser",
+        action=argparse.BooleanOptionalAction,
+        help="fetch through the browser at the CDP address (default: the crawler settings)",
+    )
     p.add_argument(
         "--ignore-robots", action="store_true", help="do not read robots.txt for this crawl"
     )

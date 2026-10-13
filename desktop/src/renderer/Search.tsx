@@ -94,7 +94,7 @@ export function Search({
     try {
       const urls = chosen.map((r) => r.url);
       // Only these pages: depth 0, and a page budget that covers all of them.
-      setJob(await client.startCrawl(collection, { urls, max_pages: urls.length, max_depth: 0, use_browser: false }));
+      setJob(await client.startCrawl(collection, { urls, max_pages: urls.length, max_depth: 0 }));
     } catch (e) {
       report(e);
     }
@@ -106,7 +106,7 @@ export function Search({
       const bySite = new Map<string, string[]>();
       for (const r of chosen) bySite.set(r.site, [...(bySite.get(r.site) ?? []), r.url]);
       for (const [site, urls] of bySite) {
-        await client.addWebsite(collection, { name: site, urls, use_browser: false });
+        await client.addWebsite(collection, { name: site, urls });
       }
       onSaved();
       setMessage(`Saved ${bySite.size} website${bySite.size === 1 ? "" : "s"}: crawl ${bySite.size === 1 ? "it" : "them"} from the list below.`);
