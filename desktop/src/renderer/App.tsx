@@ -80,7 +80,7 @@ export function App() {
         )}
         {tab === "settings" ? (
           // Needs no engine: these settings live in the app.
-          <Settings chat={chatSettings} onChat={changeChatSettings} />
+          <Settings client={client} chat={chatSettings} onChat={changeChatSettings} />
         ) : !client ? (
           <p className="muted">Waiting for the engine…</p>
         ) : tab === "chat" ? null : tab === "data" ? (

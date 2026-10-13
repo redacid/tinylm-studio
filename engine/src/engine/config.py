@@ -46,10 +46,20 @@ class Settings(BaseSettings):
     # Default requests per minute to each site; keep it low to stay polite and avoid bans.
     crawl_per_minute: float = 20
     user_agent: str = DEFAULT_USER_AGENT
-    # Web search for finding pages and videos: a self-hosted SearXNG (free, no key) or the
-    # Brave Search API (needs brave_api_key).
-    search_provider: Literal["searxng", "brave"] = "searxng"
+    # Web search for finding pages and videos: a self-hosted SearXNG (free, no key), or Brave,
+    # Tavily, Exa, Perplexity or Serper (each needs its API key; see engine.web.search).
+    # These are defaults: what is saved in the app's Settings > Search wins over them.
+    search_provider: Literal["searxng", "brave", "tavily", "exa", "perplexity", "serper"] = (
+        "searxng"
+    )
     searxng_url: str = "http://127.0.0.1:8888"
+    # Only results from these sites, and never from these (JSON lists of domains).
+    search_include_domains: list[str] = []
+    search_exclude_domains: list[str] = []
+    tavily_api_key: str | None = None
+    exa_api_key: str | None = None
+    perplexity_api_key: str | None = None
+    serper_api_key: str | None = None
     # A llama.cpp checkout whose convert_hf_to_gguf.py exports fine-tuned models to GGUF; by
     # default the converter of the installed llama-cpp-python is downloaded once from PyPI.
     llama_cpp_dir: Path | None = None

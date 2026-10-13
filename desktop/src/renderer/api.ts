@@ -74,6 +74,40 @@ export type CrawlJob = {
 
 export type SearchKind = "web" | "video";
 
+export type SearchProviderName = "searxng" | "brave" | "tavily" | "exa" | "perplexity" | "serper";
+
+/** The engine's search settings; API keys are never sent back, only whether each is set. */
+export type SearchSettings = {
+  provider: SearchProviderName;
+  include_domains: string[];
+  exclude_domains: string[];
+  searxng_url: string;
+  brave_api_key_set: boolean;
+  tavily_api_key_set: boolean;
+  tavily_depth: "basic" | "advanced";
+  tavily_topic: "general" | "news";
+  exa_api_key_set: boolean;
+  exa_type: "auto" | "fast" | "instant";
+  perplexity_api_key_set: boolean;
+  serper_api_key_set: boolean;
+  serper_country: string | null;
+};
+
+/** Fields to save; a key is set by a string and removed by "". */
+export type SearchSettingsChanges = Partial<
+  Omit<SearchSettings, `${string}_api_key_set`> & Record<`${Exclude<SearchProviderName, "searxng">}_api_key`, string>
+>;
+
+export type SearchOutcome = {
+  provider: SearchProviderName;
+  data: SearchResult[];
+  /** Results dropped by the domain filter. */
+  hidden: number;
+  queries: string[];
+  include_domains: string[];
+  exclude_domains: string[];
+};
+
 export type SearchResult = {
   title: string;
   url: string;
@@ -684,14 +718,25 @@ export class EngineClient {
     return this.json<CrawlJob>(`/api/websites/${id}/crawl`, { method: "POST" });
   }
 
-  /** Finds pages or videos on the web with the engine's search provider (SearXNG or Brave). */
-  async search(query: string, kind: SearchKind, language = "", limit = 20): Promise<SearchResult[]> {
-    const body = await this.json<{ data: SearchResult[] }>("/api/search", {
+  /** Finds pages or videos on the web with the provider and domain filter of the search settings. */
+  async search(query: string, kind: SearchKind, language = "", limit = 20): Promise<SearchOutcome> {
+    return this.json<SearchOutcome>("/api/search", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ query, kind, language: language || null, limit }),
     });
-    return body.data;
+  }
+
+  async searchSettings(): Promise<SearchSettings> {
+    return this.json<SearchSettings>("/api/search/settings");
+  }
+
+  async saveSearchSettings(changes: SearchSettingsChanges): Promise<SearchSettings> {
+    return this.json<SearchSettings>("/api/search/settings", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(changes),
+    });
   }
 
   /** Keeps search results (e.g. trailers) as small link documents that answers can cite. */

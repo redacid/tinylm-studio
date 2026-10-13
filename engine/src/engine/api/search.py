@@ -1,11 +1,12 @@
 """Management API for web search: find pages and videos, and keep results as links."""
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from engine.api.deps import knowledge, require_api_key
 from engine.rag.store import CollectionNotFound, KnowledgeStore
-from engine.web.search import SearchError, SearchKind, SearchResult, link_document
+from engine.web.search import SearchError, SearchKind, SearchResult, link_document, search
+from engine.web.search_settings import SearchSettings, validation_message
 
 router = APIRouter(prefix="/api", dependencies=[Depends(require_api_key)], tags=["search"])
 
@@ -16,6 +17,9 @@ class SearchRequest(BaseModel):
     limit: int = Field(10, ge=1, le=50)
     # Result language, such as "uk", "ru" or "en"; any language when empty.
     language: str | None = None
+    # Domain filters for this search only; the saved ones (Settings > Search) when left out.
+    include_domains: list[str] | None = None
+    exclude_domains: list[str] | None = None
 
 
 class Link(BaseModel):
@@ -30,16 +34,57 @@ class LinksRequest(BaseModel):
 
 
 @router.post("/search")
-def search(body: SearchRequest, request: Request) -> dict:
+def find(body: SearchRequest, request: Request) -> dict:
+    saved = request.app.state.search_settings.get()
+    changes = body.model_dump(include={"include_domains", "exclude_domains"}, exclude_none=True)
     try:
-        provider = request.app.state.searcher()
+        current = saved.model_copy(
+            update=SearchSettings(**changes).model_dump(include=set(changes))
+        )
+    except ValidationError as e:
+        raise HTTPException(422, validation_message(e)) from None
+    try:
+        provider = request.app.state.search_settings.provider(current)
         try:
-            results = provider.search(body.query, body.kind, body.limit, body.language or None)
+            outcome = search(
+                provider,
+                body.query,
+                body.kind,
+                body.limit,
+                body.language or None,
+                current.domain_filter,
+            )
         finally:
             provider.close()
     except SearchError as e:
         raise HTTPException(503, str(e)) from None
-    return {"provider": provider.name, "data": [r.to_dict() for r in results]}
+    return {
+        "provider": provider.name,
+        "data": [r.to_dict() for r in outcome.results],
+        # Results dropped by the domain filter, and the queries sent (with `site:` when the
+        # provider cannot filter by domain itself).
+        "hidden": outcome.hidden,
+        "queries": outcome.queries,
+        "include_domains": current.include_domains,
+        "exclude_domains": current.exclude_domains,
+    }
+
+
+@router.get("/search/settings")
+def get_settings(request: Request) -> dict:
+    return request.app.state.search_settings.get().public()
+
+
+@router.put("/search/settings")
+def put_settings(changes: dict, request: Request) -> dict:
+    """Saves the given fields only. API keys: a string sets it, "" removes it, left out keeps it."""
+    unknown = set(changes) - set(SearchSettings.model_fields)
+    if unknown:
+        raise HTTPException(422, f"Unknown settings: {', '.join(sorted(unknown))}")
+    try:
+        return request.app.state.search_settings.update(changes).public()
+    except ValidationError as e:
+        raise HTTPException(422, validation_message(e)) from None
 
 
 @router.post("/collections/{name}/links")

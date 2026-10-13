@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
-import { CrawlJob, EngineClient, SearchKind, SearchResult } from "./api";
+import { CrawlJob, EngineClient, SearchKind, SearchOutcome, SearchResult, SearchSettings } from "./api";
+import { PROVIDER_TITLES } from "./SearchSettings";
 import { CrawlProgress } from "./Websites";
 
 /**
@@ -19,6 +20,8 @@ export function Search({
   const [kind, setKind] = useState<SearchKind>("web");
   const [language, setLanguage] = useState("");
   const [results, setResults] = useState<SearchResult[] | null>(null);
+  const [outcome, setOutcome] = useState<SearchOutcome | null>(null);
+  const [searchSettings, setSearchSettings] = useState<SearchSettings | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -29,6 +32,10 @@ export function Search({
   const [job, setJob] = useState<CrawlJob | null>(null);
 
   const report = (e: unknown) => setError(e instanceof Error ? e.message : String(e));
+
+  useEffect(() => {
+    client.searchSettings().then(setSearchSettings, () => {});
+  }, [client]);
 
   // Follow the crawl started from here until it ends.
   useEffect(() => {
@@ -48,7 +55,9 @@ export function Search({
     setMessage(null);
     if (job?.state !== "running") setJob(null);
     try {
-      const found = await client.search(query.trim(), kind, language);
+      const outcome = await client.search(query.trim(), kind, language);
+      const found = outcome.data;
+      setOutcome(outcome);
       setResults(found);
       setSelected(new Set(found.map((r) => r.url)));
       setLinked(new Map());
@@ -162,6 +171,7 @@ export function Search({
         </select>
         <button type="submit" disabled={busy || !query.trim()}>{busy ? "Searching…" : "Search"}</button>
       </form>
+      <SearchSummary settings={searchSettings} outcome={outcome} />
       {error && <p className="error">{error}</p>}
       {results && results.length === 0 && <p className="muted">Nothing found.</p>}
       {results && results.length > 0 && (
@@ -203,6 +213,17 @@ export function Search({
       {job && <CrawlProgress job={job} />}
     </div>
   );
+}
+
+/** Which provider searches and which sites are filtered, so a short list is not a mystery. */
+function SearchSummary({ settings, outcome }: { settings: SearchSettings | null; outcome: SearchOutcome | null }) {
+  const source = outcome ?? settings;
+  if (!source) return null;
+  const parts = [`Searching with ${PROVIDER_TITLES[source.provider]}`];
+  if (source.include_domains.length) parts.push(`only ${source.include_domains.join(", ")}`);
+  if (source.exclude_domains.length) parts.push(`not ${source.exclude_domains.join(", ")}`);
+  if (outcome?.hidden) parts.push(`${outcome.hidden} result${outcome.hidden === 1 ? "" : "s"} hidden by the filter`);
+  return <p className="muted search-summary">{parts.join(" · ")} (Settings › Search)</p>;
 }
 
 type Mark = { text: string; tone: "ok" | "bad" | "muted" };

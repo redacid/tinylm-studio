@@ -31,7 +31,7 @@ from engine.rag.store import KnowledgeStore
 from engine.teachers.store import TeacherStore
 from engine.training.jobs import TrainingManager
 from engine.web.crawler import Crawler, CrawlManager
-from engine.web.search import BraveSearch, SearchError, SearchProvider, SearxngSearch
+from engine.web.search_settings import SearchSettingsStore
 
 
 def open_knowledge(settings: Settings) -> KnowledgeStore:
@@ -46,12 +46,8 @@ def crawler(settings: Settings, store: KnowledgeStore) -> Crawler:
     return Crawler(store, settings.proxy, settings.cdp_url, settings.user_agent)
 
 
-def searcher(settings: Settings) -> SearchProvider:
-    if settings.search_provider == "brave":
-        if not settings.brave_api_key:
-            raise SearchError("Set TINYLM_BRAVE_API_KEY to search with Brave, or use SearXNG.")
-        return BraveSearch(settings.brave_api_key, settings.proxy)
-    return SearxngSearch(settings.searxng_url)
+def search_settings(settings: Settings) -> SearchSettingsStore:
+    return SearchSettingsStore(settings.workspace_dir / "search-settings.json", settings)
 
 
 def create_app(
@@ -77,7 +73,7 @@ def create_app(
     app.state.knowledge = knowledge_store or open_knowledge(settings)
     app.state.crawls = CrawlManager(crawler(settings, app.state.knowledge))
     # A new search client per request, so a changed setting or a missing key shows up at once.
-    app.state.searcher = lambda: searcher(settings)
+    app.state.search_settings = search_settings(settings)
     app.state.datasets = DatasetStore(app.state.knowledge)
     app.state.teachers = TeacherStore(app.state.knowledge, app.state.models)
     app.state.generations = GenerationManager(

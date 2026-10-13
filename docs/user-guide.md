@@ -17,7 +17,7 @@ For the HTTP API see [api.md](api.md); for the design and roadmap see the
 - [Settings](#settings)
   - [Proxy for crawling and search](#proxy)
   - [Crawling through a real browser (CDP)](#browser-cdp)
-  - [Web search: SearXNG or Brave](#web-search)
+  - [Web search: SearXNG setup](#web-search)
   - [Hardware: threads and GPU](#hardware)
 - [Where data is stored](#where-data-is-stored)
 - [Command line](#command-line)
@@ -325,8 +325,8 @@ reports are kept until you delete them.
 ## Settings
 
 The **Settings** tab holds the app's own settings, saved as you change them and kept after a
-restart. The engine's settings (proxy, browser, web search, hardware, folders) go into `.env`
-instead; see below.
+restart, except the search settings, which the engine keeps. The engine's other settings
+(proxy, browser, hardware, folders) go into `.env`; see below.
 
 ### Chat settings
 
@@ -350,6 +350,38 @@ instead; see below.
 storage (`~/.config/tinylm-studio-desktop/`), not in `.env`, and apply to the chat screen only; API
 clients pass the same values in their requests (see [api.md](api.md)).
 
+### Search settings
+
+![Search settings](images/search-settings.png)
+
+The search on the Data tab (**Find on the web**) and `make search` use the provider and site
+filters chosen here. Unlike the chat settings, they are kept by the engine (in
+`<data dir>/workspace/search-settings.json`), so they also apply when the engine runs in a
+cluster; the `TINYLM_SEARCH_*` and `TINYLM_*_API_KEY` variables only give the defaults.
+
+| Provider | Key | Videos | Filters sites itself | Options |
+|---|---|---|---|---|
+| **SearXNG** (default) | no, self-hosted (see [Web search](#web-search)) | yes | no | Address |
+| **Brave Search** | [brave.com/search/api](https://brave.com/search/api/) | yes | no | |
+| **Tavily** | [app.tavily.com](https://app.tavily.com/) | through YouTube and Vimeo | yes | Depth (advanced costs twice the credits), topic (general, news) |
+| **Exa** | [dashboard.exa.ai](https://dashboard.exa.ai/) | through YouTube and Vimeo | yes | Search type (auto, fast, instant) |
+| **Perplexity** | [docs.perplexity.ai](https://docs.perplexity.ai/) | through YouTube and Vimeo | up to 20 sites | |
+| **Serper** (Google's results) | [serper.dev](https://serper.dev/) | yes | no | Country (`ua`, `us`, ...) |
+
+- **API key**: pasted once and never shown again; the card shows **key set** or **no key**.
+  **Remove** deletes it. Keys of other providers stay saved when you switch.
+- **Only these sites** (empty: any site) and **Never these sites** (empty: none): one domain
+  per line, e.g. `ign.com`; addresses like `https://www.ign.com/games` are reduced to the
+  domain, and subdomains count too (`wiki.example` covers `en.wiki.example`).
+- SearXNG itself has no per-search site filter (its `hostnames` plugin only removes sites for
+  every search, in its own settings), and neither do Brave and Serper. With them the search asks
+  for `site:<domain>` results for each listed site (up to 5) and drops results from other sites
+  in the engine, fetching up to 3 pages when the filter leaves too few. Tavily, Exa and
+  Perplexity get the lists in their API; the results are checked again anyway.
+- **Test search** saves and searches for one word, to check the provider and key. Above the
+  results on the Data tab, a line shows the provider, the filters and how many results were
+  hidden by them.
+
 ### Engine settings (.env)
 
 Put these into `.env` (see [.env.example](../.env.example)); the full list is in
@@ -357,7 +389,8 @@ Put these into `.env` (see [.env.example](../.env.example)); the full list is in
 
 ### Proxy
 
-`TINYLM_PROXY` sends crawler traffic, and Brave Search requests, through a proxy:
+`TINYLM_PROXY` sends crawler traffic, and requests to the hosted search providers (all but
+SearXNG), through a proxy:
 
 ```bash
 TINYLM_PROXY=http://user:password@proxy.example:3128
@@ -389,13 +422,16 @@ HTTP.
 
 ### Web search
 
-- **SearXNG** (default, free, no key): `make searxng` starts it in Docker or Podman on
-  `http://127.0.0.1:8888` and `make searxng-stop` stops it. Its settings are in
-  `<data dir>/searxng/settings.yml`: choose search engines there or give it an outgoing proxy,
-  then run `make searxng` again. To use a SearXNG you already run, set `TINYLM_SEARXNG_URL` and
-  make sure `json` is listed in its `search.formats`.
-- **Brave Search API**: `TINYLM_SEARCH_PROVIDER=brave` and `TINYLM_BRAVE_API_KEY=...` (free tier
-  at https://brave.com/search/api/).
+The provider, its key and the site filters are chosen in [Search settings](#search-settings).
+For the default, SearXNG (free, no key):
+
+- `make searxng` starts it in Docker or Podman on `http://127.0.0.1:8888` and
+  `make searxng-stop` stops it. Its settings are in `<data dir>/searxng/settings.yml`: choose
+  search engines there or give it an outgoing proxy, then run `make searxng` again.
+- To use a SearXNG you already run, put its address into Search settings (or
+  `TINYLM_SEARXNG_URL`) and make sure `json` is listed in its `search.formats`.
+- From the command line: `make search Q="elden ring review" INCLUDE=ign.com,gamespot.com` or
+  `EXCLUDE=pinterest.com` overrides the saved site filters for that search.
 
 ### Hardware
 

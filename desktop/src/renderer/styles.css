@@ -184,3 +184,13 @@ th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border);
 .sources a { color: var(--accent); text-decoration: none; }
 .sources a:hover { text-decoration: underline; }
 .sources .source-where { color: var(--muted); }
+.provider-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.provider { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+.provider.active { border-color: var(--accent); }
+.provider > span { display: flex; flex-direction: column; gap: 2px; }
+.provider .badge { align-self: flex-start; }
+.key-row { display: flex; gap: 8px; }
+.key-row input { flex: 1; max-width: 420px; }
+.buttons-row { display: flex; gap: 8px; }
+.search-summary { margin: 4px 0; }
+.provider a { color: var(--accent); }

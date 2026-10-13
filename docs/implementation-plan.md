@@ -279,4 +279,4 @@ qwen3-0.6b on ~1,000 examples on the target machine, and a GPU run.
 4. ~~Platforms and hardware~~ **Decided:** Linux (Debian-based first, Alpine second), i7-class CPU with 32 GB RAM.
 5. ~~Reference use case~~ **Decided:** video game assistant (section 3.8).
 6. ~~Repository~~ **Decided:** local git repository `tinylm-studio` for now; a remote is added later.
-7. ~~**Web search provider**~~ Decided: self-hosted SearXNG by default (free, no key; `make searxng`), Brave Search API as an option, plus user-supplied site lists.
+7. ~~**Web search provider**~~ Decided: self-hosted SearXNG by default (free, no key; `make searxng`), Brave Search API as an option, plus user-supplied site lists. **Extended (2026-10-13):** Tavily, Exa, Perplexity and Serper as further providers, chosen with their keys and site filters (include/exclude domains) in Settings > Search; the engine keeps these settings.

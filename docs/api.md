@@ -233,6 +233,9 @@ or the Data tab) adds pages of websites to a collection in the background:
 `POST /api/search` (or `make search Q="elden ring review"`, or Find on the Data tab) finds pages
 and videos for a collection, so sites and trailers do not have to be looked up by hand:
 
+The provider and the site filters are search settings kept by the engine (Settings > Search in
+the app, or the endpoints below); the variables in [Settings](#settings) are their defaults.
+
 - **SearXNG** (default, `TINYLM_SEARCH_PROVIDER=searxng`): a self-hosted metasearch engine that
   asks Google, Bing, DuckDuckGo, YouTube and others. Free, no key. `make searxng` starts it in
   Docker or Podman on `http://127.0.0.1:8888` (`TINYLM_SEARXNG_URL`), with
@@ -240,8 +243,15 @@ and videos for a collection, so sites and trailers do not have to be looked up b
   the JSON output the engine needs; edit it to choose engines or give SearXNG an outgoing proxy
   (`outgoing.proxies`), then run `make searxng` again. An existing SearXNG works too if `json`
   is listed in its `search.formats`.
-- **Brave Search API** (`TINYLM_SEARCH_PROVIDER=brave`, `TINYLM_BRAVE_API_KEY`): hosted, needs a
-  key (there is a free tier); requests go through `TINYLM_PROXY` when it is set.
+- **Hosted APIs**, each with its own key: `brave` (Brave Search), `tavily`, `exa`, `perplexity`
+  (Search API) and `serper` (Google's results). Requests go through `TINYLM_PROXY` when it is
+  set. Tavily, Exa and Perplexity have no video search: `kind: "video"` searches pages on
+  YouTube and Vimeo through them.
+- **Site filters**: `include_domains` (only these sites, subdomains included; empty: any) and
+  `exclude_domains` (never these). Tavily, Exa and Perplexity (up to 20 sites, allow or deny
+  list) take them in their APIs. SearXNG, whose only site filter is its global `hostnames`
+  plugin, Brave and Serper get one `site:<domain>` query per included site (up to 5). Every
+  result is checked by the engine, which fetches up to 3 pages when the filter leaves too few.
 
 What to do with the results:
 
@@ -252,7 +262,9 @@ What to do with the results:
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/api/search` | `{"query": "...", "kind": "web" or "video", "limit": 10, "language": "uk"}` (language optional): `provider` and results with `title`, `url`, `snippet`, `site`, `thumbnail`, `source`; 503 with the reason when the provider is not reachable or not set up |
+| POST | `/api/search` | `{"query": "...", "kind": "web" or "video", "limit": 10, "language": "uk"}` (language optional; `include_domains` / `exclude_domains` override the saved filters for this search): `provider`, results (`data`) with `title`, `url`, `snippet`, `site`, `thumbnail`, `source`, `hidden` (results dropped by the filters), `queries` sent and the filters used; 503 with the reason when the provider is not reachable or not set up |
+| GET | `/api/search/settings` | Provider, options and filters; API keys only as `<provider>_api_key_set` |
+| PUT | `/api/search/settings` | Any of `provider`, `include_domains`, `exclude_domains`, `searxng_url`, `brave_api_key`, `tavily_api_key`, `tavily_depth` (`basic`, `advanced`), `tavily_topic` (`general`, `news`), `exa_api_key`, `exa_type` (`auto`, `fast`, `instant`), `perplexity_api_key`, `serper_api_key`, `serper_country`; fields left out keep their value, `""` removes a key. Saved in `workspace/search-settings.json`; 422 names a wrong domain |
 | POST | `/api/collections/{name}/links` | `{"links": [{"title": "...", "url": "https://...", "snippet": "...", "kind": "video"}]}` |
 
 ## Datasets
@@ -430,7 +442,8 @@ POST /api/evaluations
 | `TINYLM_CDP_URL` | `http://127.0.0.1:9222` | Browser DevTools endpoint for crawling with a browser |
 | `TINYLM_CRAWL_PER_MINUTE` | `20` | Default requests per minute to each site |
 | `TINYLM_USER_AGENT` | `tinylm-studio/0.1 (local research crawler)` | User-Agent of plain HTTP requests |
-| `TINYLM_SEARCH_PROVIDER` | `searxng` | Web search: `searxng` or `brave` |
+| `TINYLM_SEARCH_PROVIDER` | `searxng` | Web search: `searxng`, `brave`, `tavily`, `exa`, `perplexity` or `serper`. This and the search variables below are defaults; the saved search settings win |
 | `TINYLM_SEARXNG_URL` | `http://127.0.0.1:8888` | SearXNG address (`make searxng` starts one) |
-| `TINYLM_BRAVE_API_KEY` | none | Brave Search API key, for `TINYLM_SEARCH_PROVIDER=brave` |
+| `TINYLM_SEARCH_INCLUDE_DOMAINS` / `TINYLM_SEARCH_EXCLUDE_DOMAINS` | `[]` | Only / never these sites (JSON list of domains) |
+| `TINYLM_BRAVE_API_KEY`, `TINYLM_TAVILY_API_KEY`, `TINYLM_EXA_API_KEY`, `TINYLM_PERPLEXITY_API_KEY`, `TINYLM_SERPER_API_KEY` | none | API keys of the hosted search providers |
 | `TINYLM_LLAMA_CPP_DIR` | none | A llama.cpp checkout whose `convert_hf_to_gguf.py` exports to GGUF; by default the converter is downloaded once from PyPI |

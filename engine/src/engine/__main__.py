@@ -6,7 +6,8 @@ python -m engine models                          list catalog and installed mode
 python -m engine bench [MODEL_ID ...]            benchmark installed models
 python -m engine ingest COLLECTION PATH ...      add files or folders to a collection
 python -m engine crawl COLLECTION URL ...        add pages of websites to a collection
-python -m engine search QUERY [--add COLLECTION] find pages or videos (and add them)
+python -m engine search QUERY [--add COLLECTION] find pages or videos (and add them);
+                 [--include a.com,b.com] [--exclude c.com]   only / never these sites
 """
 
 import argparse
@@ -161,17 +162,35 @@ def run_crawl(settings: Settings, collection: str, options) -> None:
 
 
 def search(settings: Settings, args: argparse.Namespace) -> None:
-    from engine.main import open_knowledge, searcher
+    from pydantic import ValidationError
+
+    from engine.main import open_knowledge, search_settings
     from engine.web.crawler import CrawlOptions
     from engine.web.search import SearchError, link_document
+    from engine.web.search import search as find
+    from engine.web.search_settings import SearchSettings, validation_message
 
     kind = "video" if args.video else "web"
+    store = search_settings(settings)
+    changes = {}
+    if args.include is not None:
+        changes["include_domains"] = args.include
+    if args.exclude is not None:
+        changes["exclude_domains"] = args.exclude
     try:
-        provider = searcher(settings)
-        results = provider.search(args.query, kind, args.limit, args.language)
+        # Flags win over the saved settings for this search only.
+        update = SearchSettings(**changes).model_dump(include=set(changes))
+        current = store.get().model_copy(update=update)
+        provider = store.provider(current)
+        outcome = find(provider, args.query, kind, args.limit, args.language, current.domain_filter)
         provider.close()
     except SearchError as e:
         sys.exit(str(e))
+    except ValidationError as e:
+        sys.exit(validation_message(e))
+    results = outcome.results
+    if outcome.hidden:
+        print(f"({outcome.hidden} results hidden by the domain filter)")
     if not results:
         print("Nothing found.")
     for i, result in enumerate(results, 1):
@@ -236,6 +255,16 @@ def main() -> None:
     p.add_argument("--video", action="store_true", help="find videos (trailers) instead of pages")
     p.add_argument("--limit", type=int, default=10)
     p.add_argument("--language", help="result language, such as uk, ru or en")
+    p.add_argument(
+        "--include",
+        metavar="DOMAINS",
+        help="only these sites, comma-separated (default: the saved search settings)",
+    )
+    p.add_argument(
+        "--exclude",
+        metavar="DOMAINS",
+        help="never these sites, comma-separated (default: the saved search settings)",
+    )
     p.add_argument(
         "--add", metavar="COLLECTION", help="add the found pages (or video links) to a collection"
     )

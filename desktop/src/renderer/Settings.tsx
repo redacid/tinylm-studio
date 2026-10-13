@@ -1,12 +1,23 @@
 import { ReactNode, useState } from "react";
+import { EngineClient } from "./api";
 import { CHAT_DEFAULTS, ChatSettings } from "./chatSettings";
+import { SearchSettingsForm } from "./SearchSettings";
 
-type Section = "chat";
+type Section = "chat" | "search";
 
-const SECTIONS: Record<Section, string> = { chat: "Chat settings" };
+const SECTIONS: Record<Section, string> = { chat: "Chat settings", search: "Search settings" };
 
 /** App settings, saved as they are changed. Engine settings stay in .env. */
-export function Settings({ chat, onChat }: { chat: ChatSettings; onChat: (settings: ChatSettings) => void }) {
+export function Settings({
+  client,
+  chat,
+  onChat,
+}: {
+  /** None while the engine starts; the engine keeps the search settings. */
+  client: EngineClient | null;
+  chat: ChatSettings;
+  onChat: (settings: ChatSettings) => void;
+}) {
   const [section, setSection] = useState<Section>("chat");
   return (
     <div className="data settings">
@@ -17,11 +28,13 @@ export function Settings({ chat, onChat }: { chat: ChatSettings; onChat: (settin
           </button>
         ))}
         <p className="muted">
-          Engine settings (proxy, hardware, models folder) are in <code>.env</code>; see the user guide.
+          Chat settings are kept by this app; search settings by the engine. Other engine settings (proxy, hardware,
+          models folder) are in <code>.env</code>; see the user guide.
         </p>
       </aside>
       <section className="settings-page">
         {section === "chat" && <ChatSettingsForm value={chat} onChange={onChat} />}
+        {section === "search" && <SearchSettingsForm client={client} />}
       </section>
     </div>
   );
