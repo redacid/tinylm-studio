@@ -15,6 +15,9 @@ For the HTTP API see [api.md](api.md); for the design and roadmap see the
   - [Exporting a fine-tuned model to GGUF](#exporting-to-gguf)
 - [Evaluation](#evaluation)
 - [Settings](#settings)
+  - [Chat settings](#chat-settings)
+  - [Search settings: providers and site filters](#search-settings)
+  - [Crawler settings: robots.txt, rate, defaults](#crawler-settings)
   - [Proxy for crawling and search](#proxy)
   - [Crawling through a real browser (CDP)](#browser-cdp)
   - [Web search: SearXNG setup](#web-search)
@@ -122,8 +125,10 @@ A **collection** is a set of documents that chat can answer from. Create one on 
     not overloaded and does not ban you.
   - *Browser (CDP)* loads pages in a real Chrome or Chromium, for sites that need JavaScript or
     block simple clients (see [Browser (CDP)](#browser-cdp)).
-  - robots.txt is followed, and a site that answers "too many requests" is paused for as long
-    as it asks.
+  - robots.txt is followed unless it is turned off in
+    [Crawler settings](#crawler-settings), and a site that answers "too many requests" is paused
+    for as long as it asks.
+  - A new website starts with the pages, depth and requests per minute from Crawler settings.
 
   ![A finished crawl](images/websites.png)
 
@@ -325,8 +330,8 @@ reports are kept until you delete them.
 ## Settings
 
 The **Settings** tab holds the app's own settings, saved as you change them and kept after a
-restart, except the search settings, which the engine keeps. The engine's other settings
-(proxy, browser, hardware, folders) go into `.env`; see below.
+restart, except the search and crawler settings, which the engine keeps. The engine's other
+settings (proxy, hardware, folders) go into `.env`; see below.
 
 ### Chat settings
 
@@ -389,6 +394,26 @@ cluster; the `TINYLM_SEARCH_*` and `TINYLM_*_API_KEY` variables only give the de
   results on the Data tab, a line shows the provider, the filters and how many results were
   hidden by them.
 
+### Crawler settings
+
+![Crawler settings](images/crawler-settings.png)
+
+Used when pages and websites are added on the Data tab and by `make crawl`. Like the search
+settings, they are kept by the engine (in `<data dir>/workspace/crawl-settings.json`); the
+variables in the table only give the defaults. Changes apply to crawls started after saving.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| robots.txt | Follow (`TINYLM_CRAWL_RESPECT_ROBOTS`) | **Follow**: each site's robots.txt is read first, pages it disallows are skipped and its `Crawl-delay` slows the crawl down. **Ignore**: robots.txt is not read at all, for every crawl. Ignore it only on sites you may crawl anyway, such as your own: sites can ban crawlers that do. |
+| Requests per minute | 20 (`TINYLM_CRAWL_PER_MINUTE`) | To each site, 1 to 120, for new websites and for pages added from search results. |
+| Pages | 50 (`TINYLM_CRAWL_MAX_PAGES`) | New pages a new website downloads per run. |
+| Depth | 2 (`TINYLM_CRAWL_MAX_DEPTH`) | Link hops from the start addresses for a new website. |
+| User agent | `tinylm-studio/0.1 (local research crawler)` (`TINYLM_USER_AGENT`) | How the crawler introduces itself; robots.txt rules are read for this name. |
+| Browser address (CDP) | `http://127.0.0.1:9222` (`TINYLM_CDP_URL`) | Where the browser for [Browser (CDP)](#browser-cdp) websites listens. |
+
+Pages, depth and requests per minute are only where a new website starts: each saved website
+keeps its own values, changed in its form on the Data tab.
+
 ### Engine settings (.env)
 
 Put these into `.env` (see [.env.example](../.env.example)); the full list is in
@@ -424,8 +449,8 @@ chromium --remote-debugging-port=9222 --user-data-dir=$HOME/.cache/tinylm-browse
 
 The separate `--user-data-dir` keeps this browser apart from your everyday profile; you can
 log in to sites in it, and the crawler sees them as you do. If the browser listens elsewhere,
-set `TINYLM_CDP_URL` (default `http://127.0.0.1:9222`). robots.txt is still read over plain
-HTTP.
+change **Browser address** in [Crawler settings](#crawler-settings) (or `TINYLM_CDP_URL`;
+default `http://127.0.0.1:9222`). robots.txt, when followed, is still read over plain HTTP.
 
 ### Web search
 
@@ -456,6 +481,8 @@ Everything lives in `~/.local/share/tinylm-studio` (`TINYLM_DATA_DIR` to change)
 |---|---|
 | `models/` | Downloaded and fine-tuned models, one folder each |
 | `workspace/knowledge.db` | Collections, documents, saved websites, datasets and teachers with their API keys (SQLite) |
+| `workspace/search-settings.json` | Search settings changed in the app, with the search API keys |
+| `workspace/crawl-settings.json` | Crawler settings changed in the app |
 | `workspace/training/` | Training runs: settings, progress, logs and checkpoints |
 | `workspace/evaluations/` | Evaluation reports, one JSON file each |
 | `workspace/exports/` | GGUF exports: settings, progress and logs |
@@ -479,14 +506,15 @@ targets):
 | `make download MODEL=qwen3-0.6b` | Download a model |
 | `make bench [MODEL=...]` | Measure answer speed of installed models; the report goes to `workspace/benchmarks/` |
 | `make ingest COLLECTION=games FILES=~/docs` | Add files or folders to a collection |
-| `make crawl COLLECTION=games URLS="https://..." [PAGES=50]` | Crawl websites into a collection; run again for the next new pages |
+| `make crawl COLLECTION=games URLS="https://..." [PAGES=50]` | Crawl websites into a collection (pages and depth default to Crawler settings); run again for the next new pages |
 | `make search Q="elden ring review" [VIDEO=1] [ADD=games]` | Search the web, optionally adding the results |
 | `make searxng` / `make searxng-stop` | Start or stop the local SearXNG |
 | `make run-engine [PORT=8765] [ECHO=1]` | Run only the engine, for API clients |
 | `make health` / `make info` | Check a running engine / show the paths and Python in use |
 
 More options are available directly, e.g. `python -m engine crawl --help`
-(`--max-depth`, `--per-minute`, `--browser`, `--ignore-robots`) and `python -m engine search --help`
+(`--max-depth`, `--per-minute`, `--browser`, `--ignore-robots`; options left out come from
+[Crawler settings](#crawler-settings)) and `python -m engine search --help`
 (`--limit`, `--language`).
 
 ## Troubleshooting

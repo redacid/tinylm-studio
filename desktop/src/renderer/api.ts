@@ -45,6 +45,19 @@ export type CrawlSettings = {
   use_browser: boolean;
 };
 
+/** Options left out come from the crawler settings (Settings > Crawler). */
+export type CrawlRequest = Pick<CrawlSettings, "urls"> & Partial<Omit<CrawlSettings, "urls">>;
+
+/** The engine's crawler settings: robots.txt, rate, defaults for new crawls, how pages are fetched. */
+export type CrawlerSettings = {
+  respect_robots: boolean;
+  per_minute: number;
+  max_pages: number;
+  max_depth: number;
+  user_agent: string;
+  cdp_url: string;
+};
+
 /** A saved website: start addresses and crawl settings that can be run again. */
 export type Website = CrawlSettings & {
   id: number;
@@ -682,7 +695,7 @@ export class EngineClient {
     });
   }
 
-  async startCrawl(collection: string, settings: CrawlSettings): Promise<CrawlJob> {
+  async startCrawl(collection: string, settings: CrawlRequest): Promise<CrawlJob> {
     return this.json<CrawlJob>(`/api/collections/${encodeURIComponent(collection)}/crawl`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -694,7 +707,7 @@ export class EngineClient {
     return (await this.json<{ data: Website[] }>(`/api/collections/${encodeURIComponent(collection)}/websites`)).data;
   }
 
-  async addWebsite(collection: string, website: CrawlSettings & { name: string }): Promise<Website> {
+  async addWebsite(collection: string, website: CrawlRequest & { name: string }): Promise<Website> {
     return this.json<Website>(`/api/collections/${encodeURIComponent(collection)}/websites`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -724,6 +737,18 @@ export class EngineClient {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ query, kind, language: language || null, limit }),
+    });
+  }
+
+  async crawlerSettings(): Promise<CrawlerSettings> {
+    return this.json<CrawlerSettings>("/api/crawl/settings");
+  }
+
+  async saveCrawlerSettings(changes: Partial<CrawlerSettings>): Promise<CrawlerSettings> {
+    return this.json<CrawlerSettings>("/api/crawl/settings", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(changes),
     });
   }
 

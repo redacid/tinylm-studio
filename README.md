@@ -64,7 +64,9 @@ make search Q="elden ring trailer" VIDEO=1 ADD=games
 
 Brave Search, Tavily, Exa, Perplexity and Serper work too, with their API keys, and searches can
 be limited to or keep away from chosen sites; see
-[Search settings](docs/user-guide.md#search-settings).
+[Search settings](docs/user-guide.md#search-settings). Whether the crawler follows robots.txt,
+its request rate and the defaults for new websites are in
+[Crawler settings](docs/user-guide.md#crawler-settings).
 
 To teach a model your answer style, fine-tune it with LoRA: download a model with PyTorch
 weights (`make download MODEL=qwen3-0.6b`), import examples on the Datasets tab (JSONL or CSV;

@@ -1,5 +1,6 @@
 """Website crawling: link following, politeness, proxies and the browser (CDP) fetcher."""
 
+import json
 import os
 import shutil
 import socket
@@ -12,6 +13,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
+from engine.web.crawl_settings import CrawlSettings
 from engine.web.crawler import Crawler, CrawlJob, CrawlOptions
 from engine.web.fetch import CdpFetcher, HttpFetcher
 from engine.web.politeness import RateLimiter
@@ -151,10 +153,13 @@ def games(store):
     return store
 
 
-def crawl(store, urls, proxy=None, cdp_url="http://127.0.0.1:9", **options) -> CrawlJob:
+def crawl(
+    store, urls, proxy=None, cdp_url="http://127.0.0.1:9", robots=True, **options
+) -> CrawlJob:
     options.setdefault("per_minute", 6000)
     job = CrawlJob("games", CrawlOptions(urls, **options))
-    Crawler(store, proxy, cdp_url).run(job)
+    current = CrawlSettings(user_agent="test", cdp_url=cdp_url, respect_robots=robots)
+    Crawler(store, proxy, lambda: current).run(job)
     return job
 
 
@@ -176,6 +181,12 @@ def test_max_pages_and_robots_switch(games, site):
     job = crawl(games, [f"{site}/private/x"], max_pages=1, respect_robots=False)
     assert job.fetched == 1
     assert titles(games) == ["Private"]
+
+
+def test_robots_txt_off_in_the_settings(games, site):
+    job = crawl(games, [f"{site}/private/x"], max_depth=0, robots=False)
+    assert titles(games) == ["Private"] and "/robots.txt" not in Site.requests
+    assert "robots.txt is ignored (Settings > Crawler)" in job.log
 
 
 def test_backs_off_when_the_site_says_too_many_requests(games, site):
@@ -350,6 +361,32 @@ def test_saved_websites_api(client, site):
     assert client.delete(f"/api/websites/{website['id']}").status_code == 204
     assert client.post(f"/api/websites/{website['id']}/crawl").status_code == 404
     assert client.get("/api/collections/games/websites").json()["data"] == []
+
+
+def test_crawl_settings_api(client, settings, site):
+    current = client.get("/api/crawl/settings").json()
+    assert current["respect_robots"] is True and current["per_minute"] == 20
+    assert current["max_pages"] == 50 and current["user_agent"].startswith("tinylm-studio")
+
+    changed = client.put(
+        "/api/crawl/settings",
+        json={"respect_robots": False, "max_pages": 7, "max_depth": 0, "per_minute": 120},
+    ).json()
+    assert changed["respect_robots"] is False and changed["max_pages"] == 7
+    saved = json.loads((settings.workspace_dir / "crawl-settings.json").read_text())
+    assert saved == {"respect_robots": False, "per_minute": 120, "max_pages": 7, "max_depth": 0}
+    bad = client.put("/api/crawl/settings", json={"cdp_url": "localhost:9222"})
+    assert bad.status_code == 422 and "cdp_url" in bad.json()["detail"]
+    assert client.put("/api/crawl/settings", json={"color": "red"}).status_code == 422
+
+    # New websites and crawls take the options they leave out from the settings, and robots.txt
+    # is not read.
+    client.post("/api/collections", json={"name": "games"})
+    website = client.post("/api/collections/games/websites", json={"urls": [site]}).json()
+    assert (website["max_pages"], website["max_depth"], website["per_minute"]) == (7, 0, 120)
+    job = client.post("/api/collections/games/crawl", json={"urls": [f"{site}/private/x"]})
+    assert wait_for(client, job.json()["id"])["indexed"] == 1
+    assert "/robots.txt" not in Site.requests
 
 
 def test_outcome_of_each_start_address(games, site):

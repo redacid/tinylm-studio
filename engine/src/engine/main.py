@@ -30,6 +30,7 @@ from engine.rag.embeddings import HashEmbedder, SentenceTransformerEmbedder
 from engine.rag.store import KnowledgeStore
 from engine.teachers.store import TeacherStore
 from engine.training.jobs import TrainingManager
+from engine.web.crawl_settings import CrawlSettingsStore
 from engine.web.crawler import Crawler, CrawlManager
 from engine.web.search_settings import SearchSettingsStore
 
@@ -43,7 +44,11 @@ def open_knowledge(settings: Settings) -> KnowledgeStore:
 
 
 def crawler(settings: Settings, store: KnowledgeStore) -> Crawler:
-    return Crawler(store, settings.proxy, settings.cdp_url, settings.user_agent)
+    return Crawler(store, settings.proxy, crawl_settings(settings).get)
+
+
+def crawl_settings(settings: Settings) -> CrawlSettingsStore:
+    return CrawlSettingsStore(settings.workspace_dir / "crawl-settings.json", settings)
 
 
 def search_settings(settings: Settings) -> SearchSettingsStore:
@@ -71,6 +76,7 @@ def create_app(
     )
 
     app.state.knowledge = knowledge_store or open_knowledge(settings)
+    app.state.crawl_settings = crawl_settings(settings)
     app.state.crawls = CrawlManager(crawler(settings, app.state.knowledge))
     # A new search client per request, so a changed setting or a missing key shows up at once.
     app.state.search_settings = search_settings(settings)

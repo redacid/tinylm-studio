@@ -13,7 +13,7 @@ lists what that means for the code today and what is still missing.
 
 | Need | How the engine meets it |
 |---|---|
-| Configuration | Only `TINYLM_*` environment variables (see [api.md](api.md#settings)): a ConfigMap for settings, a Secret for `TINYLM_API_KEY`, `HF_TOKEN` and the search providers' `TINYLM_*_API_KEY`. No config files to mount; search settings changed in the app are saved in the data folder and win over the variables. |
+| Configuration | Only `TINYLM_*` environment variables (see [api.md](api.md#settings)): a ConfigMap for settings, a Secret for `TINYLM_API_KEY`, `HF_TOKEN` and the search providers' `TINYLM_*_API_KEY`. No config files to mount; search and crawler settings changed in the app are saved in the data folder and win over the variables. |
 | Listening outside the pod | `TINYLM_HOST=0.0.0.0` (the default `127.0.0.1` only serves the pod itself); `TINYLM_PORT`, 8765 by default. |
 | Authentication | `TINYLM_API_KEY`: every API call then needs `Authorization: Bearer <key>` or `x-api-key: <key>`. Always set it in a cluster. |
 | Probes | `GET /health` answers without an API key; use it for liveness and readiness. |
@@ -45,7 +45,7 @@ lists what that means for the code today and what is still missing.
    Anthropic and others), the hosted search provider in use (Brave, Tavily, Exa, Perplexity,
    Serper), the sites being crawled, and the proxy if `TINYLM_PROXY` is set.
 6. **Helpers are separate services.** SearXNG (`TINYLM_SEARXNG_URL`) and a Chrome for sites that
-   need JavaScript (`TINYLM_CDP_URL`) are not started by the engine in a cluster: run them as
+   need JavaScript (`TINYLM_CDP_URL`, or Settings > Crawler) are not started by the engine in a cluster: run them as
    their own Deployments or as sidecars, and point the settings at them. The defaults point to
    `127.0.0.1`, which in a pod is the pod itself.
 7. **Paths are the pod's paths.** `python -m engine ingest <folder>` reads folders inside the

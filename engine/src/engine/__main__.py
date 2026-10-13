@@ -119,13 +119,15 @@ def ingest(settings: Settings, args: argparse.Namespace) -> None:
 
 
 def crawl(settings: Settings, args: argparse.Namespace) -> None:
+    from engine.main import crawl_settings
     from engine.web.crawler import CrawlOptions
 
+    defaults = crawl_settings(settings).get()
     options = CrawlOptions(
         args.urls,
-        max_pages=args.max_pages,
-        max_depth=args.max_depth,
-        per_minute=args.per_minute or settings.crawl_per_minute,
+        max_pages=args.max_pages or defaults.max_pages,
+        max_depth=defaults.max_depth if args.max_depth is None else args.max_depth,
+        per_minute=args.per_minute or defaults.per_minute,
         use_browser=args.browser,
         respect_robots=not args.ignore_robots,
     )
@@ -164,7 +166,7 @@ def run_crawl(settings: Settings, collection: str, options) -> None:
 def search(settings: Settings, args: argparse.Namespace) -> None:
     from pydantic import ValidationError
 
-    from engine.main import open_knowledge, search_settings
+    from engine.main import crawl_settings, open_knowledge, search_settings
     from engine.web.crawler import CrawlOptions
     from engine.web.search import SearchError, link_document
     from engine.web.search import search as find
@@ -206,7 +208,7 @@ def search(settings: Settings, args: argparse.Namespace) -> None:
         print(f"Added {len(results)} video links to {args.add}.")
     else:
         urls = [r.url for r in results]
-        per_minute = settings.crawl_per_minute
+        per_minute = crawl_settings(settings).get().per_minute
         options = CrawlOptions(urls, max_pages=len(urls), max_depth=0, per_minute=per_minute)
         run_crawl(settings, args.add, options)
 
@@ -241,13 +243,14 @@ def main() -> None:
     p = sub.add_parser("crawl", help="add pages of websites to a collection")
     p.add_argument("collection")
     p.add_argument("urls", nargs="+")
-    p.add_argument(
-        "--max-pages", type=int, default=50, help="new pages to download (earlier ones are skipped)"
-    )
-    p.add_argument("--max-depth", type=int, default=2)
+    # Options left out come from the crawler settings (Settings > Crawler, or TINYLM_CRAWL_*).
+    p.add_argument("--max-pages", type=int, help="new pages to download (earlier ones are skipped)")
+    p.add_argument("--max-depth", type=int, help="link hops from a start address")
     p.add_argument("--per-minute", type=float, help="requests per minute to each site")
     p.add_argument("--browser", action="store_true", help="fetch through the browser at CDP_URL")
-    p.add_argument("--ignore-robots", action="store_true", help="do not follow robots.txt")
+    p.add_argument(
+        "--ignore-robots", action="store_true", help="do not read robots.txt for this crawl"
+    )
     p.set_defaults(func=crawl)
 
     p = sub.add_parser("search", help="find pages or videos on the web (SearXNG or Brave)")

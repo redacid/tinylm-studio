@@ -214,7 +214,8 @@ Done: web search for finding sites and trailers (local SearXNG by default, Brave
 option; pages are crawled or saved as websites, videos kept as citable links); website crawler
 (same-site link following, per-site rate limit, robots.txt, Retry-After, HTTP/SOCKS proxy,
 browser over CDP); hybrid search (vectors + FTS5 full text); saved websites and resumable crawls
-that download only new pages; document paging and search.
+that download only new pages; document paging and search; crawler settings kept by the engine
+(robots.txt on or off, rate, defaults for new websites, user agent, browser address).
 
 Done before: file upload and folder import, multilingual-e5-small embeddings, sqlite-vec collections,
 grounded answers with sources through both APIs, Data screen and cited answers in the chat.

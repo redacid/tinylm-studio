@@ -203,10 +203,13 @@ or the Data tab) adds pages of websites to a collection in the background:
   text are remembered too: new links that later appear on them are not seen.
 - **Saved websites** keep the addresses and settings of a crawl so it can be run again, edited
   or deleted (deleting a saved website keeps the pages already added).
-- **Politeness:** at most `per_minute` requests to each site (default `TINYLM_CRAWL_PER_MINUTE`
-  = 20, with random jitter), robots.txt rules and `Crawl-delay` are followed (turn off with
-  `respect_robots: false` only for your own sites), and an HTTP 429/503 answer pauses that site
-  for its `Retry-After` time (60 s by default) before the page is retried.
+- **Defaults:** `max_pages`, `max_depth` and `per_minute` left out of a crawl or a new website
+  come from the crawler settings (`GET /api/crawl/settings`; 50, 2 and 20 unless changed).
+- **Politeness:** at most `per_minute` requests to each site (with random jitter), robots.txt
+  rules and `Crawl-delay` are followed, and an HTTP 429/503 answer pauses that site for its
+  `Retry-After` time (60 s by default) before the page is retried. robots.txt is read only when
+  both the crawl's `respect_robots` and the crawler settings' `respect_robots` are on: either
+  turns it off (only for your own sites), and the crawl's `log` then says so.
 - **Proxy:** `TINYLM_PROXY` sends all crawler traffic through an HTTP (`http://user:pass@host:port`)
   or SOCKS (`socks5://host:port`; `socks5h://` resolves names through the proxy) proxy.
 - **Browser (CDP):** with `use_browser: true` pages are opened in a running Chrome/Chromium over
@@ -214,7 +217,8 @@ or the Data tab) adds pages of websites to a collection in the background:
   site sees a real browser. Start one with
   `chromium --remote-debugging-port=9222 --user-data-dir=$HOME/.cache/tinylm-browser` (add
   `--proxy-server=socks5://host:port` to use a proxy there) and set `TINYLM_CDP_URL` if it is not
-  `http://127.0.0.1:9222`. robots.txt is still read over plain HTTP.
+  `http://127.0.0.1:9222` (the crawler settings' `cdp_url` wins). robots.txt is still read over
+  plain HTTP.
 
 | Method | Path | Notes |
 |---|---|---|
@@ -227,6 +231,8 @@ or the Data tab) adds pages of websites to a collection in the background:
 | GET | `/api/crawls` | All crawls since the engine started |
 | GET | `/api/crawls/{id}` | Progress: `state`, `website_id`, `fetched` (new pages), `known` (downloaded before), `indexed`, `duplicates`, `skipped`, `failed`, `current`, `log`, and `outcomes`: per start address `added`, `duplicate`, `known`, `skipped` or `failed` (missing: not reached) |
 | POST | `/api/crawls/{id}/cancel` | Stops a crawl after the current page |
+| GET | `/api/crawl/settings` | `respect_robots`, `per_minute`, `max_pages`, `max_depth`, `user_agent`, `cdp_url` |
+| PUT | `/api/crawl/settings` | Any of those fields; fields left out keep their value. Saved in `workspace/crawl-settings.json`, wins over the `TINYLM_*` variables and applies to crawls started afterwards; 422 names a wrong value |
 
 ## Web search
 
@@ -446,6 +452,8 @@ POST /api/evaluations
 | `TINYLM_PROXY` | none | HTTP or SOCKS proxy for website crawling |
 | `TINYLM_CDP_URL` | `http://127.0.0.1:9222` | Browser DevTools endpoint for crawling with a browser |
 | `TINYLM_CRAWL_PER_MINUTE` | `20` | Default requests per minute to each site |
+| `TINYLM_CRAWL_RESPECT_ROBOTS` | `true` | `false`: robots.txt is not read for any crawl |
+| `TINYLM_CRAWL_MAX_PAGES` / `TINYLM_CRAWL_MAX_DEPTH` | `50` / `2` | Defaults for new crawls and websites |
 | `TINYLM_USER_AGENT` | `tinylm-studio/0.1 (local research crawler)` | User-Agent of plain HTTP requests |
 | `TINYLM_SEARCH_PROVIDER` | `searxng` | Web search: `searxng`, `brave`, `tavily`, `exa`, `perplexity` or `serper`. This and the search variables below are defaults; the saved search settings win |
 | `TINYLM_SEARXNG_URL` | `http://127.0.0.1:8888` | SearXNG address (`make searxng` starts one) |

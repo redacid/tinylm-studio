@@ -80,8 +80,10 @@ export function Websites({
     };
   }, [client, collection, onIndexed, refreshWebsites]);
 
-  function edit(website: Website | null) {
+  async function edit(website: Website | null) {
     setError(null);
+    // A new website starts with the defaults from Settings > Crawler.
+    const defaults = website ? null : await client.crawlerSettings().catch(() => null);
     setEditing(website ? website.id : "new");
     setDraft(
       website
@@ -93,7 +95,9 @@ export function Websites({
             per_minute: website.per_minute,
             use_browser: website.use_browser,
           }
-        : NEW_SITE,
+        : defaults
+          ? { ...NEW_SITE, max_pages: defaults.max_pages, max_depth: defaults.max_depth, per_minute: defaults.per_minute }
+          : NEW_SITE,
     );
   }
 
@@ -159,7 +163,7 @@ export function Websites({
             <label title="Requests per minute to each site. Keep it low to avoid overloading the site or being banned.">
               Per minute <input type="number" min={1} max={120} value={draft.per_minute} onChange={(e) => set({ per_minute: +e.target.value })} />
             </label>
-            <label title="Load pages in the browser connected over CDP (TINYLM_CDP_URL), for sites that need JavaScript">
+            <label title="Load pages in the browser connected over CDP (its address is in Settings > Crawler), for sites that need JavaScript">
               <input type="checkbox" checked={draft.use_browser} onChange={(e) => set({ use_browser: e.target.checked })} /> Browser (CDP)
             </label>
             <span className="buttons">

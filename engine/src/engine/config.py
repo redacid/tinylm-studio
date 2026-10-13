@@ -43,8 +43,14 @@ class Settings(BaseSettings):
     proxy: str | None = None
     # Chrome DevTools endpoint of a running browser, used for sites that need JavaScript.
     cdp_url: str = "http://127.0.0.1:9222"
+    # These are defaults: what is saved in the app's Settings > Crawler wins over them.
     # Default requests per minute to each site; keep it low to stay polite and avoid bans.
     crawl_per_minute: float = 20
+    # False: robots.txt is not read for any crawl.
+    crawl_respect_robots: bool = True
+    # New pages per crawl and link hops from a start address, for new websites and crawls.
+    crawl_max_pages: int = 50
+    crawl_max_depth: int = 2
     user_agent: str = DEFAULT_USER_AGENT
     # Web search for finding pages and videos: a self-hosted SearXNG (free, no key), or Brave,
     # Tavily, Exa, Perplexity or Serper (each needs its API key; see engine.web.search).

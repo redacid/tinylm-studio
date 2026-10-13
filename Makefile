@@ -127,7 +127,7 @@ ingest: ## Add files or folders to a collection: make ingest COLLECTION=games FI
 
 .PHONY: crawl
 crawl: ## Add website pages to a collection: make crawl COLLECTION=games URLS="https://..." [PAGES=50]
-	$(PYTHON) -m engine crawl $(COLLECTION) $(URLS) --max-pages $(or $(PAGES),50)
+	$(PYTHON) -m engine crawl $(COLLECTION) $(URLS) $(if $(PAGES),--max-pages $(PAGES))
 
 ##@ Web search
 
@@ -152,8 +152,8 @@ searxng-stop: ## Stop the local SearXNG
 	$(CONTAINER) rm -f tinylm-searxng
 
 .PHONY: search
-search: ## Find pages on the web: make search Q="elden ring review" [VIDEO=1] [ADD=games]
-	$(PYTHON) -m engine search "$(Q)" $(if $(VIDEO),--video) $(if $(ADD),--add $(ADD))
+search: ## Find pages on the web: make search Q="elden ring review" [VIDEO=1] [ADD=games] [INCLUDE=a.com,b.com] [EXCLUDE=c.com]
+	$(PYTHON) -m engine search "$(Q)" $(if $(VIDEO),--video) $(if $(ADD),--add $(ADD)) $(if $(INCLUDE),--include $(INCLUDE)) $(if $(EXCLUDE),--exclude $(EXCLUDE))
 
 ##@ Cleanup
 

@@ -3,11 +3,13 @@
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from engine.api.deps import knowledge, require_api_key
 from engine.rag.store import CollectionNotFound, KnowledgeStore
+from engine.web.crawl_settings import CrawlSettings, CrawlSettingsStore
 from engine.web.crawler import CrawlJob, CrawlManager, CrawlOptions
+from engine.web.search_settings import validation_message
 from engine.web.sites import Website, WebsiteStore
 
 router = APIRouter(prefix="/api", dependencies=[Depends(require_api_key)], tags=["web"])
@@ -15,10 +17,11 @@ router = APIRouter(prefix="/api", dependencies=[Depends(require_api_key)], tags=
 
 class CrawlRequest(BaseModel):
     urls: list[str] = Field(min_length=1)
+    # Left out: the crawler settings (Settings > Crawler, or TINYLM_CRAWL_*) give them.
     # New pages to download; pages downloaded by earlier crawls are walked through for free.
-    max_pages: int = Field(50, ge=1, le=100000)
-    max_depth: int = Field(2, ge=0, le=100)
-    # Requests per minute to each site; defaults to TINYLM_CRAWL_PER_MINUTE.
+    max_pages: int | None = Field(None, ge=1, le=100000)
+    max_depth: int | None = Field(None, ge=0, le=100)
+    # Requests per minute to each site.
     per_minute: float | None = Field(None, gt=0, le=120)
     use_browser: bool = False
     respect_robots: bool = True
@@ -47,14 +50,23 @@ def websites(request: Request) -> WebsiteStore:
     return request.app.state.crawls.crawler.pages
 
 
-def per_minute(body: CrawlRequest, request: Request) -> float:
-    return body.per_minute or request.app.state.settings.crawl_per_minute
+def crawl_settings(request: Request) -> CrawlSettingsStore:
+    return request.app.state.crawl_settings
+
+
+def with_defaults(body: CrawlRequest, request: Request) -> dict:
+    """The request's crawl options, with the crawler settings for those left out."""
+    defaults = crawl_settings(request).get()
+    fields = body.model_dump(exclude={"name"})
+    for name in ("max_pages", "max_depth", "per_minute"):
+        if fields[name] is None:
+            fields[name] = getattr(defaults, name)
+    return fields
 
 
 def to_website(body: WebsiteRequest, request: Request) -> Website:
-    fields = body.model_dump(exclude={"per_minute", "name"})
     name = body.name.strip() or urlsplit(body.urls[0]).hostname or body.urls[0]
-    return Website(name=name, per_minute=per_minute(body, request), **fields)
+    return Website(name=name, **with_defaults(body, request))
 
 
 def options(website: Website) -> CrawlOptions:
@@ -98,10 +110,7 @@ def start_crawl(
 ) -> dict:
     """A one-off crawl that is not saved."""
     require_collection(store, name)
-    crawl = CrawlOptions(
-        **body.model_dump(exclude={"per_minute"}), per_minute=per_minute(body, request)
-    )
-    return manager.start(name, crawl).to_dict()
+    return manager.start(name, CrawlOptions(**with_defaults(body, request))).to_dict()
 
 
 @router.get("/collections/{name}/websites")
@@ -172,3 +181,28 @@ def cancel_crawl(job_id: str, manager: CrawlManager = Depends(crawls)) -> dict:
     job = require_job(manager, job_id)
     job.cancelled.set()
     return job.to_dict()
+
+
+class CrawlSettingsChanges(BaseModel, extra="forbid"):
+    respect_robots: bool | None = None
+    per_minute: float | None = None
+    max_pages: int | None = None
+    max_depth: int | None = None
+    user_agent: str | None = None
+    cdp_url: str | None = None
+
+
+@router.get("/crawl/settings")
+def get_crawl_settings(store: CrawlSettingsStore = Depends(crawl_settings)) -> CrawlSettings:
+    return store.get()
+
+
+@router.put("/crawl/settings")
+def put_crawl_settings(
+    body: CrawlSettingsChanges, store: CrawlSettingsStore = Depends(crawl_settings)
+) -> CrawlSettings:
+    """Changes the fields given; the others keep their value. Applies from the next crawl."""
+    try:
+        return store.update(body.model_dump(exclude_unset=True))
+    except ValidationError as e:
+        raise HTTPException(422, validation_message(e)) from None

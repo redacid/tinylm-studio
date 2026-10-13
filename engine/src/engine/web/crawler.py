@@ -10,6 +10,7 @@ import threading
 import time
 import uuid
 from collections import deque
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import PurePosixPath
@@ -18,6 +19,7 @@ from urllib.parse import urldefrag, urljoin, urlsplit
 
 from engine.rag.convert import UnsupportedFile, convert
 from engine.rag.store import KnowledgeStore
+from engine.web.crawl_settings import CrawlSettings
 from engine.web.fetch import DEFAULT_USER_AGENT, CdpFetcher, FetchError, HttpFetcher, Page
 from engine.web.politeness import RateLimiter, Robots, site
 from engine.web.sites import WebsiteStore
@@ -52,6 +54,7 @@ class CrawlOptions:
     max_depth: int = 2  # link hops from a start URL
     per_minute: float = 20  # requests per minute to each site
     use_browser: bool = False  # fetch through the browser at cdp_url instead of plain HTTP
+    # Read robots.txt; it is not read either way when the crawler settings turn it off.
     respect_robots: bool = True
 
 
@@ -121,24 +124,29 @@ def worth_fetching(url: str) -> bool:
     return PurePosixPath(urlsplit(url).path).suffix.lower() not in SKIP_SUFFIXES
 
 
+DEFAULT_SETTINGS = CrawlSettings(user_agent=DEFAULT_USER_AGENT, cdp_url="http://127.0.0.1:9222")
+
+
 class Crawler:
     def __init__(
         self,
         store: KnowledgeStore,
         proxy: str | None = None,
-        cdp_url: str = "http://127.0.0.1:9222",
-        user_agent: str = DEFAULT_USER_AGENT,
+        settings: Callable[[], CrawlSettings] = lambda: DEFAULT_SETTINGS,
     ):
         self.store = store
         self.proxy = proxy
-        self.cdp_url = cdp_url
-        self.user_agent = user_agent
+        self.settings = settings  # read at the start of each crawl, so changes apply to the next
         self.pages = WebsiteStore(store)
 
     def run(self, job: CrawlJob) -> None:
         options = job.options
-        http = HttpFetcher(self.proxy, self.user_agent)
-        browser = CdpFetcher(self.cdp_url) if options.use_browser else None
+        current = self.settings()
+        http = HttpFetcher(self.proxy, current.user_agent)
+        browser = CdpFetcher(current.cdp_url) if options.use_browser else None
+        respect_robots = options.respect_robots and current.respect_robots
+        if options.respect_robots and not respect_robots:
+            job.note("robots.txt is ignored (Settings > Crawler)")
         limiter = RateLimiter(options.per_minute, sleep=job.cancelled.wait)
 
         def robots_text(url: str) -> str | None:
@@ -149,7 +157,7 @@ class Crawler:
                 return None
             return page.body.decode(errors="replace") if page.status == 200 else None
 
-        robots = Robots(robots_text, self.user_agent)
+        robots = Robots(robots_text, current.user_agent)
         start_sites = {site(u) for u in options.urls}
         queue = deque((normalize(u), 0) for u in options.urls)
         seen = {url for url, _ in queue}
@@ -174,7 +182,7 @@ class Crawler:
                     follow(found, depth)
                     continue
                 host = site(url)
-                if options.respect_robots:
+                if respect_robots:
                     if not robots.allowed(url):
                         job.record(url, "skipped")
                         job.note(f"robots.txt disallows {url}")
