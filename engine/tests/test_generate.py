@@ -8,7 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from engine.datasets.generate import CHECK_SYSTEM, detect_language, parse_json
+from engine.datasets.generate import CHECK_SYSTEM, detect_language, good_numbers, parse_json
 
 TEXTS = {
     "witcher.md": (
@@ -58,6 +58,9 @@ class FakeTeacher(BaseHTTPRequestHandler):
             system, prompt = body["messages"][0]["content"], body["messages"][1]["content"]
         FakeTeacher.prompts.append(prompt)
         text = self.answer(system, prompt)
+        if system == CHECK_SYSTEM and body["max_tokens"] < 1024:
+            # Like a reasoning model: the thinking spent the whole limit, no answer is left.
+            text = ""
         if self.path == "/v1/messages":
             body = {"model": "claude-test-1", "content": [{"type": "text", "text": text}]}
             return self.reply(200, body)
@@ -167,6 +170,12 @@ def test_language_and_json_helpers():
     assert parse_json('<think>{"x": 1}</think> [1, 2]') == [1, 2]
     with pytest.raises(ValueError):
         parse_json("no json here")
+    assert good_numbers({"good": [1, "3"]}) == {1, 3}
+    assert good_numbers({"good": "1, 2"}) == {1, 2}
+    assert good_numbers([2]) == {2}
+    assert good_numbers({"good": []}) == set()
+    with pytest.raises(TypeError):
+        good_numbers({"good": {"1": True}})
 
 
 def test_teachers_api(client, teacher_server):

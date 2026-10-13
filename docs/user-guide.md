@@ -195,6 +195,8 @@ Settings:
   says there is no such information. This teaches the small model not to invent facts.
 - **Check pairs against the text**: a second request per chunk in which the teacher drops pairs
   the text does not support. It doubles the number of requests but catches made-up answers.
+  When the check reply is not JSON, the pairs are kept unchecked and the request shows the start
+  of the reply.
 
 The progress shows chunks read, pairs written and added, duplicates, and why pairs were dropped
 (wrong language, too short or long, not supported by the text). Below it, every request to

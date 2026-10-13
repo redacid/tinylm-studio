@@ -152,6 +152,25 @@ def parse_json(text: str):
     raise ValueError("no JSON in the reply")
 
 
+def good_numbers(data) -> set[int]:
+    """The numbers of the good examples from a check reply: {"good": [1, 2]}, a bare list,
+    numbers written as strings or as one string like "1, 2"."""
+    good = data.get("good", []) if isinstance(data, dict) else data
+    if isinstance(good, (str, int)):
+        good = [good]
+    if not isinstance(good, list):
+        raise TypeError("no list of good examples")
+    numbers = set()
+    for n in good:
+        if isinstance(n, bool):
+            raise TypeError("not a number")
+        if isinstance(n, str):
+            numbers |= {int(d) for d in re.findall(r"\d+", n)}
+        else:
+            numbers.add(int(n))
+    return numbers
+
+
 def generation_prompt(
     options: GenerationOptions, document: str, text: str, samples: list[list[dict]]
 ) -> str:
@@ -394,17 +413,18 @@ class Generator:
 
     def _verified(self, job: GenerationJob, teacher, chunk: dict, pairs: list[dict]) -> list[dict]:
         request = job.request(chunk["name"], "check")
+        # The same room as for writing: reasoning models spend much of max_tokens on
+        # thinking, and with a small limit their answer was cut off before the JSON.
         reply = self._ask(
-            request, teacher, CHECK_SYSTEM, check_prompt(chunk["text"], pairs), 512, 0.0
+            request, teacher, CHECK_SYSTEM, check_prompt(chunk["text"], pairs), 4096, 0.0
         )
         try:
-            data = parse_json(reply)
-            good = data.get("good", []) if isinstance(data, dict) else data
-            keep = {int(n) for n in good}
+            keep = good_numbers(parse_json(reply))
         except (ValueError, TypeError):
             # A broken check reply should not throw away the whole chunk.
             job.note("the check reply was not JSON; keeping the pairs unchecked")
-            self._answered(request, False, "not JSON: the pairs are kept unchecked")
+            snippet = reply.strip()[:200] or "empty reply"
+            self._answered(request, False, f"not JSON, the pairs are kept unchecked: {snippet}")
             return pairs
         kept = [pair for i, pair in enumerate(pairs, 1) if i in keep]
         self._answered(request, True, f"{len(kept)} of {len(pairs)} pairs supported by the text")
