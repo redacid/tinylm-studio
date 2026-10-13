@@ -335,6 +335,16 @@ export type ChatOptions = {
   onStart?: () => void;
   onSources?: (sources: Source[]) => void;
   onTimings?: (timings: Timings) => void;
+  /** Filled in as the exchange goes: the request sent and every chunk received, for debugging. */
+  trace?: ChatTrace;
+};
+
+/** One chat request and its streamed response, exactly as sent and received. */
+export type ChatTrace = {
+  request: Record<string, unknown>;
+  status?: number;
+  /** The parsed `data:` events of the stream, ending with "[DONE]"; or the error body. */
+  chunks: unknown[];
 };
 
 export class EngineClient {
@@ -698,13 +708,29 @@ export class EngineClient {
     onText: (text: string) => void,
     options: ChatOptions = {},
   ) {
+    const request = {
+      model,
+      messages,
+      stream: true,
+      max_tokens: 512,
+      collection: options.collection,
+      // Asks the engine for the prompt as the model got it, for the trace.
+      debug: options.trace ? true : undefined,
+    };
+    const trace = options.trace ?? { request, chunks: [] };
+    trace.request = JSON.parse(JSON.stringify(request)); // without the undefined fields, as sent
     const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ model, messages, stream: true, max_tokens: 512, collection: options.collection }),
+      body: JSON.stringify(request),
       signal: options.signal,
     });
-    if (!response.ok || !response.body) throw new Error(await errorText(response));
+    trace.status = response.status;
+    if (!response.ok || !response.body) {
+      const text = await response.clone().text().catch(() => "");
+      trace.chunks.push(parseOrText(text));
+      throw new Error(await errorText(response));
+    }
 
     const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
     let buffer = "";
@@ -716,8 +742,12 @@ export class EngineClient {
       buffer = events.pop() ?? "";
       for (const event of events) {
         const data = event.replace(/^data: /, "");
-        if (data === "[DONE]") return;
+        if (data === "[DONE]") {
+          trace.chunks.push(data);
+          return;
+        }
         const chunk = JSON.parse(data);
+        trace.chunks.push(chunk);
         if (chunk.choices?.[0]?.delta?.role) options.onStart?.();
         if (chunk.sources) options.onSources?.(chunk.sources);
         if (chunk.timings) options.onTimings?.(chunk.timings);
@@ -735,6 +765,14 @@ export class EngineClient {
     const response = await fetch(`${this.baseUrl}${path}`, init);
     if (!response.ok) throw new Error(await errorText(response));
     return response;
+  }
+}
+
+function parseOrText(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
   }
 }
 

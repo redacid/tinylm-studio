@@ -49,6 +49,13 @@ app read it.
 - The line under each answer shows where the time went: loading the model, searching the data,
   reading the prompt (tokens per second) and writing the answer. Use it to see what is slow.
 - **New chat** clears the conversation; **Stop** ends an answer early.
+- The **{ }** button in the corner of each message shows the JSON of that exchange with the
+  engine. On a question it opens **Sent**: the request body sent to `/v1/chat/completions`, and
+  the request as the model got it, with the system prompt and the sources found in the data.
+  On an answer it opens **Received**: the HTTP status and every streamed chunk, including
+  `sources` and `timings`. **Copy** copies what is shown; Esc closes it.
+
+![The JSON sent for a question](images/chat-trace.png)
 
 The same models answer through the OpenAI- and Anthropic-compatible APIs, so any client or SDK
 can use them (see [api.md](api.md)).

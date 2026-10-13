@@ -69,6 +69,24 @@ print([s["document"] for s in reply.sources])
 
 With the Anthropic SDK, pass the same `extra_body` and read `message.model_extra["sources"]`.
 
+### The prompt as the model got it
+
+`/v1/chat/completions` also accepts `"debug": true`. The response then carries a `prompt`
+object (top level for non-streaming responses, in the first chunk when streaming): the request
+after the engine prepared it, with the sources added to the system prompt. The chat screen uses
+it to show what the model was given.
+
+```json
+"prompt": {
+  "model": "echo",
+  "messages": [
+    {"role": "system", "content": "Answer the user's question using the numbered sources below. ..."},
+    {"role": "user", "content": "Who is Geralt?"}
+  ],
+  "max_tokens": 512, "temperature": 0.7, "top_p": 1.0, "stop": []
+}
+```
+
 ### Timings
 
 Every answer carries a `timings` object (top level for non-streaming responses; on the chunk

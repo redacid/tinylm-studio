@@ -4,6 +4,7 @@ import json
 import time
 import uuid
 from collections.abc import Iterator
+from dataclasses import asdict
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Request
@@ -48,6 +49,8 @@ class ChatCompletionRequest(BaseModel):
     stream_options: StreamOptions | None = None
     # tinylm extension: answer from this collection of uploaded data, with cited sources.
     collection: str | None = None
+    # tinylm extension: also return the request as the model got it, with the added sources.
+    debug: bool = False
 
     def to_internal(self) -> ChatRequest:
         messages = []
@@ -109,6 +112,8 @@ def chat_completions(
         )
     # Sources are an extension field, only present when a collection was used.
     extra = {"sources": sources} if body.collection else {}
+    if body.debug:
+        extra["prompt"] = asdict(request)
     with timings.measure("load_ms"):
         runtime = models.runtime(body.model)
     completion_id = f"chatcmpl-{uuid.uuid4().hex}"

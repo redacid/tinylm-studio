@@ -123,6 +123,21 @@ def test_openai_answer_carries_sources(games):
     )
     first = next(iter(stream))
     assert first.sources[0]["document"] == "witcher.txt"
+    assert not hasattr(first, "prompt")
+
+    # debug: the request as the model got it, with the sources in the system prompt.
+    stream = api.chat.completions.create(
+        model="echo",
+        messages=messages,
+        stream=True,
+        max_tokens=32,
+        extra_body={"collection": "games", "debug": True},
+    )
+    prompt = next(iter(stream)).prompt
+    assert prompt["model"] == "echo" and prompt["max_tokens"] == 32
+    assert prompt["messages"][0]["role"] == "system"
+    assert "hunts monsters for coin" in prompt["messages"][0]["content"]
+    assert prompt["messages"][-1] == messages[0]
 
     with pytest.raises(openai.NotFoundError):
         api.chat.completions.create(
