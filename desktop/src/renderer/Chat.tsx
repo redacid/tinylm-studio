@@ -173,7 +173,9 @@ export function Chat({
             {m.sources && m.sources.length > 0 && (
               <ol className="sources">
                 {m.sources.map((s) => (
-                  <li key={s.index} value={s.index} title={s.text}>{s.document}</li>
+                  <li key={s.index} value={s.index} title={s.text}>
+                    <SourceLink source={s} />
+                  </li>
                 ))}
               </ol>
             )}
@@ -257,4 +259,25 @@ function TraceDialog({
       </div>
     </div>
   );
+}
+
+/** A source's name, linked to its web page or file when the collection knows where it came from. */
+function SourceLink({ source }: { source: Source }) {
+  const href = sourceUrl(source.source);
+  if (!href) return <>{source.document}</>;
+  // The site, or the file name; the full address is in the tooltip.
+  const where = href.startsWith("file:") ? source.source.split("/").pop() : new URL(href).host;
+  return (
+    <a href={href} target="_blank" rel="noreferrer" title={`${source.source}\n\n${source.text}`}>
+      {source.document}
+      {where !== source.document && <span className="source-where"> · {where}</span>}
+    </a>
+  );
+}
+
+function sourceUrl(source: string): string | null {
+  if (/^https?:\/\//i.test(source)) return source;
+  // Files added from the command line keep their full path; uploads only their name.
+  if (source.startsWith("/")) return "file://" + source.split("/").map(encodeURIComponent).join("/");
+  return null;
 }

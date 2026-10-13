@@ -1,6 +1,8 @@
 // Electron main process: owns the window and the engine lifecycle.
 import { app, BrowserWindow, ipcMain, shell } from "electron";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Engine } from "./engine";
 
 const repoRoot = join(__dirname, "..", "..", "..");
@@ -15,9 +17,15 @@ function createWindow() {
     title: "tinylm-studio",
     webPreferences: { preload: join(__dirname, "..", "preload", "preload.js") },
   });
-  // Links such as a model's Hugging Face page open in the system browser.
+  // Links such as a model's Hugging Face page or a chat source open in the system browser; a
+  // source file is shown in the file manager rather than opened, so nothing gets run.
   window.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith("https://")) shell.openExternal(url);
+    if (url.startsWith("https://") || url.startsWith("http://")) {
+      shell.openExternal(url);
+    } else if (url.startsWith("file://")) {
+      const path = fileURLToPath(url);
+      if (existsSync(path)) shell.showItemInFolder(path);
+    }
     return { action: "deny" };
   });
   window.loadFile(join(__dirname, "..", "renderer", "index.html"));

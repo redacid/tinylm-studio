@@ -44,7 +44,10 @@ app read it.
 - Pick a **model** in the first list. Downloaded models, fine-tuned models and (with
   `TINYLM_ENABLE_ECHO=true`) the test model `echo` are offered.
 - Pick **Data: \<collection\>** to answer from your uploaded data. The answer lists the sources
-  it was given; the model is asked to cite them as [1], [2].
+  it was given; the model is asked to cite them as [1], [2]. A source from a website opens its
+  page in the browser (the site is shown after the name); a file added with `make ingest` is
+  shown in the file manager. Files uploaded in the app keep only their name, so they are not
+  links. Hover a source to see its address and the text the answer got from it.
 - The **system prompt** sets the assistant's role or tone for the conversation. It starts with
   the default one from [Chat settings](#chat-settings).
 - The line under each answer shows where the time went: loading the model, searching the data,

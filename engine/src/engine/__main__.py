@@ -108,7 +108,8 @@ def ingest(settings: Settings, args: argparse.Namespace) -> None:
         try:
             doc = convert(path.name, path.read_bytes())
             title = doc.title or path.name
-            result = store.add_document(args.collection, title, doc.text, str(path))
+            # The full path, so the chat can link to the file.
+            result = store.add_document(args.collection, title, doc.text, str(path.resolve()))
         except Exception as e:
             print(f"skipped  {path}: {e}")
             continue
