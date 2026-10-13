@@ -69,6 +69,10 @@ on the Training tab and pick the new model in the chat. **Export to GGUF** on th
 then makes it as fast as the other llama.cpp models. See
 [the user guide](docs/user-guide.md#training) and [docs/api.md](docs/api.md#fine-tuning).
 
+The chat's answer length, temperature, repetition penalty, number of sources and default system
+prompt are on the Settings tab and are kept after a restart, together with the conversation; see
+[Chat settings](docs/user-guide.md#chat-settings).
+
 Engine only, for API clients (see [docs/api.md](docs/api.md)):
 
 ```bash

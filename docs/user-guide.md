@@ -45,18 +45,22 @@ app read it.
   `TINYLM_ENABLE_ECHO=true`) the test model `echo` are offered.
 - Pick **Data: \<collection\>** to answer from your uploaded data. The answer lists the sources
   it was given; the model is asked to cite them as [1], [2].
-- The **system prompt** sets the assistant's role or tone for the conversation.
+- The **system prompt** sets the assistant's role or tone for the conversation. It starts with
+  the default one from [Chat settings](#chat-settings).
 - The line under each answer shows where the time went: loading the model, searching the data,
   reading the prompt (tokens per second) and writing the answer. Use it to see what is slow.
 - **New chat** clears the conversation; **Stop** ends an answer early.
 - The conversation, the unsent text and the chosen model, data and system prompt stay when you
   switch to another tab, and an answer being written keeps going. Coming back, the chat picks
-  up models and collections added on the other tabs. Closing the app clears the conversation.
+  up models and collections added on the other tabs. The conversation and the chosen model and
+  data are also kept after the app is closed; both can be turned off in
+  [Chat settings](#chat-settings).
 - The **{ }** button in the corner of each message shows the JSON of that exchange with the
   engine. On a question it opens **Sent**: the request body sent to `/v1/chat/completions`, and
   the request as the model got it, with the system prompt and the sources found in the data.
   On an answer it opens **Received**: the HTTP status and every streamed chunk, including
-  `sources` and `timings`. **Copy** copies what is shown; Esc closes it.
+  `sources` and `timings` (with streaming off, the one response). **Copy** copies what is shown;
+  Esc closes it.
 
 ![The JSON sent for a question](images/chat-trace.png)
 
@@ -316,6 +320,34 @@ computer, the judge after all answers are written. **Stop** keeps the report of 
 reports are kept until you delete them.
 
 ## Settings
+
+The **Settings** tab holds the app's own settings, saved as you change them and kept after a
+restart. The engine's settings (proxy, browser, web search, hardware, folders) go into `.env`
+instead; see below.
+
+### Chat settings
+
+![Chat settings](images/settings.png)
+
+| Setting | Default | What it does |
+|---|---|---|
+| Default system prompt | empty | The system prompt the chat starts with; changing it here replaces the one above the chat. |
+| Max answer length | 512 | Tokens an answer may take (16 to 8192). |
+| Temperature | 0.7 | 0 always picks the most likely word, so the same question gets the same answer; higher is more varied. |
+| Top P | 1 | Picks only from the most likely words that together make up this share; 1 turns it off. |
+| Repetition penalty | engine's, 1.1 | Above 1 makes repeated words less likely; raise it (1.2 to 1.3) when a small model loops. Empty uses `TINYLM_REPETITION_PENALTY`. |
+| Sources from data | engine's, 4 | How many chunks of the chosen data an answer gets. More can answer more, but the prompt is longer and slower. Empty uses `TINYLM_RAG_TOP_K`. |
+| Stop sequences | none | One per line; the answer ends before any of them. |
+| Show the answer as it is written | on | Off: the chat asks for one complete response (`"stream": false`) and shows it at once. |
+| Show the { } button | on | The button with the JSON sent and received on each message. |
+| Start with the model and data chosen last time | on | Otherwise the chat starts with the default model and no data. |
+| Keep the conversation after the app is closed | on | The conversation and the system prompt come back on the next start; **New chat** still clears it. |
+
+**Reset to defaults** restores the table's defaults. The settings live in the desktop app's own
+storage (`~/.config/tinylm-studio-desktop/`), not in `.env`, and apply to the chat screen only; API
+clients pass the same values in their requests (see [api.md](api.md)).
+
+### Engine settings (.env)
 
 Put these into `.env` (see [.env.example](../.env.example)); the full list is in
 [api.md](api.md#settings).

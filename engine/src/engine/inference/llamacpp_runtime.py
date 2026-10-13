@@ -88,7 +88,7 @@ class LlamaCppRuntime:
                 max_tokens=request.max_tokens,
                 temperature=request.temperature,
                 top_p=request.top_p,
-                repeat_penalty=self.repetition_penalty,
+                repeat_penalty=request.repetition_penalty or self.repetition_penalty,
                 stream=True,
             )
             stop = StopSequenceFilter(request.stop)

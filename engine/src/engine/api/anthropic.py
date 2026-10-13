@@ -7,7 +7,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from engine.api.deps import grounded, manager, require_api_key
 from engine.chat import ChatRequest, Finish, Message, TextDelta, collect
@@ -41,6 +41,10 @@ class MessagesRequest(BaseModel):
     stream: bool = False
     # tinylm extension: answer from this collection of uploaded data, with cited sources.
     collection: str | None = None
+    # tinylm extensions: how many chunks of the collection to add (TINYLM_RAG_TOP_K by default)
+    # and the repetition penalty (TINYLM_REPETITION_PENALTY by default).
+    rag_top_k: int | None = Field(None, ge=1, le=20)
+    repetition_penalty: float | None = Field(None, gt=0, le=2)
 
     def to_internal(self) -> ChatRequest:
         messages: list[Message] = []
@@ -54,6 +58,7 @@ class MessagesRequest(BaseModel):
             temperature=self.temperature,
             top_p=self.top_p,
             stop=self.stop_sequences,
+            repetition_penalty=self.repetition_penalty,
         )
 
 
@@ -93,7 +98,7 @@ def create_message(body: MessagesRequest, http: Request, models: ModelManager = 
     timings = Timings()
     try:
         with timings.measure("retrieval_ms"):
-            request, sources = grounded(http, body.to_internal(), body.collection)
+            request, sources = grounded(http, body.to_internal(), body.collection, body.rag_top_k)
     except CollectionNotFound:
         return error(404, f"collection: {body.collection}", "not_found_error")
     with timings.measure("load_ms"):

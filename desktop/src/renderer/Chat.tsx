@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { ChatMessage, ChatTrace, EngineClient, Source, Timings } from "./api";
+import { ChatMessage, ChatParams, ChatTrace, EngineClient, Source, Timings } from "./api";
+import { ChatSettings, loadChatSession, saveChatSession } from "./chatSettings";
 import { LiveStatus, Progress, Stats } from "./Stats";
 
 /** A question and its answer share the trace of the request that answered it. */
@@ -9,25 +10,53 @@ type TraceView = { trace: ChatTrace; side: "sent" | "received" };
 export function Chat({
   client,
   active,
+  settings,
   onNeedModel,
 }: {
   client: EngineClient;
   /** The chat tab is shown; hidden, the chat keeps its conversation. */
   active: boolean;
+  settings: ChatSettings;
   onNeedModel: () => void;
 }) {
+  const [saved] = useState(loadChatSession);
   const [models, setModels] = useState<string[]>([]);
-  const [model, setModel] = useState("");
-  const [system, setSystem] = useState("");
+  const [model, setModel] = useState((settings.rememberChoice && saved.model) || "");
+  const [system, setSystem] = useState(
+    settings.keepConversation && saved.system !== undefined ? saved.system : settings.systemPrompt,
+  );
   const [collections, setCollections] = useState<string[]>([]);
-  const [collection, setCollection] = useState("");
-  const [messages, setMessages] = useState<Turn[]>([]);
+  const [collection, setCollection] = useState((settings.rememberChoice && saved.collection) || "");
+  const [messages, setMessages] = useState<Turn[]>(
+    settings.keepConversation ? ((saved.messages ?? []) as Turn[]) : [],
+  );
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [traceView, setTraceView] = useState<TraceView | null>(null);
   const abort = useRef<AbortController | null>(null);
+
+  // A new default system prompt from the settings replaces the current one.
+  const firstRender = useRef(true);
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    setSystem(settings.systemPrompt);
+  }, [settings.systemPrompt]);
+
+  // Kept for the next start; not while an answer is being written.
+  useEffect(() => {
+    if (busy) return;
+    const choice = settings.rememberChoice ? { model, collection } : {};
+    const kept = settings.keepConversation ? { system, messages } : {};
+    if (!saveChatSession({ ...choice, ...kept }) && settings.keepConversation) {
+      // Too large with the JSON of every exchange: keep the conversation without it.
+      saveChatSession({ ...choice, system, messages: messages.map(({ trace: _, ...m }) => m) });
+    }
+  }, [messages, model, collection, system, busy, settings.rememberChoice, settings.keepConversation]);
 
   // Reloaded whenever the tab is shown: models and collections may have changed on other tabs.
   useEffect(() => {
@@ -72,9 +101,19 @@ export function Chat({
           p && { ...p, phase: "generating", tokens: p.tokens + 1, firstToken: p.firstToken ?? performance.now() },
         );
       };
+      const params: ChatParams = {
+        max_tokens: settings.maxTokens,
+        temperature: settings.temperature,
+        top_p: settings.topP,
+        stop: settings.stop.some(Boolean) ? settings.stop.filter(Boolean) : undefined,
+        repetition_penalty: settings.repetitionPenalty ?? undefined,
+        rag_top_k: collection && settings.sources ? settings.sources : undefined,
+      };
       await client.chat(model, prompt, onText, {
         signal: controller.signal,
         trace,
+        params,
+        stream: settings.stream,
         collection: collection || undefined,
         onStart: () => setProgress((p) => p && { ...p, phase: "reading", prepared: performance.now() }),
         onSources: (sources) => updateLast((last) => ({ ...last, sources })),
@@ -119,7 +158,7 @@ export function Chat({
       <div className="messages">
         {messages.map((m, i) => (
           <div key={i} className={`message ${m.role}`}>
-            {m.trace && (
+            {m.trace && settings.showJson && (
               <button
                 className="trace-button"
                 title={m.role === "user" ? "Show the JSON sent" : "Show the JSON received"}
@@ -186,7 +225,9 @@ function TraceDialog({
           ["Sent to the engine: POST /v1/chat/completions", trace.request],
           ["As the model got it, with the sources added", first?.prompt],
         ]
-      : [[`Received: HTTP ${trace.status ?? "…"}, ${trace.chunks.length} chunks`, trace.chunks]];
+      : trace.request.stream === false
+        ? [[`Received: HTTP ${trace.status ?? "…"}`, trace.chunks[0]]]
+        : [[`Received: HTTP ${trace.status ?? "…"}, ${trace.chunks.length} chunks`, trace.chunks]];
   const text = (value: unknown) => JSON.stringify(value, null, 2);
   const all = sections.filter(([, value]) => value !== undefined);
 

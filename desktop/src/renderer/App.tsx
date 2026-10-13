@@ -4,7 +4,9 @@ import { Chat } from "./Chat";
 import { Data } from "./Data";
 import { Datasets } from "./Datasets";
 import { EvaluationScreen } from "./Evaluation";
+import { loadChatSettings, saveChatSettings } from "./chatSettings";
 import { Models } from "./Models";
+import { Settings } from "./Settings";
 import { Training } from "./Training";
 import type { EngineState } from "./types";
 
@@ -16,7 +18,7 @@ const PHASE_LABELS: Record<EngineState["phase"], string> = {
   stopped: "Engine stopped",
 };
 
-type Tab = "chat" | "data" | "datasets" | "training" | "evaluation" | "models";
+type Tab = "chat" | "data" | "datasets" | "training" | "evaluation" | "models" | "settings";
 
 const TAB_LABELS: Record<Tab, string> = {
   chat: "Chat",
@@ -25,11 +27,17 @@ const TAB_LABELS: Record<Tab, string> = {
   training: "Training",
   evaluation: "Evaluation",
   models: "Models",
+  settings: "Settings",
 };
 
 export function App() {
   const [engine, setEngine] = useState<EngineState>({ phase: "starting", port: 0 });
   const [tab, setTab] = useState<Tab>("chat");
+  const [chatSettings, setChatSettings] = useState(loadChatSettings);
+  const changeChatSettings = (settings: typeof chatSettings) => {
+    setChatSettings(settings);
+    saveChatSettings(settings);
+  };
 
   useEffect(() => {
     window.tinylm.onEngineState(setEngine);
@@ -62,10 +70,18 @@ export function App() {
         {/* The chat stays mounted on the other tabs, so the conversation is kept. */}
         {client && (
           <div className="chat-tab" hidden={tab !== "chat"}>
-            <Chat client={client} active={tab === "chat"} onNeedModel={() => setTab("models")} />
+            <Chat
+              client={client}
+              active={tab === "chat"}
+              settings={chatSettings}
+              onNeedModel={() => setTab("models")}
+            />
           </div>
         )}
-        {!client ? (
+        {tab === "settings" ? (
+          // Needs no engine: these settings live in the app.
+          <Settings chat={chatSettings} onChat={changeChatSettings} />
+        ) : !client ? (
           <p className="muted">Waiting for the engine…</p>
         ) : tab === "chat" ? null : tab === "data" ? (
           <Data client={client} />

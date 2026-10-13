@@ -138,6 +138,17 @@ def test_openai_answer_carries_sources(games):
     assert prompt["messages"][0]["role"] == "system"
     assert "hunts monsters for coin" in prompt["messages"][0]["content"]
     assert prompt["messages"][-1] == messages[0]
+    assert prompt["repetition_penalty"] is None
+
+    # Per-request number of sources and repetition penalty.
+    body = {"model": "echo", "messages": messages, "collection": "games", "debug": True}
+    reply = games.post(
+        "/v1/chat/completions", json={**body, "rag_top_k": 1, "repetition_penalty": 1.3}
+    ).json()
+    assert len(reply["sources"]) == 1 and reply["prompt"]["repetition_penalty"] == 1.3
+    assert len(games.post("/v1/chat/completions", json=body).json()["sources"]) == 2
+    bad = games.post("/v1/chat/completions", json={**body, "rag_top_k": 0})
+    assert bad.status_code == 422
 
     with pytest.raises(openai.NotFoundError):
         api.chat.completions.create(

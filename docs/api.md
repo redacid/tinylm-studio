@@ -69,6 +69,23 @@ print([s["document"] for s in reply.sources])
 
 With the Anthropic SDK, pass the same `extra_body` and read `message.model_extra["sources"]`.
 
+### Sources count and repetition penalty
+
+Two more extension fields work in both chat endpoints:
+
+| Field | Default | Meaning |
+|---|---|---|
+| `rag_top_k` | `TINYLM_RAG_TOP_K` (4) | How many chunks of `collection` to add, 1 to 20 |
+| `repetition_penalty` | `TINYLM_REPETITION_PENALTY` (1.1) | Above 1 makes repeated tokens less likely, up to 2 |
+
+```python
+client.chat.completions.create(
+    model="games01",
+    messages=[{"role": "user", "content": "Як пройти Круг бійні?"}],
+    extra_body={"collection": "games", "rag_top_k": 2, "repetition_penalty": 1.25},
+)
+```
+
 ### The prompt as the model got it
 
 `/v1/chat/completions` also accepts `"debug": true`. The response then carries a `prompt`
@@ -83,7 +100,7 @@ it to show what the model was given.
     {"role": "system", "content": "Answer the user's question using the numbered sources below. ..."},
     {"role": "user", "content": "Who is Geralt?"}
   ],
-  "max_tokens": 512, "temperature": 0.7, "top_p": 1.0, "stop": []
+  "max_tokens": 512, "temperature": 0.7, "top_p": 1.0, "stop": [], "repetition_penalty": null
 }
 ```
 

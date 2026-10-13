@@ -331,6 +331,10 @@ export type Timings = {
 export type ChatOptions = {
   signal?: AbortSignal;
   collection?: string;
+  /** Sampling and answer settings; the engine's defaults where left out. */
+  params?: ChatParams;
+  /** Off: one response with the whole answer instead of a stream. Default on. */
+  stream?: boolean;
   /** The engine has loaded the model and searched the data, and starts reading the prompt. */
   onStart?: () => void;
   onSources?: (sources: Source[]) => void;
@@ -339,11 +343,22 @@ export type ChatOptions = {
   trace?: ChatTrace;
 };
 
+export type ChatParams = {
+  max_tokens?: number;
+  temperature?: number;
+  top_p?: number;
+  stop?: string[];
+  repetition_penalty?: number;
+  /** How many chunks of the collection to add. */
+  rag_top_k?: number;
+};
+
 /** One chat request and its streamed response, exactly as sent and received. */
 export type ChatTrace = {
   request: Record<string, unknown>;
   status?: number;
-  /** The parsed `data:` events of the stream, ending with "[DONE]"; or the error body. */
+  /** The parsed `data:` events of the stream, ending with "[DONE]"; the whole response when
+   * not streaming; or the error body. */
   chunks: unknown[];
 };
 
@@ -708,11 +723,13 @@ export class EngineClient {
     onText: (text: string) => void,
     options: ChatOptions = {},
   ) {
+    const stream = options.stream ?? true;
     const request = {
       model,
       messages,
-      stream: true,
+      stream,
       max_tokens: 512,
+      ...options.params,
       collection: options.collection,
       // Asks the engine for the prompt as the model got it, for the trace.
       debug: options.trace ? true : undefined,
@@ -730,6 +747,16 @@ export class EngineClient {
       const text = await response.clone().text().catch(() => "");
       trace.chunks.push(parseOrText(text));
       throw new Error(await errorText(response));
+    }
+    if (!stream) {
+      const body = await response.json();
+      trace.chunks.push(body);
+      options.onStart?.();
+      if (body.sources) options.onSources?.(body.sources);
+      const text = body.choices?.[0]?.message?.content;
+      if (text) onText(text);
+      if (body.timings) options.onTimings?.(body.timings);
+      return;
     }
 
     const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();

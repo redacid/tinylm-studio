@@ -9,7 +9,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from engine.api import anthropic as anthropic_api
 from engine.api.deps import grounded, is_anthropic, manager, require_api_key
@@ -49,6 +49,10 @@ class ChatCompletionRequest(BaseModel):
     stream_options: StreamOptions | None = None
     # tinylm extension: answer from this collection of uploaded data, with cited sources.
     collection: str | None = None
+    # tinylm extensions: how many chunks of the collection to add (TINYLM_RAG_TOP_K by default)
+    # and the repetition penalty (TINYLM_REPETITION_PENALTY by default).
+    rag_top_k: int | None = Field(None, ge=1, le=20)
+    repetition_penalty: float | None = Field(None, gt=0, le=2)
     # tinylm extension: also return the request as the model got it, with the added sources.
     debug: bool = False
 
@@ -69,6 +73,7 @@ class ChatCompletionRequest(BaseModel):
             temperature=self.temperature,
             top_p=self.top_p,
             stop=stop,
+            repetition_penalty=self.repetition_penalty,
         )
 
 
@@ -105,7 +110,7 @@ def chat_completions(
     timings = Timings()
     try:
         with timings.measure("retrieval_ms"):
-            request, sources = grounded(http, body.to_internal(), body.collection)
+            request, sources = grounded(http, body.to_internal(), body.collection, body.rag_top_k)
     except CollectionNotFound:
         return error(
             404, f"The collection '{body.collection}' does not exist", "invalid_request_error"

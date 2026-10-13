@@ -87,7 +87,7 @@ class TransformersRuntime:
                 streamer=streamer,
                 max_new_tokens=request.max_tokens,
                 do_sample=sampling,
-                repetition_penalty=self.repetition_penalty,
+                repetition_penalty=request.repetition_penalty or self.repetition_penalty,
                 pad_token_id=self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
             )
             if sampling:

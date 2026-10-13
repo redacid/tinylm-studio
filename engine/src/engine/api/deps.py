@@ -40,10 +40,10 @@ def is_anthropic(request: Request) -> bool:
 
 
 def grounded(
-    request: Request, chat: ChatRequest, collection: str | None
+    request: Request, chat: ChatRequest, collection: str | None, top_k: int | None = None
 ) -> tuple[ChatRequest, list[dict]]:
     """Adds retrieved chunks from the collection to the prompt; raises CollectionNotFound."""
     if not collection:
         return chat, []
-    top_k = request.app.state.settings.rag_top_k
+    top_k = top_k or request.app.state.settings.rag_top_k
     return retrieve(request.app.state.knowledge, collection, chat, top_k)

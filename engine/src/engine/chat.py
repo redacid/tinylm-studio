@@ -22,6 +22,7 @@ class ChatRequest:
     temperature: float = 0.7
     top_p: float = 1.0
     stop: list[str] = field(default_factory=list)
+    repetition_penalty: float | None = None  # None: the runtime's default (settings)
 
 
 @dataclass
