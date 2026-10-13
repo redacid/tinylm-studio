@@ -46,7 +46,9 @@ lists what that means for the code today and what is still missing.
    Serper), the sites being crawled, and the proxy if `TINYLM_PROXY` is set.
 6. **Helpers are separate services.** SearXNG (`TINYLM_SEARXNG_URL`) and a Chrome for sites that
    need JavaScript (`TINYLM_CDP_URL`, or Settings > Crawler) are not started by the engine in a cluster: run them as
-   their own Deployments or as sidecars, and point the settings at them. The defaults point to
+   their own Deployments or as sidecars, and point the settings at them. For Chrome,
+   `chromedp/headless-shell` (what `make chrome` runs) works as a sidecar listening on 9222;
+   mount an `emptyDir` with `medium: Memory` on `/dev/shm`, as `make chrome` gives it `--shm-size=1g`. The defaults point to
    `127.0.0.1`, which in a pod is the pod itself.
 7. **Paths are the pod's paths.** `python -m engine ingest <folder>` reads folders inside the
    container, and file sources in the chat point into the container too, so they are not links

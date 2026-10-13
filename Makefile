@@ -155,6 +155,23 @@ searxng-stop: ## Stop the local SearXNG
 search: ## Find pages on the web: make search Q="elden ring review" [VIDEO=1] [ADD=games] [INCLUDE=a.com,b.com] [EXCLUDE=c.com]
 	$(PYTHON) -m engine search "$(Q)" $(if $(VIDEO),--video) $(if $(ADD),--add $(ADD)) $(if $(INCLUDE),--include $(INCLUDE)) $(if $(EXCLUDE),--exclude $(EXCLUDE))
 
+##@ Browser for crawling
+
+CDP_PORT ?= 9222
+
+.PHONY: chrome
+chrome: ## Start a headless Chrome for crawling with Browser (CDP) on 127.0.0.1:CDP_PORT [CDP_PROXY=socks5://host:port]
+	@test -n "$(CONTAINER)" || { echo "Install Docker or Podman, or start Chrome yourself (see the user guide)."; exit 1; }
+	-$(CONTAINER) rm -f tinylm-chrome >/dev/null 2>&1
+	$(CONTAINER) run -d --name tinylm-chrome --restart unless-stopped --shm-size=1g \
+		-p 127.0.0.1:$(CDP_PORT):9222 \
+		docker.io/chromedp/headless-shell:stable $(if $(CDP_PROXY),--proxy-server=$(CDP_PROXY))
+	@echo "Chrome's DevTools run on http://127.0.0.1:$(CDP_PORT) (Settings > Crawler > Browser address)"
+
+.PHONY: chrome-stop
+chrome-stop: ## Stop the headless Chrome
+	$(CONTAINER) rm -f tinylm-chrome
+
 ##@ Cleanup
 
 .PHONY: clean

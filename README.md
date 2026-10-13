@@ -115,7 +115,8 @@ scripts/setup-engine.sh   # installs the engine into that environment
 `TINYLM_TORCH` picks the PyTorch build: `cpu` (default, small), `auto` (detect GPU),
 a CUDA version such as `cu128`, or `pypi`.
 
-More commands (`make models`, `make bench`, `make searxng-stop`, `make info`, ...) are listed in
+More commands (`make models`, `make bench`, `make searxng-stop`, `make chrome` for a headless
+browser in Docker, `make info`, ...) are listed in
 the [user guide](docs/user-guide.md#command-line) and by `make help`.
 
 ## Development

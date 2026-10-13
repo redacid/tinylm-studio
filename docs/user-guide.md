@@ -438,7 +438,23 @@ SearXNG has its own outgoing proxy setting (`outgoing.proxies` in its `settings.
 
 Some sites build their pages with JavaScript or refuse simple HTTP clients. Tick
 **Browser (CDP)** on a website (or pass `--browser` to `python -m engine crawl`) to load its pages in a real
-browser that the engine controls over the Chrome DevTools Protocol:
+browser that the engine controls over the Chrome DevTools Protocol.
+
+The quickest is a headless Chrome in Docker or Podman:
+
+```bash
+make chrome                                   # on http://127.0.0.1:9222
+make chrome CDP_PROXY=socks5://host:1080      # its traffic through a proxy
+make chrome CDP_PORT=9333                     # another port; change Browser address to match
+make chrome-stop
+```
+
+It runs `chromedp/headless-shell` and restarts with Docker. Inside the container, `127.0.0.1`
+and `localhost` are the container itself: for a site on your own machine use the host's
+address (with Docker on Linux usually `172.17.0.1`), and for a proxy on your machine too. The
+browser keeps no logins between restarts.
+
+To log in to sites first, run your own Chrome or Chromium with a separate profile instead:
 
 ```bash
 chromium --remote-debugging-port=9222 --user-data-dir=$HOME/.cache/tinylm-browser
@@ -509,6 +525,7 @@ targets):
 | `make crawl COLLECTION=games URLS="https://..." [PAGES=50]` | Crawl websites into a collection (pages and depth default to Crawler settings); run again for the next new pages |
 | `make search Q="elden ring review" [VIDEO=1] [ADD=games]` | Search the web, optionally adding the results |
 | `make searxng` / `make searxng-stop` | Start or stop the local SearXNG |
+| `make chrome [CDP_PROXY=...]` / `make chrome-stop` | Start or stop a headless Chrome in Docker for websites with Browser (CDP) |
 | `make run-engine [PORT=8765] [ECHO=1]` | Run only the engine, for API clients |
 | `make health` / `make info` | Check a running engine / show the paths and Python in use |
 

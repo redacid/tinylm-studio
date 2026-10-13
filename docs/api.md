@@ -214,7 +214,8 @@ or the Data tab) adds pages of websites to a collection in the background:
   or SOCKS (`socks5://host:port`; `socks5h://` resolves names through the proxy) proxy.
 - **Browser (CDP):** with `use_browser: true` pages are opened in a running Chrome/Chromium over
   the Chrome DevTools Protocol, so sites that build their content with JavaScript work, and the
-  site sees a real browser. Start one with
+  site sees a real browser. `make chrome` starts a headless Chrome in Docker or Podman
+  (`chromedp/headless-shell`; `CDP_PROXY=socks5://host:port` for a proxy), or start one with
   `chromium --remote-debugging-port=9222 --user-data-dir=$HOME/.cache/tinylm-browser` (add
   `--proxy-server=socks5://host:port` to use a proxy there) and set `TINYLM_CDP_URL` if it is not
   `http://127.0.0.1:9222` (the crawler settings' `cdp_url` wins). robots.txt is still read over

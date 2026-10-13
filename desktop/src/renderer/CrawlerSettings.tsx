@@ -179,7 +179,7 @@ export function CrawlerSettingsForm({
       </Field>
       <Field
         label="Browser address (CDP)"
-        hint="Chrome's DevTools endpoint, for websites with Browser (CDP) on: sites that need JavaScript (see Browser (CDP) in the user guide)."
+        hint="Chrome's DevTools endpoint, for websites with Browser (CDP) on: sites that need JavaScript. make chrome starts one in Docker."
       >
         {text("cdp_url")}
       </Field>
