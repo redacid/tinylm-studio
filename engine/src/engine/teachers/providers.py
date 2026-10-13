@@ -37,8 +37,9 @@ class RateLimited(TeacherError):
 
 class Teacher(Protocol):
     name: str
-    # Who answered the last request: {"model": ..., "provider": ...}. OpenRouter names the model
-    # that actually answered (it can differ from the one asked for) and the upstream provider.
+    # Who answered the last request, or failed it: {"model": ..., "provider": ...}. OpenRouter
+    # names the model that actually answered (it can differ from the one asked for) and the
+    # upstream provider, also in its errors; until an answer says otherwise it is the model asked.
     last_served: dict | None
 
     def complete(
@@ -51,6 +52,22 @@ def retry_after(response: httpx.Response, default: float = 30) -> float:
         return min(600.0, float(response.headers.get("retry-after", default)))
     except ValueError:
         return default
+
+
+def served_by(response: httpx.Response, model: str, provider: str | None = None) -> dict:
+    """The model and provider an answer or an error names, falling back to the ones asked."""
+    try:
+        data = response.json()
+    except ValueError:
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+    error = data.get("error") if isinstance(data.get("error"), dict) else {}
+    metadata = error.get("metadata") if isinstance(error.get("metadata"), dict) else {}
+    return {
+        "model": data.get("model") or model,
+        "provider": data.get("provider") or metadata.get("provider_name") or provider,
+    }
 
 
 def check(response: httpx.Response, provider: str) -> None:
@@ -111,10 +128,12 @@ class OpenAICompatibleTeacher:
             "max_tokens": max_tokens,
             "temperature": temperature,
         }
+        self.last_served = {"model": self.model, "provider": None}
         try:
             response = self.client.post(f"{self.base_url}/chat/completions", json=body)
         except httpx.HTTPError as e:
             raise TeacherError(f"{self.base_url} is not reachable ({type(e).__name__})") from None
+        self.last_served = served_by(response, self.model)
         check(response, self.name)
         try:
             data = response.json()
@@ -123,12 +142,7 @@ class OpenAICompatibleTeacher:
                 error = data["error"]
                 message = error.get("message") if isinstance(error, dict) else error
                 raise TeacherError(f"{self.name}: {message}")
-            content = data["choices"][0]["message"]["content"] or ""
-            self.last_served = {
-                "model": data.get("model") or self.model,
-                "provider": data.get("provider"),
-            }
-            return content
+            return data["choices"][0]["message"]["content"] or ""
         except (ValueError, KeyError, IndexError, TypeError):
             raise TeacherError(f"{self.name}: unexpected answer {response.text[:300]}") from None
 
@@ -171,16 +185,16 @@ class AnthropicTeacher:
             "max_tokens": max_tokens,
             "temperature": temperature,
         }
+        self.last_served = {"model": self.model, "provider": "Anthropic"}
         try:
             response = self.client.post(f"{self.base_url}/v1/messages", json=body)
         except httpx.HTTPError as e:
             raise TeacherError(f"{self.base_url} is not reachable ({type(e).__name__})") from None
+        self.last_served = served_by(response, self.model, "Anthropic")
         check(response, self.name)
         try:
-            data = response.json()
-            text = "".join(b.get("text", "") for b in data["content"] if b.get("type") == "text")
-            self.last_served = {"model": data.get("model") or self.model, "provider": "Anthropic"}
-            return text
+            blocks = response.json()["content"]
+            return "".join(b.get("text", "") for b in blocks if b.get("type") == "text")
         except (ValueError, KeyError, TypeError):
             raise TeacherError(f"{self.name}: unexpected answer {response.text[:300]}") from None
 
@@ -206,8 +220,6 @@ class Paced:
         self.retries = retries
         self.sleep = sleep or time.sleep
         self.last = 0.0
-        # Called after each answer with who served it (see Teacher.last_served).
-        self.on_served = lambda served: None
         # Called with the number of seconds before waiting out a rate limit.
         self.on_wait = lambda seconds: None
 
@@ -220,14 +232,14 @@ class Paced:
                 self.sleep(wait)
             self.last = time.monotonic()
             try:
-                text = self.teacher.complete(system, prompt, max_tokens, temperature)
+                return self.teacher.complete(system, prompt, max_tokens, temperature)
             except RateLimited as e:
                 if attempt == self.retries:
                     raise
                 self.on_wait(e.retry_after)
                 self.sleep(e.retry_after)
-                continue
-            if self.teacher.last_served:
-                self.on_served(self.teacher.last_served)
-            return text
         raise AssertionError("unreachable")
+
+    @property
+    def last_served(self) -> dict | None:
+        return self.teacher.last_served

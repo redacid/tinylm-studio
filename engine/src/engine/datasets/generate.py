@@ -81,9 +81,11 @@ class GenerationJob:
     failed_chunks: int = 0
     current: str | None = None
     waiting: float | None = None  # seconds of a rate-limit pause in progress
-    # Who answered the teacher's requests: [{"model", "provider", "requests"}], as the API
-    # reported it (OpenRouter may route to another model or provider than the one asked for).
-    served: list[dict] = field(default_factory=list)
+    # Every request to the teacher, newest last: the document, the step ("write" the pairs or
+    # "check" them), the model and provider that answered or failed it as the API reported them
+    # (OpenRouter may route to another model or provider than the one asked for), whether it
+    # worked and what came back.
+    requests: list[dict] = field(default_factory=list)
     log: list[str] = field(default_factory=list)
     error: str | None = None
     created_at: str = field(default_factory=now)
@@ -93,14 +95,19 @@ class GenerationJob:
         self.log.append(line)
         del self.log[:-200]
 
-    def count_served(self, served: dict) -> None:
-        for row in self.served:
-            if (row["model"], row["provider"]) == (served.get("model"), served.get("provider")):
-                row["requests"] += 1
-                return
-        self.served.append(
-            {"model": served.get("model"), "provider": served.get("provider"), "requests": 1}
-        )
+    def request(self, document: str, step: str) -> dict:
+        entry = {
+            "document": document,
+            "step": step,
+            "model": None,
+            "provider": None,
+            "ok": None,  # None while the request runs
+            "result": "",
+            "at": now(),
+        }
+        self.requests.append(entry)
+        del self.requests[:-500]
+        return entry
 
     def reject(self, reason: str, count: int = 1) -> None:
         self.rejected[reason] = self.rejected.get(reason, 0) + count
@@ -110,7 +117,7 @@ class GenerationJob:
         data["options"] = asdict(self.options)
         data["rejected"] = dict(self.rejected)
         data["log"] = self.log[-50:]
-        data["served"] = [dict(row) for row in self.served]
+        data["requests"] = [dict(r) for r in self.requests[-100:]]
         return data
 
 
@@ -268,7 +275,6 @@ class Generator:
         try:
             teacher = self.teachers.teacher(options.teacher)
             teacher.on_wait = lambda seconds: self._wait(job, seconds)
-            teacher.on_served = job.count_served
             chunks = self.unused_chunks(job.dataset, options.collection, options.chunks)
             job.chunks_total = len(chunks)
             if not chunks:
@@ -306,13 +312,17 @@ class Generator:
     def _chunk(self, job: GenerationJob, teacher, chunk: dict, samples) -> None:
         options = job.options
         prompt = generation_prompt(options, chunk["name"], chunk["text"], samples)
-        reply = teacher.complete(SYSTEM, prompt, max_tokens=4096, temperature=0.7)
+        request = job.request(chunk["name"], "write")
+        reply = self._ask(request, teacher, SYSTEM, prompt, 4096, 0.7)
         try:
             data = parse_json(reply)
         except ValueError:
             job.reject("not JSON", 1)
+            self._answered(request, False, f"not JSON: {reply.strip()[:200] or 'empty reply'}")
             raise ValueError("the teacher's reply was not JSON") from None
         items = data.get("examples", []) if isinstance(data, dict) else data
+        count = len(items) if isinstance(items, list) else 0
+        self._answered(request, count > 0, f"{count} pairs written")
         pairs = []
         for item in items if isinstance(items, list) else []:
             job.generated += 1
@@ -328,7 +338,7 @@ class Generator:
                     }
                 )
         if pairs and options.verify:
-            pairs = self._verified(job, teacher, chunk["text"], pairs)
+            pairs = self._verified(job, teacher, chunk, pairs)
         added = duplicates = 0
         for pair in pairs:
             messages = [{"role": "user", "content": pair["question"]}]
@@ -361,8 +371,27 @@ class Generator:
                 return "language"
         return None
 
-    def _verified(self, job: GenerationJob, teacher, text: str, pairs: list[dict]) -> list[dict]:
-        reply = teacher.complete(CHECK_SYSTEM, check_prompt(text, pairs), 512, 0.0)
+    def _ask(self, request: dict, teacher, system: str, prompt: str, max_tokens, temperature):
+        """Asks the teacher and notes in the request who answered, or the error."""
+        try:
+            reply = teacher.complete(system, prompt, max_tokens=max_tokens, temperature=temperature)
+        except Exception as e:
+            self._answered(request, False, str(e) or type(e).__name__, teacher)
+            raise
+        request.update(teacher.last_served or {})
+        return reply
+
+    @staticmethod
+    def _answered(request: dict, ok: bool, result: str, teacher=None) -> None:
+        if teacher is not None:
+            request.update(teacher.last_served or {})
+        request["ok"], request["result"] = ok, result
+
+    def _verified(self, job: GenerationJob, teacher, chunk: dict, pairs: list[dict]) -> list[dict]:
+        request = job.request(chunk["name"], "check")
+        reply = self._ask(
+            request, teacher, CHECK_SYSTEM, check_prompt(chunk["text"], pairs), 512, 0.0
+        )
         try:
             data = parse_json(reply)
             good = data.get("good", []) if isinstance(data, dict) else data
@@ -370,8 +399,10 @@ class Generator:
         except (ValueError, TypeError):
             # A broken check reply should not throw away the whole chunk.
             job.note("the check reply was not JSON; keeping the pairs unchecked")
+            self._answered(request, False, "not JSON: the pairs are kept unchecked")
             return pairs
         kept = [pair for i, pair in enumerate(pairs, 1) if i in keep]
+        self._answered(request, True, f"{len(kept)} of {len(pairs)} pairs supported by the text")
         if len(kept) < len(pairs):
             job.reject("not supported by the text", len(pairs) - len(kept))
         return kept

@@ -198,9 +198,9 @@ th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border);
 .search-summary { margin: 4px 0; }
 .provider a { color: var(--accent); }
 
-.job .served {
-  color: var(--muted);
-}
-.job .served strong {
-  color: var(--fg);
-}
+.teacher-requests table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.teacher-requests th, .teacher-requests td { text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.teacher-requests th { color: var(--muted); font-weight: 600; }
+.teacher-requests td { overflow-wrap: anywhere; }
+.teacher-requests tr.failed td { color: var(--bad); }
+.teacher-requests button { margin-top: 4px; }

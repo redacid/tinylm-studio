@@ -244,9 +244,16 @@ def test_generate_examples(library, teacher_server, kind):
     assert job["rejected"] == {"language": 1, "length": 1, "not supported by the text": 1}
     assert any("rate limit" in line for line in job["log"])
     # Two requests: writing the pairs and checking them.
+    # Each request with the model and provider that answered it and what came back.
     served = {"openai": ("routed/model", "Chutes"), "anthropic": ("claude-test-1", "Anthropic")}
     model, provider = served[kind]
-    assert job["served"] == [{"model": model, "provider": provider, "requests": 2}]
+    requests = [
+        (r["step"], r["model"], r["provider"], r["ok"], r["result"]) for r in job["requests"]
+    ]
+    assert requests == [
+        ("write", model, provider, True, "5 pairs written"),
+        ("check", model, provider, True, "2 of 3 pairs supported by the text"),
+    ]
 
     # The prompt carried the style: instructions, language and the hand-written example.
     prompt = FakeTeacher.prompts[0]
@@ -297,6 +304,10 @@ def test_generation_errors(library, teacher_server):
     )
     assert job["state"] == "error" and "rejected the API key" in job["error"]
     assert job["failed_chunks"] == 3
+    # The failed requests name the model asked for, and the error.
+    failed = job["requests"][-1]
+    assert (failed["step"], failed["ok"]) == ("write", False)
+    assert failed["model"] == "small/free:free" and "rejected the API key" in failed["result"]
 
     # Failed chunks stay unused for the next run.
     unused = client.get("/api/datasets/hints/generate", params={"collection": "games"}).json()

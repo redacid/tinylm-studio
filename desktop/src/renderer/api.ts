@@ -206,6 +206,20 @@ export type GenerationOptions = {
 /** The model and provider that answered a teacher request (OpenRouter may route elsewhere). */
 export type Served = { model: string | null; provider: string | null; requests?: number };
 
+/** One request to the teacher during a generation, and what came of it. */
+export type TeacherRequest = {
+  document: string;
+  /** "write": the pairs from a chunk; "check": the pairs against the text. */
+  step: "write" | "check";
+  /** As the API reported them; the model asked for until an answer says otherwise. */
+  model: string | null;
+  provider: string | null;
+  /** null while the request runs. */
+  ok: boolean | null;
+  result: string;
+  at: string;
+};
+
 export type GenerationJob = {
   id: string;
   dataset: string;
@@ -222,8 +236,8 @@ export type GenerationJob = {
   current: string | null;
   /** Seconds of a rate-limit pause in progress. */
   waiting: number | null;
-  /** Who answered the teacher's requests, as the API reported it. */
-  served: Served[];
+  /** The teacher requests of the run, newest last (the last 100). */
+  requests: TeacherRequest[];
   log: string[];
   error: string | null;
   created_at: string;

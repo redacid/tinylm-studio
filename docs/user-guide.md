@@ -197,11 +197,14 @@ Settings:
   the text does not support. It doubles the number of requests but catches made-up answers.
 
 The progress shows chunks read, pairs written and added, duplicates, and why pairs were dropped
-(wrong language, too short or long, not supported by the text). **Answered by** names the
-model and provider that answered the teacher's requests, as the API reports them: OpenRouter
-can route a request to another model than the one asked for (`openrouter/auto`, fallbacks) and
-to one of several upstream providers, and the count after each shows how many requests each
-served. **Stop** ends the run after the
+(wrong language, too short or long, not supported by the text). Below it, every request to
+the teacher is listed, newest first (the last 10; **Show all** for the rest): the time, the
+document, whether it wrote the pairs or checked them, the **model** and **provider** that
+answered, and the result (pairs written, pairs supported by the text) or, in red, the error.
+Model and provider are what the API reports: OpenRouter can route a request to another model
+than the one asked for (`openrouter/auto`, fallbacks) and to one of several upstream providers,
+and names the provider in its errors too; when an answer names none, the model asked for is
+shown. **Stop** ends the run after the
 current chunk; what was added stays. When a free provider's rate limit is reached, the run waits
 and retries by itself. After three failed chunks in a row (for example, a wrong API key) the run
 stops with the reason.

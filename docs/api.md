@@ -346,7 +346,7 @@ style samples.
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/api/generations` | Runs since the engine started |
-| GET | `/api/generations/{id}` | `state` (`running`, `done`, `cancelled`, `error`), `chunks_total`, `chunks_done`, `generated`, `added`, `duplicates`, `rejected` (reason → count), `failed_chunks`, `current` (document being read), `waiting` (seconds of a rate-limit pause), `served` (who answered the teacher's requests: `[{"model", "provider", "requests"}]` as the API reported them; OpenRouter names the routed model and the upstream provider, Anthropic gives `provider: "Anthropic"`, installed models `"local"`), the last 50 `log` lines, `error`, `options` |
+| GET | `/api/generations/{id}` | `state` (`running`, `done`, `cancelled`, `error`), `chunks_total`, `chunks_done`, `generated`, `added`, `duplicates`, `rejected` (reason → count), `failed_chunks`, `current` (document being read), `waiting` (seconds of a rate-limit pause), `requests` (the last 100 teacher requests, newest last: `document`, `step` (`write` or `check`), `model` and `provider` as the API reported them (OpenRouter names the routed model and the upstream provider, also in errors; Anthropic gives `"Anthropic"`, installed models `"local"`; otherwise the model asked for), `ok` (`null` while running), `result` (what came back, or the error) and `at`), the last 50 `log` lines, `error`, `options` |
 | POST | `/api/generations/{id}/cancel` | Stops after the chunk in progress |
 
 ### Teachers

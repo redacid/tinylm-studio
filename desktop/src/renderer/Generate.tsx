@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Collection, EngineClient, GenerationJob, GenerationOptions, Served, Teacher } from "./api";
+import { Collection, EngineClient, GenerationJob, GenerationOptions, Served, Teacher, TeacherRequest } from "./api";
 import { useTabActive } from "./tabActive";
 
 const LANGUAGES = [
@@ -251,18 +251,6 @@ function GenerationProgress({ job }: { job: GenerationJob }) {
           <div style={{ width: `${share}%` }} />
         </div>
       )}
-      {job.served.length > 0 && (
-        <span className="served">
-          Answered by{" "}
-          {job.served.map((s, i) => (
-            <span key={i}>
-              {i > 0 && ", "}
-              <strong>{servedBy(s)}</strong>
-              {job.served.length > 1 && ` (${s.requests})`}
-            </span>
-          ))}
-        </span>
-      )}
       {job.current && <span className="muted">Reading {job.current}</span>}
       {job.waiting != null && (
         <span className="muted">The provider's rate limit was reached; waiting {Math.round(job.waiting)} s.</span>
@@ -271,7 +259,47 @@ function GenerationProgress({ job }: { job: GenerationJob }) {
         <span className="muted">Dropped: {rejected.map(([reason, count]) => `${count} ${reason}`).join(", ")}</span>
       )}
       {job.error && <p className="error">{job.error}</p>}
+      {job.requests.length > 0 && <TeacherRequests requests={job.requests} />}
       {job.log.length > 0 && <pre className="muted">{job.log.slice(-12).join("\n")}</pre>}
+    </div>
+  );
+}
+
+/** Each request to the teacher, newest first: who answered it and what came back. */
+function TeacherRequests({ requests }: { requests: TeacherRequest[] }) {
+  const [all, setAll] = useState(false);
+  const shown = [...requests].reverse().slice(0, all ? undefined : 10);
+  return (
+    <div className="teacher-requests">
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Document</th>
+            <th>Request</th>
+            <th>Model</th>
+            <th>Provider</th>
+            <th>Result</th>
+          </tr>
+        </thead>
+        <tbody>
+          {shown.map((r, i) => (
+            <tr key={requests.length - i} className={r.ok === false ? "failed" : ""}>
+              <td className="nowrap">{new Date(r.at).toLocaleTimeString()}</td>
+              <td>{r.document}</td>
+              <td className="nowrap">{r.step === "write" ? "write pairs" : "check pairs"}</td>
+              <td>{r.model ?? "—"}</td>
+              <td className="nowrap">{r.provider ?? "—"}</td>
+              <td>{r.ok === null ? "waiting for the answer…" : r.result}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {requests.length > 10 && (
+        <button type="button" onClick={() => setAll(!all)}>
+          {all ? "Show the last 10" : `Show all ${requests.length}`}
+        </button>
+      )}
     </div>
   );
 }
