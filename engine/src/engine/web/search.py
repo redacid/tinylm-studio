@@ -8,14 +8,16 @@ Providers:
   search goes through them restricted to video sites.
 - Serper: Google's results; web and video search.
 
-Domain filters (include only these sites, never these sites) are passed to the providers whose
-APIs take them (Tavily, Exa, Perplexity). For the others, an include list becomes `site:`
-queries, and every result is checked here as well, fetching more pages when filtering leaves
-too few.
+Domain filters (include only these sites, never these sites) hold domains (`example.com`, which
+covers its subdomains too) and patterns with `*` (`*.ua`, `*.google.*`, `steam*.com`). They are
+passed to the providers whose APIs take them (Tavily, Exa, Perplexity) as far as those APIs
+understand them. For the others, an include list becomes `site:` queries. Every result is
+checked here as well, fetching more pages when filtering leaves too few.
 """
 
 import re
 from dataclasses import asdict, dataclass, field, replace
+from fnmatch import fnmatchcase
 from typing import Literal, Protocol
 from urllib.parse import urlsplit
 
@@ -28,6 +30,10 @@ VIDEO_SITES = ("youtube.com", "vimeo.com")
 # An include list becomes one `site:` query per domain, for at most this many domains.
 MAX_SITE_QUERIES = 5
 DOMAIN = re.compile(r"^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9-]{2,63}$")
+# A pattern: labels of letters, digits, '-' and '*', with at least one letter or digit.
+PATTERN = re.compile(r"^(?=.{1,253}$)(?=.*[a-z0-9])[a-z0-9*-]+(\.[a-z0-9*-]+)*$")
+# "*.ua", "*.com": every site under a top-level domain.
+TOP_LEVEL = re.compile(r"^\*\.([a-z0-9-]+)$")
 
 
 class SearchError(Exception):
@@ -52,22 +58,48 @@ class SearchResult:
 
 
 def normalize_domain(text: str) -> str | None:
-    """'https://www.Example.com/path' -> 'example.com'; None when it is not a domain."""
+    """A domain or pattern as kept in the filter, or None when it is neither:
+    'https://www.Example.com/path' -> 'example.com', '*.example.com' -> 'example.com' (a domain
+    covers its subdomains anyway), '.ua' -> '*.ua', '*.Google.*' -> '*.google.*'."""
     text = text.strip().lower()
     if "://" in text:
-        text = urlsplit(text).hostname or ""
-    text = text.split("/")[0].split(":")[0].removeprefix("*.").removeprefix("www.")
+        text = urlsplit(text.replace("*", "wildcard-")).hostname or ""
+        text = text.replace("wildcard-", "*")
+    text = text.split("/")[0].split(":")[0]
+    if text.startswith("."):
+        text = "*" + text
+    if text.startswith("*.") and "*" not in text[2:] and "." in text[2:]:
+        text = text[2:]
+    text = text.removeprefix("www.")
     try:
-        text = text.encode("idna").decode()  # кіно.укр -> xn--...
+        # кіно.укр -> xn--...; label by label, so '*' stays as it is.
+        labels = [part if "*" in part else part.encode("idna").decode() for part in text.split(".")]
     except UnicodeError:
         return None
+    text = ".".join(labels)
+    if "*" in text:
+        return re.sub(r"\*+", "*", text) if PATTERN.match(text) else None
     return text if DOMAIN.match(text) else None
 
 
 def matches(host: str, domain: str) -> bool:
-    """A domain covers itself and its subdomains."""
+    """A domain covers itself and its subdomains; a pattern's '*' stands for any characters,
+    dots included, and a leading "*." may also match nothing."""
     host = host.lower().removeprefix("www.")
+    if "*" in domain:
+        # "*.google.*" also covers google.co.uk itself, as "*.ua" covers a bare "ua".
+        return fnmatchcase(host, domain) or (
+            domain.startswith("*.") and fnmatchcase(host, domain[2:])
+        )
     return host == domain or host.endswith("." + domain)
+
+
+def site_operator(domain: str) -> str | None:
+    """The `site:` term search engines understand for a domain or pattern, if there is one."""
+    if "*" not in domain:
+        return domain
+    top = TOP_LEVEL.match(domain)
+    return f".{top.group(1)}" if top else None
 
 
 @dataclass(frozen=True)
@@ -77,6 +109,20 @@ class DomainFilter:
 
     def __bool__(self) -> bool:
         return bool(self.include or self.exclude)
+
+    def native_include(self, top_level: bool = False) -> list[str]:
+        """The include list for an API that takes domains (and, with top_level, '.ua' for *.ua).
+        Empty when a pattern does not translate: the API must not narrow the search then, and
+        the results are filtered here instead."""
+        translated = [site_operator(d) if top_level else d for d in self.include]
+        if any(d is None or "*" in d for d in translated):
+            return []
+        return translated
+
+    def native_exclude(self, top_level: bool = False) -> list[str]:
+        """The part of the exclude list an API can take; the rest is filtered here."""
+        translated = [site_operator(d) if top_level else d for d in self.exclude]
+        return [d for d in translated if d is not None and "*" not in d]
 
     def allows(self, url: str) -> bool:
         host = urlsplit(url).hostname or ""
@@ -130,7 +176,10 @@ def search(
         kind = "web"
     queries = [query]
     if domains.include and not provider.native_domains and kind == "web":
-        queries = [f"{query} site:{d}" for d in domains.include[:MAX_SITE_QUERIES]]
+        sites = [site_operator(d) for d in domains.include]
+        # Only when every included site can be asked for; otherwise one plain query, filtered.
+        if all(sites):
+            queries = [f"{query} site:{d}" for d in sites[:MAX_SITE_QUERIES]]
     pages = provider.max_pages if domains else 1
 
     found: list[list[SearchResult]] = []
@@ -341,10 +390,10 @@ class TavilySearch(HostedSearch):
             "search_depth": self.depth,
             "topic": self.topic,
         }
-        if domains.include:
-            body["include_domains"] = list(domains.include)[:300]
-        if domains.exclude:
-            body["exclude_domains"] = list(domains.exclude)[:150]
+        if include := domains.native_include():
+            body["include_domains"] = include[:300]
+        if exclude := domains.native_exclude():
+            body["exclude_domains"] = exclude[:150]
         items = self.request("POST", "search", json=body).get("results", [])
         return [
             SearchResult(
@@ -391,10 +440,10 @@ class ExaSearch(HostedSearch):
             "type": self.search_type,
             "contents": {"highlights": True},
         }
-        if domains.include:
-            body["includeDomains"] = list(domains.include)
-        if domains.exclude:
-            body["excludeDomains"] = list(domains.exclude)
+        if include := domains.native_include():
+            body["includeDomains"] = include
+        if exclude := domains.native_exclude():
+            body["excludeDomains"] = exclude
         items = self.request("POST", "search", json=body).get("results", [])
         return [
             SearchResult(
@@ -437,12 +486,13 @@ class PerplexitySearch(HostedSearch):
         body: dict = {"query": query, "max_results": min(limit, 20)}
         if language:
             body["search_language_filter"] = [language]
-        # Up to 20 domains, either all included or all excluded ("-site.com"); the rest of the
-        # filter is applied to the results afterwards.
-        if domains.include:
-            body["search_domain_filter"] = list(domains.include)[:20]
-        elif domains.exclude:
-            body["search_domain_filter"] = ["-" + d for d in domains.exclude][:20]
+        # Up to 20 domains or top-level domains (".ua"), either all included or all excluded
+        # ("-site.com"); the rest of the filter is applied to the results afterwards.
+        include = domains.native_include(top_level=True)
+        if include and len(include) <= 20:
+            body["search_domain_filter"] = include
+        elif exclude := domains.native_exclude(top_level=True):
+            body["search_domain_filter"] = ["-" + d for d in exclude][:20]
         items = self.request("POST", "search", json=body).get("results", [])
         return [
             SearchResult(

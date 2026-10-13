@@ -53,7 +53,8 @@ class Settings(BaseSettings):
         "searxng"
     )
     searxng_url: str = "http://127.0.0.1:8888"
-    # Only results from these sites, and never from these (JSON lists of domains).
+    # Only results from these sites, and never from these (JSON lists of domains or patterns
+    # such as "*.ua").
     search_include_domains: list[str] = []
     search_exclude_domains: list[str] = []
     tavily_api_key: str | None = None

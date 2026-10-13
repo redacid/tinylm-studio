@@ -373,11 +373,18 @@ cluster; the `TINYLM_SEARCH_*` and `TINYLM_*_API_KEY` variables only give the de
 - **Only these sites** (empty: any site) and **Never these sites** (empty: none): one domain
   per line, e.g. `ign.com`; addresses like `https://www.ign.com/games` are reduced to the
   domain, and subdomains count too (`wiki.example` covers `en.wiki.example`).
+- Patterns work too: `*` stands for any characters, dots included. `*.ua` (or `.ua`) is every
+  site in the .ua zone, `*.com` every .com site, `*.google.*` Google in any country
+  (`google.com`, `google.co.uk`, `maps.google.com`), `steam*.com` both `steampowered.com` and
+  `steamcommunity.com`. `*` alone is not accepted: leave the list empty for any site.
 - SearXNG itself has no per-search site filter (its `hostnames` plugin only removes sites for
   every search, in its own settings), and neither do Brave and Serper. With them the search asks
-  for `site:<domain>` results for each listed site (up to 5) and drops results from other sites
-  in the engine, fetching up to 3 pages when the filter leaves too few. Tavily, Exa and
-  Perplexity get the lists in their API; the results are checked again anyway.
+  for `site:<domain>` results for each listed site (up to 5; `*.ua` becomes `site:.ua`) and
+  drops results from other sites in the engine, fetching up to 3 pages when the filter leaves
+  too few. Tavily, Exa and Perplexity get the lists in their API (Perplexity also takes `.ua`
+  for `*.ua`); the results are checked again anyway. A pattern a provider cannot take, like
+  `*.google.*`, is applied by the engine alone: with one in **Only these sites** the provider
+  searches everywhere and the engine keeps the matching results.
 - **Test search** saves and searches for one word, to check the provider and key. Above the
   results on the Data tab, a line shows the provider, the filters and how many results were
   hidden by them.

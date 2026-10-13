@@ -234,6 +234,48 @@ def test_domains_are_normalized_and_matched():
     assert DomainFilter().allows("https://anything.example/") and not DomainFilter()
 
 
+def test_domain_patterns():
+    assert [normalize_domain(d) for d in ("*.ua", ".UA", "*.Google.*", "steam*.com")] == [
+        "*.ua",
+        "*.ua",
+        "*.google.*",
+        "steam*.com",
+    ]
+    assert normalize_domain("*.com.ua") == "com.ua"  # a plain domain covers its subdomains
+    assert normalize_domain("*.укр") == "*.xn--j1amh"
+    assert all(normalize_domain(d) is None for d in ("*", "*.*", "ua"))
+
+    ua = DomainFilter(include=("*.ua",))
+    assert ua.allows("https://www.ign.com.ua/a") and ua.allows("https://rozetka.ua/")
+    assert not ua.allows("https://ign.com/a") and not ua.allows("https://ua.example.com/")
+    google = DomainFilter(exclude=("*.google.*",))
+    assert not google.allows("https://www.google.co.uk/") and not google.allows(
+        "https://maps.google.com/"
+    )
+    assert google.allows("https://googleblog.com/")
+    steam = DomainFilter(include=("steam*.com",))
+    assert steam.allows("https://steampowered.com/") and steam.allows("https://steamcommunity.com/")
+    assert not steam.allows("https://store.steampowered.com/")  # '*' does not start before 'steam'
+
+
+def test_patterns_in_site_queries_and_native_filters(providers):
+    searxng = SearxngSearch(providers)
+    outcome = search(searxng, "q", domains=DomainFilter(include=("*.ua", "games.example")))
+    assert outcome.queries == ["q site:.ua", "q site:games.example"]
+    # A pattern search engines cannot take: one plain query, filtered here.
+    outcome = search(searxng, "q", domains=DomainFilter(include=("*games*",)))
+    assert outcome.queries == ["q"] and {r.site for r in outcome.results} == {"games.example"}
+
+    domains = DomainFilter(include=("*.ua", "wiki.example"), exclude=("spam.*", "x.example"))
+    search(ExaSearch("k", base_url=providers), "q", domains=domains)
+    body = FakeProviders.requests[-1][1]
+    assert "includeDomains" not in body and body["excludeDomains"] == ["x.example"]
+    search(PerplexitySearch("k", base_url=providers), "q", domains=domains)
+    assert FakeProviders.requests[-1][1]["search_domain_filter"] == [".ua", "wiki.example"]
+    search(PerplexitySearch("k", base_url=providers), "q", domains=DomainFilter(exclude=("*.ru",)))
+    assert FakeProviders.requests[-1][1]["search_domain_filter"] == ["-.ru"]
+
+
 def test_searxng_include_uses_site_queries_and_checks_results(providers):
     searxng = SearxngSearch(providers)
     domains = DomainFilter(include=("games.example", "wiki.example"))
@@ -346,6 +388,9 @@ def test_search_settings_api(client, settings, providers):
         "/api/search/settings", json={"include_domains": ["ok.example", "not a domain"]}
     )
     assert bad.status_code == 422 and "not a domain" in bad.json()["detail"]
+    assert "pattern: *" in client.put("/api/search/settings", json={"exclude_domains": ["*"]}).text
+    patterns = client.put("/api/search/settings", json={"exclude_domains": [".RU", "*.google.*"]})
+    assert patterns.json()["exclude_domains"] == ["*.ru", "*.google.*"]
     assert client.put("/api/search/settings", json={"color": "red"}).status_code == 422
     assert client.put("/api/search/settings", json={"provider": "bing"}).status_code == 422
 

@@ -75,7 +75,7 @@ class SearchSettings(BaseModel):
             elif domain not in found:
                 found.append(domain)
         if bad:
-            raise ValueError(f"not a domain: {', '.join(bad)}")
+            raise ValueError(f"not a domain or pattern: {', '.join(bad)}")
         return found
 
     @field_validator("serper_country", *KEY_FIELDS, mode="before")
@@ -162,7 +162,7 @@ def make_provider(s: SearchSettings, proxy: str | None) -> SearchProvider:
 
 
 def validation_message(error: ValidationError) -> str:
-    """'exclude_domains: not a domain: x' instead of pydantic's report."""
+    """'exclude_domains: not a domain or pattern: x' instead of pydantic's report."""
     first = error.errors()[0]
     field = ".".join(str(p) for p in first["loc"])
     text = first["msg"].removeprefix("Value error, ")

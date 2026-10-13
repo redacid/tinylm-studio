@@ -248,10 +248,15 @@ the app, or the endpoints below); the variables in [Settings](#settings) are the
   set. Tavily, Exa and Perplexity have no video search: `kind: "video"` searches pages on
   YouTube and Vimeo through them.
 - **Site filters**: `include_domains` (only these sites, subdomains included; empty: any) and
-  `exclude_domains` (never these). Tavily, Exa and Perplexity (up to 20 sites, allow or deny
-  list) take them in their APIs. SearXNG, whose only site filter is its global `hostnames`
-  plugin, Brave and Serper get one `site:<domain>` query per included site (up to 5). Every
-  result is checked by the engine, which fetches up to 3 pages when the filter leaves too few.
+  `exclude_domains` (never these). Each entry is a domain or a pattern where `*` stands for any
+  characters, dots included: `*.ua` (also written `.ua`) is the whole .ua zone, `*.google.*`
+  covers `google.co.uk` and `maps.google.com`, `steam*.com` covers `steampowered.com`.
+  Tavily, Exa and Perplexity (up to 20 sites, allow or deny list) take plain domains in their
+  APIs, and Perplexity also `.ua` for `*.ua`. SearXNG, whose only site filter is its global
+  `hostnames` plugin, Brave and Serper get one `site:<domain>` query per included site (up to
+  5; `site:.ua` for `*.ua`). Other patterns are applied by the engine only: an include list
+  with one is not passed on, and the search runs unrestricted. Every result is checked by the
+  engine, which fetches up to 3 pages when the filter leaves too few.
 
 What to do with the results:
 
@@ -264,7 +269,7 @@ What to do with the results:
 |---|---|---|
 | POST | `/api/search` | `{"query": "...", "kind": "web" or "video", "limit": 10, "language": "uk"}` (language optional; `include_domains` / `exclude_domains` override the saved filters for this search): `provider`, results (`data`) with `title`, `url`, `snippet`, `site`, `thumbnail`, `source`, `hidden` (results dropped by the filters), `queries` sent and the filters used; 503 with the reason when the provider is not reachable or not set up |
 | GET | `/api/search/settings` | Provider, options and filters; API keys only as `<provider>_api_key_set` |
-| PUT | `/api/search/settings` | Any of `provider`, `include_domains`, `exclude_domains`, `searxng_url`, `brave_api_key`, `tavily_api_key`, `tavily_depth` (`basic`, `advanced`), `tavily_topic` (`general`, `news`), `exa_api_key`, `exa_type` (`auto`, `fast`, `instant`), `perplexity_api_key`, `serper_api_key`, `serper_country`; fields left out keep their value, `""` removes a key. Saved in `workspace/search-settings.json`; 422 names a wrong domain |
+| PUT | `/api/search/settings` | Any of `provider`, `include_domains`, `exclude_domains`, `searxng_url`, `brave_api_key`, `tavily_api_key`, `tavily_depth` (`basic`, `advanced`), `tavily_topic` (`general`, `news`), `exa_api_key`, `exa_type` (`auto`, `fast`, `instant`), `perplexity_api_key`, `serper_api_key`, `serper_country`; fields left out keep their value, `""` removes a key. Saved in `workspace/search-settings.json`; 422 names a wrong domain or pattern |
 | POST | `/api/collections/{name}/links` | `{"links": [{"title": "...", "url": "https://...", "snippet": "...", "kind": "video"}]}` |
 
 ## Datasets
@@ -444,6 +449,6 @@ POST /api/evaluations
 | `TINYLM_USER_AGENT` | `tinylm-studio/0.1 (local research crawler)` | User-Agent of plain HTTP requests |
 | `TINYLM_SEARCH_PROVIDER` | `searxng` | Web search: `searxng`, `brave`, `tavily`, `exa`, `perplexity` or `serper`. This and the search variables below are defaults; the saved search settings win |
 | `TINYLM_SEARXNG_URL` | `http://127.0.0.1:8888` | SearXNG address (`make searxng` starts one) |
-| `TINYLM_SEARCH_INCLUDE_DOMAINS` / `TINYLM_SEARCH_EXCLUDE_DOMAINS` | `[]` | Only / never these sites (JSON list of domains) |
+| `TINYLM_SEARCH_INCLUDE_DOMAINS` / `TINYLM_SEARCH_EXCLUDE_DOMAINS` | `[]` | Only / never these sites (JSON list of domains or patterns like `*.ua`) |
 | `TINYLM_BRAVE_API_KEY`, `TINYLM_TAVILY_API_KEY`, `TINYLM_EXA_API_KEY`, `TINYLM_PERPLEXITY_API_KEY`, `TINYLM_SERPER_API_KEY` | none | API keys of the hosted search providers |
 | `TINYLM_LLAMA_CPP_DIR` | none | A llama.cpp checkout whose `convert_hf_to_gguf.py` exports to GGUF; by default the converter is downloaded once from PyPI |

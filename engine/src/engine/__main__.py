@@ -258,12 +258,12 @@ def main() -> None:
     p.add_argument(
         "--include",
         metavar="DOMAINS",
-        help="only these sites, comma-separated (default: the saved search settings)",
+        help="only these sites or patterns like *.ua, comma-separated (default: saved settings)",
     )
     p.add_argument(
         "--exclude",
         metavar="DOMAINS",
-        help="never these sites, comma-separated (default: the saved search settings)",
+        help="never these sites or patterns like *.ru, comma-separated (default: saved settings)",
     )
     p.add_argument(
         "--add", metavar="COLLECTION", help="add the found pages (or video links) to a collection"
