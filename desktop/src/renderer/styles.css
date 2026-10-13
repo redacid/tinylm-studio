@@ -42,6 +42,9 @@ main { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
 .chat { display: flex; flex-direction: column; height: 100%; }
 .chat-tab { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .chat-tab[hidden] { display: none; }
+.tab-page { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.tab-page > * { flex: 1; min-height: 0; }
+.tab-page[hidden] { display: none; }
 .toolbar { display: flex; gap: 8px; padding: 8px 16px; }
 .toolbar .system { flex: 1; }
 .messages { flex: 1; overflow-y: auto; padding: 8px 16px; display: flex; flex-direction: column; gap: 8px; }
@@ -194,3 +197,10 @@ th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border);
 .buttons-row { display: flex; gap: 8px; }
 .search-summary { margin: 4px 0; }
 .provider a { color: var(--accent); }
+
+.job .served {
+  color: var(--muted);
+}
+.job .served strong {
+  color: var(--fg);
+}

@@ -81,6 +81,9 @@ class GenerationJob:
     failed_chunks: int = 0
     current: str | None = None
     waiting: float | None = None  # seconds of a rate-limit pause in progress
+    # Who answered the teacher's requests: [{"model", "provider", "requests"}], as the API
+    # reported it (OpenRouter may route to another model or provider than the one asked for).
+    served: list[dict] = field(default_factory=list)
     log: list[str] = field(default_factory=list)
     error: str | None = None
     created_at: str = field(default_factory=now)
@@ -90,6 +93,15 @@ class GenerationJob:
         self.log.append(line)
         del self.log[:-200]
 
+    def count_served(self, served: dict) -> None:
+        for row in self.served:
+            if (row["model"], row["provider"]) == (served.get("model"), served.get("provider")):
+                row["requests"] += 1
+                return
+        self.served.append(
+            {"model": served.get("model"), "provider": served.get("provider"), "requests": 1}
+        )
+
     def reject(self, reason: str, count: int = 1) -> None:
         self.rejected[reason] = self.rejected.get(reason, 0) + count
 
@@ -98,6 +110,7 @@ class GenerationJob:
         data["options"] = asdict(self.options)
         data["rejected"] = dict(self.rejected)
         data["log"] = self.log[-50:]
+        data["served"] = [dict(row) for row in self.served]
         return data
 
 
@@ -255,6 +268,7 @@ class Generator:
         try:
             teacher = self.teachers.teacher(options.teacher)
             teacher.on_wait = lambda seconds: self._wait(job, seconds)
+            teacher.on_served = job.count_served
             chunks = self.unused_chunks(job.dataset, options.collection, options.chunks)
             job.chunks_total = len(chunks)
             if not chunks:

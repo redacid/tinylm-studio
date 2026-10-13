@@ -37,6 +37,9 @@ class RateLimited(TeacherError):
 
 class Teacher(Protocol):
     name: str
+    # Who answered the last request: {"model": ..., "provider": ...}. OpenRouter names the model
+    # that actually answered (it can differ from the one asked for) and the upstream provider.
+    last_served: dict | None
 
     def complete(
         self, system: str, prompt: str, max_tokens: int = 2048, temperature: float = 0.7
@@ -72,6 +75,7 @@ class LocalTeacher:
         self.models = models
         self.model_id = model_id
         self.name = f"local:{model_id}"
+        self.last_served = {"model": model_id, "provider": "local"}
 
     def complete(
         self, system: str, prompt: str, max_tokens: int = 2048, temperature: float = 0.7
@@ -89,6 +93,7 @@ class OpenAICompatibleTeacher:
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.name = name or model
+        self.last_served: dict | None = None
         headers = {**APP_HEADERS}
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
@@ -118,7 +123,12 @@ class OpenAICompatibleTeacher:
                 error = data["error"]
                 message = error.get("message") if isinstance(error, dict) else error
                 raise TeacherError(f"{self.name}: {message}")
-            return data["choices"][0]["message"]["content"] or ""
+            content = data["choices"][0]["message"]["content"] or ""
+            self.last_served = {
+                "model": data.get("model") or self.model,
+                "provider": data.get("provider"),
+            }
+            return content
         except (ValueError, KeyError, IndexError, TypeError):
             raise TeacherError(f"{self.name}: unexpected answer {response.text[:300]}") from None
 
@@ -145,6 +155,7 @@ class AnthropicTeacher:
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.name = name or model
+        self.last_served: dict | None = None
         headers = {"anthropic-version": ANTHROPIC_VERSION}
         if api_key:
             headers["x-api-key"] = api_key
@@ -166,8 +177,10 @@ class AnthropicTeacher:
             raise TeacherError(f"{self.base_url} is not reachable ({type(e).__name__})") from None
         check(response, self.name)
         try:
-            blocks = response.json()["content"]
-            return "".join(b.get("text", "") for b in blocks if b.get("type") == "text")
+            data = response.json()
+            text = "".join(b.get("text", "") for b in data["content"] if b.get("type") == "text")
+            self.last_served = {"model": data.get("model") or self.model, "provider": "Anthropic"}
+            return text
         except (ValueError, KeyError, TypeError):
             raise TeacherError(f"{self.name}: unexpected answer {response.text[:300]}") from None
 
@@ -193,6 +206,8 @@ class Paced:
         self.retries = retries
         self.sleep = sleep or time.sleep
         self.last = 0.0
+        # Called after each answer with who served it (see Teacher.last_served).
+        self.on_served = lambda served: None
         # Called with the number of seconds before waiting out a rate limit.
         self.on_wait = lambda seconds: None
 
@@ -205,10 +220,14 @@ class Paced:
                 self.sleep(wait)
             self.last = time.monotonic()
             try:
-                return self.teacher.complete(system, prompt, max_tokens, temperature)
+                text = self.teacher.complete(system, prompt, max_tokens, temperature)
             except RateLimited as e:
                 if attempt == self.retries:
                     raise
                 self.on_wait(e.retry_after)
                 self.sleep(e.retry_after)
+                continue
+            if self.teacher.last_served:
+                self.on_served(self.teacher.last_served)
+            return text
         raise AssertionError("unreachable")

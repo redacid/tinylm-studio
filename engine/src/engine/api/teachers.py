@@ -92,10 +92,10 @@ def provider_models(body: TeacherRequest, store: TeacherStore = Depends(teachers
 @router.post("/test")
 def test_teacher(body: TeacherRequest, store: TeacherStore = Depends(teachers)) -> dict:
     """Sends a tiny request to check the address, key and model."""
+    teacher = client(config(body, store))
     try:
-        reply = client(config(body, store)).complete(
-            "Reply with one word.", "Say OK.", max_tokens=16, temperature=0
-        )
+        reply = teacher.complete("Reply with one word.", "Say OK.", max_tokens=16, temperature=0)
     except TeacherError as e:
         raise HTTPException(502, str(e)) from None
-    return {"reply": reply.strip()[:200]}
+    # The model and provider that answered, as the API reported them.
+    return {"reply": reply.strip()[:200], "served": teacher.last_served}

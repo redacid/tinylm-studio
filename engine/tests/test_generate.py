@@ -59,8 +59,12 @@ class FakeTeacher(BaseHTTPRequestHandler):
         FakeTeacher.prompts.append(prompt)
         text = self.answer(system, prompt)
         if self.path == "/v1/messages":
-            return self.reply(200, {"content": [{"type": "text", "text": text}]})
-        self.reply(200, {"choices": [{"message": {"role": "assistant", "content": text}}]})
+            body = {"model": "claude-test-1", "content": [{"type": "text", "text": text}]}
+            return self.reply(200, body)
+        # OpenRouter names the model and the upstream provider that answered.
+        message = {"role": "assistant", "content": text}
+        body = {"model": "routed/model", "provider": "Chutes", "choices": [{"message": message}]}
+        self.reply(200, body)
 
     def answer(self, system: str, prompt: str) -> str:
         if system == CHECK_SYSTEM:
@@ -188,7 +192,7 @@ def test_teachers_api(client, teacher_server):
     assert models.json()["data"][0]["free"]
     assert client.post(
         "/api/teachers/test", json={**body, "api_key": None, "id": teacher["id"]}
-    ).json() == {"reply": "OK"}
+    ).json() == {"reply": "OK", "served": {"model": "routed/model", "provider": "Chutes"}}
     bad = client.post("/api/teachers/test", json={**body, "api_key": "wrong"})
     assert bad.status_code == 502 and "rejected the API key" in bad.json()["detail"]
     down = client.post("/api/teachers/test", json={**body, "base_url": "http://127.0.0.1:9"})
@@ -206,7 +210,8 @@ def test_teachers_api(client, teacher_server):
         "model": "claude-x",
         "api_key": "good-key",
     }
-    assert client.post("/api/teachers/test", json=anthropic).json() == {"reply": "OK"}
+    tested = client.post("/api/teachers/test", json=anthropic).json()
+    assert tested == {"reply": "OK", "served": {"model": "claude-test-1", "provider": "Anthropic"}}
     assert client.post("/api/teachers/models", json=anthropic).json()["data"][0]["id"] == "claude-x"
     default = client.post("/api/teachers", json={"kind": "anthropic", "model": "claude-x"}).json()
     assert default["base_url"] == "https://api.anthropic.com" and not default["has_key"]
@@ -238,6 +243,10 @@ def test_generate_examples(library, teacher_server, kind):
     assert (job["chunks_done"], job["generated"], job["added"]) == (1, 5, 2)
     assert job["rejected"] == {"language": 1, "length": 1, "not supported by the text": 1}
     assert any("rate limit" in line for line in job["log"])
+    # Two requests: writing the pairs and checking them.
+    served = {"openai": ("routed/model", "Chutes"), "anthropic": ("claude-test-1", "Anthropic")}
+    model, provider = served[kind]
+    assert job["served"] == [{"model": model, "provider": provider, "requests": 2}]
 
     # The prompt carried the style: instructions, language and the hand-written example.
     prompt = FakeTeacher.prompts[0]

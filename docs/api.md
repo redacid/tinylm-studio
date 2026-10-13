@@ -346,7 +346,7 @@ style samples.
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/api/generations` | Runs since the engine started |
-| GET | `/api/generations/{id}` | `state` (`running`, `done`, `cancelled`, `error`), `chunks_total`, `chunks_done`, `generated`, `added`, `duplicates`, `rejected` (reason → count), `failed_chunks`, `current` (document being read), `waiting` (seconds of a rate-limit pause), the last 50 `log` lines, `error`, `options` |
+| GET | `/api/generations/{id}` | `state` (`running`, `done`, `cancelled`, `error`), `chunks_total`, `chunks_done`, `generated`, `added`, `duplicates`, `rejected` (reason → count), `failed_chunks`, `current` (document being read), `waiting` (seconds of a rate-limit pause), `served` (who answered the teacher's requests: `[{"model", "provider", "requests"}]` as the API reported them; OpenRouter names the routed model and the upstream provider, Anthropic gives `provider: "Anthropic"`, installed models `"local"`), the last 50 `log` lines, `error`, `options` |
 | POST | `/api/generations/{id}/cancel` | Stops after the chunk in progress |
 
 ### Teachers
@@ -378,7 +378,7 @@ defaults to the model. `per_minute` spaces requests out; HTTP 429 answers are wa
 | PUT | `/api/teachers/{id}` | The same body; an empty `api_key` keeps the saved key |
 | DELETE | `/api/teachers/{id}` | 204 |
 | POST | `/api/teachers/models` | The same body (or with `id` to use a saved key): the provider's models as `id`, `name`, `free`, free ones first; 502 with the provider's error |
-| POST | `/api/teachers/test` | The same body: sends "Say OK." and returns `{"reply": "OK"}`; 502 with the reason (rejected key, not reachable, unknown model) |
+| POST | `/api/teachers/test` | The same body: sends "Say OK." and returns `{"reply": "OK", "served": {"model": "...", "provider": "..."}}`; 502 with the reason (rejected key, not reachable, unknown model) |
 
 ## Fine-tuning
 

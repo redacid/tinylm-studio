@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { CatalogEntry, EngineClient, ExportJob, Quantization, TrainedModel } from "./api";
 import { Teachers } from "./Teachers";
+import { useTabActive } from "./tabActive";
 
 export function Models({ client }: { client: EngineClient }) {
   const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
@@ -29,12 +30,14 @@ export function Models({ client }: { client: EngineClient }) {
     await refresh();
   }
 
+  const active = useTabActive();
   useEffect(() => {
+    if (!active) return;
     refresh();
     // Poll while downloads are running.
     const timer = setInterval(refresh, 2000);
     return () => clearInterval(timer);
-  }, [refresh]);
+  }, [refresh, active]);
 
   async function download(id: string) {
     setError(null);

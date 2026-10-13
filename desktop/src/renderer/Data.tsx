@@ -3,6 +3,7 @@ import { Collection, EngineClient } from "./api";
 import { Documents } from "./Documents";
 import { Search } from "./Search";
 import { Websites } from "./Websites";
+import { useTabActive } from "./tabActive";
 
 export function Data({ client }: { client: EngineClient }) {
   const [collections, setCollections] = useState<Collection[]>([]);
@@ -28,9 +29,10 @@ export function Data({ client }: { client: EngineClient }) {
     setSelected((current) => (list.some((c) => c.name === current) ? current : list[0]?.name ?? ""));
   }, [client]);
 
+  const active = useTabActive();
   useEffect(() => {
-    refresh().catch(report);
-  }, [refresh]);
+    if (active) refresh().catch(report);
+  }, [refresh, active]);
 
   const refreshAll = useCallback(() => {
     refresh().catch(report);

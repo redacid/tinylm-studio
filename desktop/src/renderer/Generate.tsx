@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Collection, EngineClient, GenerationJob, GenerationOptions, Teacher } from "./api";
+import { Collection, EngineClient, GenerationJob, GenerationOptions, Served, Teacher } from "./api";
+import { useTabActive } from "./tabActive";
 
 const LANGUAGES = [
   ["uk", "Ukrainian"],
@@ -50,7 +51,9 @@ export function GeneratePanel({
   const report = (e: unknown) => setError(e instanceof Error ? e.message : String(e));
   const set = (patch: Partial<GenerationOptions>) => setOptions((o) => ({ ...o, ...patch }));
 
+  const active = useTabActive();
   useEffect(() => {
+    if (!active) return;
     Promise.all([client.collections(), client.teachers(), client.generations()])
       .then(([c, t, jobs]) => {
         setCollections(c);
@@ -65,7 +68,7 @@ export function GeneratePanel({
         setJob(mine[mine.length - 1] ?? null);
       })
       .catch(report);
-  }, [client, dataset]);
+  }, [client, dataset, active]);
 
   const running = job?.state === "running";
 
@@ -75,7 +78,7 @@ export function GeneratePanel({
   }, [client, dataset, options.collection, job?.state]);
 
   useEffect(() => {
-    if (!job || !running) return;
+    if (!job || !running || !active) return;
     let added = job.added;
     const timer = setInterval(async () => {
       try {
@@ -88,7 +91,7 @@ export function GeneratePanel({
       }
     }, 1000);
     return () => clearInterval(timer);
-  }, [client, job?.id, running]);
+  }, [client, job?.id, running, active]);
 
   async function start(event: FormEvent) {
     event.preventDefault();
@@ -223,6 +226,13 @@ export function GeneratePanel({
   );
 }
 
+/** "deepseek/deepseek-chat via Chutes": the model and provider that answered. */
+export function servedBy(served: Served): string {
+  return [served.model, served.provider && served.provider !== "local" && `via ${served.provider}`]
+    .filter(Boolean)
+    .join(" ");
+}
+
 function GenerationProgress({ job }: { job: GenerationJob }) {
   const rejected = Object.entries(job.rejected);
   const share = job.chunks_total ? (100 * job.chunks_done) / job.chunks_total : 0;
@@ -240,6 +250,18 @@ function GenerationProgress({ job }: { job: GenerationJob }) {
         <div className="progress">
           <div style={{ width: `${share}%` }} />
         </div>
+      )}
+      {job.served.length > 0 && (
+        <span className="served">
+          Answered by{" "}
+          {job.served.map((s, i) => (
+            <span key={i}>
+              {i > 0 && ", "}
+              <strong>{servedBy(s)}</strong>
+              {job.served.length > 1 && ` (${s.requests})`}
+            </span>
+          ))}
+        </span>
       )}
       {job.current && <span className="muted">Reading {job.current}</span>}
       {job.waiting != null && (

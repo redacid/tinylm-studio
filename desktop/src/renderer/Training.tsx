@@ -1,5 +1,6 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Dataset, EngineClient, LossPoint, TrainingJob, TrainingSettings } from "./api";
+import { useTabActive } from "./tabActive";
 
 const DEFAULTS: Omit<TrainingSettings, "name" | "base" | "dataset"> = {
   epochs: 3,
@@ -33,7 +34,9 @@ export function Training({ client, onNeedModel }: { client: EngineClient; onNeed
 
   const refreshJobs = useCallback(async () => setJobs((await client.trainingJobs()).reverse()), [client]);
 
+  const active = useTabActive();
   useEffect(() => {
+    if (!active) return;
     (async () => {
       const [models, sets] = await Promise.all([client.trainableModels(), client.datasets()]);
       setBases(models);
@@ -47,7 +50,7 @@ export function Training({ client, onNeedModel }: { client: EngineClient; onNeed
     refreshJobs().catch(report);
     const timer = setInterval(() => refreshJobs().catch(() => {}), 3000);
     return () => clearInterval(timer);
-  }, [client, refreshJobs]);
+  }, [client, refreshJobs, active]);
 
   async function start(event: FormEvent) {
     event.preventDefault();

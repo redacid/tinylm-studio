@@ -8,6 +8,7 @@ import { loadChatSettings, saveChatSettings } from "./chatSettings";
 import { Models } from "./Models";
 import { Settings } from "./Settings";
 import { Training } from "./Training";
+import { TabActive } from "./tabActive";
 import type { EngineState } from "./types";
 
 const PHASE_LABELS: Record<EngineState["phase"], string> = {
@@ -19,6 +20,9 @@ const PHASE_LABELS: Record<EngineState["phase"], string> = {
 };
 
 type Tab = "chat" | "data" | "datasets" | "training" | "evaluation" | "models" | "settings";
+
+// Tabs that need the engine and keep their state while hidden (the chat has its own).
+const PAGES: Tab[] = ["data", "datasets", "training", "evaluation", "models"];
 
 const TAB_LABELS: Record<Tab, string> = {
   chat: "Chat",
@@ -33,6 +37,8 @@ const TAB_LABELS: Record<Tab, string> = {
 export function App() {
   const [engine, setEngine] = useState<EngineState>({ phase: "starting", port: 0 });
   const [tab, setTab] = useState<Tab>("chat");
+  const [visited, setVisited] = useState<Set<Tab>>(() => new Set([tab]));
+  if (!visited.has(tab)) setVisited(new Set(visited).add(tab));
   const [chatSettings, setChatSettings] = useState(loadChatSettings);
   const changeChatSettings = (settings: typeof chatSettings) => {
     setChatSettings(settings);
@@ -78,22 +84,31 @@ export function App() {
             />
           </div>
         )}
-        {tab === "settings" ? (
+        {tab === "settings" && (
           // Needs no engine: these settings live in the app.
           <Settings client={client} chat={chatSettings} onChat={changeChatSettings} />
-        ) : !client ? (
-          <p className="muted">Waiting for the engine…</p>
-        ) : tab === "chat" ? null : tab === "data" ? (
-          <Data client={client} />
-        ) : tab === "datasets" ? (
-          <Datasets client={client} />
-        ) : tab === "training" ? (
-          <Training client={client} onNeedModel={() => setTab("models")} />
-        ) : tab === "evaluation" ? (
-          <EvaluationScreen client={client} />
-        ) : (
-          <Models client={client} />
         )}
+        {!client && tab !== "settings" && tab !== "chat" && <p className="muted">Waiting for the engine…</p>}
+        {/* The other tabs stay mounted once opened, so a form, a selection or the progress of a
+            generation, crawl or training run is still there after switching tabs. */}
+        {client &&
+          PAGES.filter((page) => visited.has(page)).map((page) => (
+            <div key={page} className="tab-page" hidden={tab !== page}>
+              <TabActive.Provider value={tab === page}>
+                {page === "data" ? (
+                  <Data client={client} />
+                ) : page === "datasets" ? (
+                  <Datasets client={client} />
+                ) : page === "training" ? (
+                  <Training client={client} onNeedModel={() => setTab("models")} />
+                ) : page === "evaluation" ? (
+                  <EvaluationScreen client={client} />
+                ) : (
+                  <Models client={client} />
+                )}
+              </TabActive.Provider>
+            </div>
+          ))}
       </main>
     </div>
   );

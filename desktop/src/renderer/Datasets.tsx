@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { ChatMessage, Dataset, EngineClient, Example, ExampleFilter } from "./api";
 import { GeneratePanel } from "./Generate";
+import { useTabActive } from "./tabActive";
 
 const PAGE_SIZE = 20;
 const NEW_EXAMPLE: ChatMessage[] = [
@@ -26,9 +27,10 @@ export function Datasets({ client }: { client: EngineClient }) {
     setSelected((current) => (list.some((d) => d.name === current) ? current : list[0]?.name ?? ""));
   }, [client]);
 
+  const active = useTabActive();
   useEffect(() => {
-    refresh().catch(report);
-  }, [refresh]);
+    if (active) refresh().catch(report);
+  }, [refresh, active]);
 
   async function create(event: FormEvent) {
     event.preventDefault();

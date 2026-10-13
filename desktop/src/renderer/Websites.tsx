@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CrawlJob, EngineClient, Website } from "./api";
+import { useTabActive } from "./tabActive";
 
 type Draft = {
   name: string;
@@ -55,7 +56,9 @@ export function Websites({
   }, [refreshWebsites, savedVersion]);
 
   // Poll crawls into this collection; reload documents as pages arrive and websites when one ends.
+  const active = useTabActive();
   useEffect(() => {
+    if (!active) return;
     let stopped = false;
     async function poll() {
       const list = (await client.crawls()).filter((j) => j.collection === collection);
@@ -78,7 +81,7 @@ export function Websites({
       stopped = true;
       clearInterval(timer);
     };
-  }, [client, collection, onIndexed, refreshWebsites]);
+  }, [client, collection, onIndexed, refreshWebsites, active]);
 
   async function edit(website: Website | null) {
     setError(null);

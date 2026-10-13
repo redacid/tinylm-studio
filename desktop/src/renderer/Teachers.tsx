@@ -1,5 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { EngineClient, Teacher, TeacherInput, TeacherModel } from "./api";
+import { servedBy } from "./Generate";
+import { useTabActive } from "./tabActive";
 
 /** Ready-made settings for common providers; every field stays editable. */
 const PROVIDERS = [
@@ -36,9 +38,10 @@ export function Teachers({ client }: { client: EngineClient }) {
   const report = (e: unknown) => setError(e instanceof Error ? e.message : String(e));
   const refresh = useCallback(() => client.teachers().then(setTeachers, report), [client]);
 
+  const active = useTabActive();
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    if (active) refresh();
+  }, [refresh, active]);
 
   function edit(teacher: Teacher | null) {
     setError(null);
@@ -73,7 +76,10 @@ export function Teachers({ client }: { client: EngineClient }) {
 
   const listModels = () => check(async () => setModels(await client.teacherModels(editing!)));
   const test = () =>
-    check(async () => setResult({ ok: true, text: `The model answered: ${await client.testTeacher(editing!)}` }));
+    check(async () => {
+      const { reply, served } = await client.testTeacher(editing!);
+      setResult({ ok: true, text: `The model answered: ${reply}${served ? ` (${servedBy(served)})` : ""}` });
+    });
 
   async function save(event: FormEvent) {
     event.preventDefault();

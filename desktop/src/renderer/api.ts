@@ -203,6 +203,9 @@ export type GenerationOptions = {
   verify: boolean;
 };
 
+/** The model and provider that answered a teacher request (OpenRouter may route elsewhere). */
+export type Served = { model: string | null; provider: string | null; requests?: number };
+
 export type GenerationJob = {
   id: string;
   dataset: string;
@@ -219,6 +222,8 @@ export type GenerationJob = {
   current: string | null;
   /** Seconds of a rate-limit pause in progress. */
   waiting: number | null;
+  /** Who answered the teacher's requests, as the API reported it. */
+  served: Served[];
   log: string[];
   error: string | null;
   created_at: string;
@@ -578,14 +583,12 @@ export class EngineClient {
   }
 
   /** Sends a short request; returns the model's reply or throws the provider's error. */
-  async testTeacher(teacher: TeacherInput): Promise<string> {
-    return (
-      await this.json<{ reply: string }>("/api/teachers/test", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(teacher),
-      })
-    ).reply;
+  async testTeacher(teacher: TeacherInput): Promise<{ reply: string; served: Served | null }> {
+    return this.json<{ reply: string; served: Served | null }>("/api/teachers/test", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(teacher),
+    });
   }
 
   async evaluations(): Promise<Evaluation[]> {

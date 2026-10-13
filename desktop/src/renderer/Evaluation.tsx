@@ -1,5 +1,6 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Dataset, EngineClient, Evaluation, EvaluationOptions, Teacher, TrainedModel } from "./api";
+import { useTabActive } from "./tabActive";
 
 const STATE_LABELS: Record<Evaluation["state"], string> = {
   running: "Running",
@@ -20,11 +21,13 @@ export function EvaluationScreen({ client }: { client: EngineClient }) {
   const report = (e: unknown) => setError(e instanceof Error ? e.message : String(e));
   const refresh = useCallback(async () => setRuns((await client.evaluations()).reverse()), [client]);
 
+  const active = useTabActive();
   useEffect(() => {
+    if (!active) return;
     refresh().catch(report);
     const timer = setInterval(() => refresh().catch(() => {}), 3000);
     return () => clearInterval(timer);
-  }, [refresh]);
+  }, [refresh, active]);
 
   return (
     <div className="data">
@@ -84,18 +87,24 @@ function EvaluationForm({ client, onStarted }: { client: EngineClient; onStarted
   const [error, setError] = useState<string | null>(null);
   const set = (patch: Partial<EvaluationOptions>) => setOptions((o) => ({ ...o, ...patch }));
 
+  const active = useTabActive();
   useEffect(() => {
+    if (!active) return;
     Promise.all([client.datasets(), client.installedModels(), client.trainedModels(), client.teachers()])
       .then(([d, m, t, j]) => {
         setDatasets(d);
         setModels(m);
         setTrained(t);
         setTeachers(j.filter((teacher) => teacher.kind !== "local"));
-        const dataset = d.find((x) => x.eval > 0)?.name ?? d[0]?.name ?? "";
-        setOptions((o) => ({ ...o, dataset, models: suggested(dataset, t, m) }));
+        // Shown again: keep what was chosen while the dataset still exists.
+        setOptions((o) => {
+          if (d.some((x) => x.name === o.dataset)) return o;
+          const dataset = d.find((x) => x.eval > 0)?.name ?? d[0]?.name ?? "";
+          return { ...o, dataset, models: suggested(dataset, t, m) };
+        });
       })
       .catch((e) => setError(String(e)));
-  }, [client]);
+  }, [client, active]);
 
   function toggle(model: string) {
     set({

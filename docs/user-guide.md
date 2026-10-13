@@ -40,6 +40,11 @@ After pulling changes that add Python packages (see `engine/pyproject.toml`), ru
 Settings go into `.env` in the repository (`cp .env.example .env`); every `make` target and the
 app read it.
 
+Switching tabs stops nothing. Crawls, example generation, training, evaluation and exports run
+in the engine; each tab keeps its form, selection and progress while another one is shown, and
+refreshes its lists when you come back. Closing the app stops the engine, and with it a run in
+progress.
+
 ## Chat
 
 ![Chat with answers from a collection](images/chat.png)
@@ -192,7 +197,11 @@ Settings:
   the text does not support. It doubles the number of requests but catches made-up answers.
 
 The progress shows chunks read, pairs written and added, duplicates, and why pairs were dropped
-(wrong language, too short or long, not supported by the text). **Stop** ends the run after the
+(wrong language, too short or long, not supported by the text). **Answered by** names the
+model and provider that answered the teacher's requests, as the API reports them: OpenRouter
+can route a request to another model than the one asked for (`openrouter/auto`, fallbacks) and
+to one of several upstream providers, and the count after each shows how many requests each
+served. **Stop** ends the run after the
 current chunk; what was added stays. When a free provider's rate limit is reached, the run waits
 and retries by itself. After three failed chunks in a row (for example, a wrong API key) the run
 stops with the reason.
@@ -222,7 +231,8 @@ A teacher is the model that writes examples. Teachers are set up at the bottom o
 - **Installed models** are offered as teachers without any setup. They are free and private,
   but a 4B model on a CPU takes minutes per chunk; use them for small runs.
 
-**Test** sends a tiny request and shows the answer or the provider's error. **Requests per
+**Test** sends a tiny request and shows the answer, with the model and provider that answered,
+or the provider's error. **Requests per
 minute** keeps the studio under the provider's limit; leave it empty for no limit.
 
 ![Saved teachers](images/teachers.png)
