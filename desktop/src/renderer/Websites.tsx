@@ -9,9 +9,18 @@ type Draft = {
   max_depth: number;
   per_minute: number;
   use_browser: boolean;
+  only_under_start: boolean;
 };
 
-const NEW_SITE: Draft = { name: "", urls: "", max_pages: 50, max_depth: 2, per_minute: 20, use_browser: false };
+const NEW_SITE: Draft = {
+  name: "",
+  urls: "",
+  max_pages: 50,
+  max_depth: 2,
+  per_minute: 20,
+  use_browser: false,
+  only_under_start: false,
+};
 
 /**
  * Saved websites of a collection. Each can be crawled again: pages downloaded before are skipped
@@ -97,6 +106,7 @@ export function Websites({
             max_depth: website.max_depth,
             per_minute: website.per_minute,
             use_browser: website.use_browser,
+            only_under_start: website.only_under_start,
           }
         : defaults
           ? {
@@ -175,6 +185,14 @@ export function Websites({
             <label title="Load pages in the browser connected over CDP (its address is in Settings > Crawler), for sites that need JavaScript">
               <input type="checkbox" checked={draft.use_browser} onChange={(e) => set({ use_browser: e.target.checked })} /> Browser (CDP)
             </label>
+            <label title="Follow links only inside the folders of the addresses above: from example.com/guides/ only to example.com/guides/…, not the rest of the site. Other sites and subdomains are never followed either way.">
+              <input
+                type="checkbox"
+                checked={draft.only_under_start}
+                onChange={(e) => set({ only_under_start: e.target.checked })}
+              />{" "}
+              Only under these addresses
+            </label>
             <span className="buttons">
               <button type="button" onClick={() => setEditing(null)}>Cancel</button>
               <button type="button" onClick={(e) => save(e, false)} disabled={!draft.urls.trim()}>Save</button>
@@ -202,6 +220,7 @@ export function Websites({
               </div>
               <div className="muted">
                 {w.max_pages} new pages · depth {w.max_depth} · {w.per_minute}/min{w.use_browser && " · browser"}
+                {w.only_under_start && " · only under these addresses"}
                 <div>{w.last_crawled_at ? `Last crawled ${new Date(w.last_crawled_at).toLocaleString()}` : "Not crawled yet"}</div>
               </div>
               <div className="buttons">

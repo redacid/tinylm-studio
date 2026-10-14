@@ -231,9 +231,11 @@ PyPI (downloaded once into `<data dir>/tools/`) or from `TINYLM_LLAMA_CPP_DIR`.
 `POST /api/collections/{name}/crawl` (or `make crawl COLLECTION=games URLS="https://site/ ..."`,
 or the Data tab) adds pages of websites to a collection in the background:
 
-- Starts from the given addresses and follows links **within the same sites** up to `max_depth`
-  hops, until `max_pages` **new** pages are downloaded. Images, video, archives, scripts and styles are
-  never requested. Pages with little text (listings, navigation) are followed but not indexed;
+- Starts from the given addresses and follows links **within the same sites** (the same host,
+  `www.` aside; other subdomains are other sites) up to `max_depth` hops; with
+  `only_under_start: true`, only links under the start addresses' folders (from
+  `https://example.com/guides/`, only `/guides/…`), until `max_pages` **new** pages are
+  downloaded. Images, video, archives, scripts and styles are never requested. Pages with little text (listings, navigation) are followed but not indexed;
   web pages keep only their main text (menus and footers are dropped); PDFs are indexed too.
 - **Repeated crawls continue where the last one stopped.** Every downloaded page is remembered
   in the collection with its links. A later crawl into the same collection walks through those
@@ -264,7 +266,7 @@ or the Data tab) adds pages of websites to a collection in the background:
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/api/collections/{name}/crawl` | One-off crawl: `{"urls": [...], "max_pages": 50, "max_depth": 2, "per_minute": 20, "use_browser": false, "respect_robots": true}` |
+| POST | `/api/collections/{name}/crawl` | One-off crawl: `{"urls": [...], "max_pages": 50, "max_depth": 2, "per_minute": 20, "use_browser": false, "respect_robots": true, "only_under_start": false}` |
 | GET | `/api/collections/{name}/websites` | Saved websites of a collection, with `last_crawled_at` |
 | POST | `/api/collections/{name}/websites` | Saves a website: the crawl fields above plus an optional `name` (defaults to the host) |
 | PUT | `/api/websites/{id}` | Changes a saved website (same body) |

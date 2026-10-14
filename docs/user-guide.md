@@ -184,6 +184,12 @@ A **collection** is a set of documents that chat can answer from. Create one on 
     walked through without downloading them again and are not counted, so every run continues
     where the last one stopped until the whole site is in the collection.
   - *Depth* is how many links away from the start addresses to go.
+  - The crawl never leaves the start sites: links to other sites, and to other subdomains of
+    the same site (`auction.example.com` from `example.com`), are not followed.
+    *Only under these addresses* keeps it to the start addresses' folders as well: from
+    `https://example.com/guides/` it follows `/guides/…` links but not the rest of the site.
+    The folder is the address up to its last `/`, so `https://example.com/guides` (no slash at
+    the end) means the whole site.
   - *Per minute* limits requests to each site. Keep it low (the default is 20) so the site is
     not overloaded and does not ban you.
   - *Browser (CDP)* loads pages in a real Chrome or Chromium, for sites that need JavaScript or

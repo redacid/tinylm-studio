@@ -25,6 +25,8 @@ class CrawlRequest(BaseModel):
     per_minute: float | None = Field(None, gt=0, le=120)
     use_browser: bool | None = None
     respect_robots: bool = True
+    # Follow only links under the start addresses' folders, not the whole site.
+    only_under_start: bool = False
 
     @field_validator("urls")
     @classmethod
@@ -77,6 +79,7 @@ def options(website: Website) -> CrawlOptions:
         per_minute=website.per_minute,
         use_browser=website.use_browser,
         respect_robots=website.respect_robots,
+        only_under_start=website.only_under_start,
     )
 
 

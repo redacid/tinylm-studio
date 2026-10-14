@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS websites (
     per_minute REAL NOT NULL,
     use_browser INTEGER NOT NULL,
     respect_robots INTEGER NOT NULL,
+    only_under_start INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     last_crawled_at TEXT
 );
@@ -48,6 +49,7 @@ class Website:
     per_minute: float = 20
     use_browser: bool = False
     respect_robots: bool = True
+    only_under_start: bool = False
     id: int | None = None
     collection: str = ""
     created_at: str | None = None
@@ -57,7 +59,17 @@ class Website:
         return asdict(self)
 
 
-FIELDS = ("name", "max_pages", "max_depth", "per_minute", "use_browser", "respect_robots")
+FIELDS = (
+    "name",
+    "max_pages",
+    "max_depth",
+    "per_minute",
+    "use_browser",
+    "respect_robots",
+    "only_under_start",
+)
+# Columns added after the first release, with their definitions, for older databases.
+ADDED_COLUMNS = {"only_under_start": "INTEGER NOT NULL DEFAULT 0"}
 
 
 class WebsiteStore:
@@ -65,6 +77,12 @@ class WebsiteStore:
         self.store = store
         self._lock = store._lock
         self.db.executescript(SCHEMA)
+        columns = {r["name"] for r in self.db.execute("PRAGMA table_info(websites)")}
+        with self._lock:
+            for name, definition in ADDED_COLUMNS.items():
+                if name not in columns:
+                    self.db.execute(f"ALTER TABLE websites ADD COLUMN {name} {definition}")
+            self.db.commit()
 
     @property
     def db(self):
@@ -127,6 +145,7 @@ class WebsiteStore:
         data["urls"] = json.loads(data["urls"])
         data["use_browser"] = bool(data["use_browser"])
         data["respect_robots"] = bool(data["respect_robots"])
+        data["only_under_start"] = bool(data["only_under_start"])
         return Website(**data)
 
     # Pages already downloaded

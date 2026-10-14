@@ -113,6 +113,8 @@ export type CrawlSettings = {
   max_depth: number;
   per_minute: number;
   use_browser: boolean;
+  /** Follow only links under the start addresses' folders, not the whole site. */
+  only_under_start: boolean;
 };
 
 /** Options left out come from the crawler settings (Settings > Crawler). */

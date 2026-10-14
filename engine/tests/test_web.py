@@ -36,6 +36,12 @@ SITE = {
     "/c": page("Article C", ARTICLE.replace("Geralt", "Yennefer") + '<a href="/d">deeper</a>'),
     "/d": page("Article D", ARTICLE.replace("Geralt", "Dandelion")),
     "/private/x": page("Private", ARTICLE),
+    "/guides/": page(
+        "Guides",
+        '<a href="/guides/one">1</a> <a href="/guides/deep/two">2</a> <a href="/a">A</a>',
+    ),
+    "/guides/one": page("Guide One", ARTICLE.replace("Geralt", "Vesemir")),
+    "/guides/deep/two": page("Guide Two", ARTICLE.replace("Geralt", "Lambert")),
     "/robots.txt": "User-agent: *\nDisallow: /private/\n",
     "/js": "<html><head><title>Rendered</title></head><body><div id=app></div><script>"
     "document.getElementById('app').innerHTML = '<article><p>' + "
@@ -175,6 +181,18 @@ def test_crawl_follows_links_within_the_site(games, site):
     assert not {"/private/x", "/shot.png", "/d"} & set(Site.requests)
     assert job.skipped >= 2
     assert games.documents("games")[0]["source"].startswith(site)
+
+
+def test_only_under_the_start_address(games, site):
+    job = crawl(games, [f"{site}/guides/"], max_depth=2, only_under_start=True)
+    assert job.state == "done"
+    assert titles(games) == ["Guide One", "Guide Two"]
+    assert "/a" not in Site.requests
+
+
+def test_whole_site_from_a_folder_by_default(games, site):
+    crawl(games, [f"{site}/guides/"], max_depth=1)
+    assert titles(games) == ["Article A", "Guide One", "Guide Two"]
 
 
 def test_max_pages_and_robots_switch(games, site):
@@ -346,8 +364,13 @@ def test_saved_websites_api(client, site):
     website = saved.json()
     assert website["name"] == "127.0.0.1" and website["last_crawled_at"] is None
 
-    edited = client.put(f"/api/websites/{website['id']}", json={**body, "name": "Witcher fans"})
+    assert website["only_under_start"] is False
+    edited = client.put(
+        f"/api/websites/{website['id']}",
+        json={**body, "name": "Witcher fans", "only_under_start": True},
+    )
     assert edited.json()["name"] == "Witcher fans" and edited.json()["max_pages"] == 2
+    assert edited.json()["only_under_start"] is True
     listed = client.get("/api/collections/games/websites").json()["data"]
     assert [w["name"] for w in listed] == ["Witcher fans"]
 
@@ -411,3 +434,26 @@ def test_outcome_of_each_start_address(games, site):
     assert (job.known, job.indexed, job.skipped, job.failed) == (1, 1, 2, 1)
     # Next time the short home page is still reported as skipped, not as already there.
     assert crawl(games, [f"{site}/"], max_depth=0).outcomes == {f"{site}/": "skipped"}
+
+
+def test_older_database_gets_the_new_website_column(tmp_path):
+    import sqlite3
+
+    from engine.rag.embeddings import HashEmbedder
+    from engine.rag.store import KnowledgeStore
+    from engine.web.sites import WebsiteStore
+
+    path = tmp_path / "knowledge.db"
+    old = sqlite3.connect(path)
+    old.executescript(
+        "CREATE TABLE websites (id INTEGER PRIMARY KEY, collection TEXT NOT NULL, name TEXT NOT"
+        " NULL, urls TEXT NOT NULL, max_pages INTEGER NOT NULL, max_depth INTEGER NOT NULL,"
+        " per_minute REAL NOT NULL, use_browser INTEGER NOT NULL, respect_robots INTEGER NOT"
+        " NULL, created_at TEXT NOT NULL, last_crawled_at TEXT);"
+        "INSERT INTO websites VALUES (1, 'games', 'old', '[\"https://a.example/\"]', 5, 1, 20,"
+        " 0, 1, '2026-01-01', NULL);"
+    )
+    old.commit()
+    old.close()
+    store = KnowledgeStore(path, HashEmbedder())
+    assert WebsiteStore(store).website(1).only_under_start is False

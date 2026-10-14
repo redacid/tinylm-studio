@@ -1,5 +1,9 @@
 """Crawls websites into a collection: follows links within each start site, politely.
 
+A site is one host (www. aside): links to other sites and to other subdomains are never
+followed. With only_under_start, links are also kept inside the folders of the start addresses,
+like wget --no-parent: from https://example.com/guides/ the crawl stays under /guides/.
+
 Pages downloaded by earlier crawls into the same collection are not downloaded again: the crawl
 walks through them using their remembered links and spends its page budget only on new pages,
 so repeated crawls of a site gradually cover all of it.
@@ -56,6 +60,8 @@ class CrawlOptions:
     use_browser: bool = False  # fetch through the browser at cdp_url instead of plain HTTP
     # Read robots.txt; it is not read either way when the crawler settings turn it off.
     respect_robots: bool = True
+    # Follow only links under the start addresses' folders, not the whole site.
+    only_under_start: bool = False
 
 
 @dataclass
@@ -120,6 +126,18 @@ def links(page: Page) -> list[str]:
     return found
 
 
+def folder(url: str) -> str:
+    """The folder a start address is in: its path up to the last slash."""
+    path = urlsplit(url).path or "/"
+    return path[: path.rfind("/") + 1]
+
+
+def under(url: str, folders: dict[str, set[str]]) -> bool:
+    """Whether a URL is in one of its site's start folders."""
+    path = urlsplit(url).path or "/"
+    return any(path.startswith(f) for f in folders.get(site(url), ()))
+
+
 def worth_fetching(url: str) -> bool:
     return PurePosixPath(urlsplit(url).path).suffix.lower() not in SKIP_SUFFIXES
 
@@ -161,6 +179,9 @@ class Crawler:
 
         robots = Robots(robots_text, current.user_agent)
         start_sites = {site(u) for u in options.urls}
+        folders: dict[str, set[str]] = {}
+        for u in options.urls:
+            folders.setdefault(site(u), set()).add(folder(u))
         queue = deque((normalize(u), 0) for u in options.urls)
         seen = {url for url, _ in queue}
         attempts: dict[str, int] = {}
@@ -169,7 +190,12 @@ class Crawler:
             if depth >= options.max_depth:
                 return
             for link in found:
-                if link not in seen and site(link) in start_sites and worth_fetching(link):
+                if (
+                    link not in seen
+                    and site(link) in start_sites
+                    and (not options.only_under_start or under(link, folders))
+                    and worth_fetching(link)
+                ):
                     seen.add(link)
                     queue.append((link, depth + 1))
 
