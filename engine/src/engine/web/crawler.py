@@ -1,8 +1,9 @@
 """Crawls websites into a collection: follows links within each start site, politely.
 
 A site is one host (www. aside): links to other sites and to other subdomains are never
-followed. With only_under_start, links are also kept inside the folders of the start addresses,
-like wget --no-parent: from https://example.com/guides/ the crawl stays under /guides/.
+followed, nor links matching the exclude patterns of the crawler settings. With
+only_under_start, links are also kept inside the folders of the start addresses, like wget
+--no-parent: from https://example.com/guides/ the crawl stays under /guides/.
 
 Pages downloaded by earlier crawls into the same collection are not downloaded again: the crawl
 walks through them using their remembered links and spends its page budget only on new pages,
@@ -23,7 +24,7 @@ from urllib.parse import urldefrag, urljoin, urlsplit
 
 from engine.rag.convert import UnsupportedFile, convert
 from engine.rag.store import KnowledgeStore
-from engine.web.crawl_settings import CrawlSettings
+from engine.web.crawl_settings import CrawlSettings, excluded
 from engine.web.fetch import DEFAULT_USER_AGENT, CdpFetcher, FetchError, HttpFetcher, Page
 from engine.web.politeness import RateLimiter, Robots, site
 from engine.web.sites import WebsiteStore
@@ -168,6 +169,10 @@ class Crawler:
         if options.respect_robots and not respect_robots:
             job.note("robots.txt is ignored (Settings > Crawler)")
         limiter = RateLimiter(options.per_minute, sleep=job.cancelled.wait)
+        if current.exclude:
+            job.note(
+                f"links matching {', '.join(current.exclude)} are skipped (Settings > Crawler)"
+            )
 
         def robots_text(url: str) -> str | None:
             limiter.wait(site(url))
@@ -195,6 +200,7 @@ class Crawler:
                     and site(link) in start_sites
                     and (not options.only_under_start or under(link, folders))
                     and worth_fetching(link)
+                    and not excluded(link, current.exclude)
                 ):
                     seen.add(link)
                     queue.append((link, depth + 1))

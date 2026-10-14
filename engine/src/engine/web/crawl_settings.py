@@ -5,6 +5,7 @@ the app's Settings is saved in <workspace>/crawl-settings.json and wins over the
 """
 
 import json
+import re
 import threading
 from pathlib import Path
 
@@ -25,6 +26,23 @@ class CrawlSettings(BaseModel):
     use_browser: bool = False
     user_agent: str = Field(min_length=1, max_length=300)
     cdp_url: str
+    # Links the crawler never follows, for every crawl: a part of the address ("/tag/",
+    # "?sort="), or a pattern with * matched against the whole address ("*/forum/*", "*.pdf").
+    exclude: list[str] = Field(default_factory=list, max_length=200)
+
+    @field_validator("exclude", mode="before")
+    @classmethod
+    def patterns(cls, value):
+        if isinstance(value, str):
+            value = value.split("\n")
+        found = []
+        for text in value or []:
+            text = str(text).strip()
+            if len(text) > 300:
+                raise ValueError(f"pattern longer than 300 characters: {text[:40]}…")
+            if text and text not in found:
+                found.append(text)
+        return found
 
     @field_validator("user_agent", "cdp_url")
     @classmethod
@@ -39,6 +57,20 @@ class CrawlSettings(BaseModel):
         return value.rstrip("/")
 
 
+def excluded(url: str, patterns: list[str]) -> bool:
+    """Whether a link matches one of the exclude patterns; letter case is ignored. Only * is
+    special (any characters); "?" and the rest match themselves."""
+    url = url.lower()
+    for pattern in patterns:
+        pattern = pattern.lower()
+        if "*" not in pattern:
+            if pattern in url:
+                return True
+        elif re.fullmatch(".*".join(map(re.escape, pattern.split("*"))), url):
+            return True
+    return False
+
+
 def env_defaults(settings: Settings) -> dict:
     return {
         "respect_robots": settings.crawl_respect_robots,
@@ -48,6 +80,7 @@ def env_defaults(settings: Settings) -> dict:
         "use_browser": settings.crawl_use_browser,
         "user_agent": settings.user_agent,
         "cdp_url": settings.cdp_url,
+        "exclude": settings.crawl_exclude,
     }
 
 

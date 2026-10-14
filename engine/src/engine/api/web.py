@@ -194,6 +194,7 @@ class CrawlSettingsChanges(BaseModel, extra="forbid"):
     use_browser: bool | None = None
     user_agent: str | None = None
     cdp_url: str | None = None
+    exclude: list[str] | None = None
 
 
 @router.get("/crawl/settings")

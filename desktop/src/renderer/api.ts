@@ -129,6 +129,8 @@ export type CrawlerSettings = {
   use_browser: boolean;
   user_agent: string;
   cdp_url: string;
+  /** Links every crawl skips: a part of the address, or a pattern with * for the whole address. */
+  exclude: string[];
 };
 
 /** A saved website: start addresses and crawl settings that can be run again. */

@@ -160,11 +160,13 @@ def games(store):
 
 
 def crawl(
-    store, urls, proxy=None, cdp_url="http://127.0.0.1:9", robots=True, **options
+    store, urls, proxy=None, cdp_url="http://127.0.0.1:9", robots=True, exclude=(), **options
 ) -> CrawlJob:
     options.setdefault("per_minute", 6000)
     job = CrawlJob("games", CrawlOptions(urls, **options))
-    current = CrawlSettings(user_agent="test", cdp_url=cdp_url, respect_robots=robots)
+    current = CrawlSettings(
+        user_agent="test", cdp_url=cdp_url, respect_robots=robots, exclude=list(exclude)
+    )
     Crawler(store, proxy, lambda: current).run(job)
     return job
 
@@ -188,6 +190,23 @@ def test_only_under_the_start_address(games, site):
     assert job.state == "done"
     assert titles(games) == ["Guide One", "Guide Two"]
     assert "/a" not in Site.requests
+
+
+def test_exclude_patterns_skip_links(games, site):
+    job = crawl(games, [f"{site}/guides/"], max_depth=2, exclude=["/DEEP/", "*/a"])
+    assert titles(games) == ["Guide One"]
+    assert not {"/a", "/guides/deep/two"} & set(Site.requests)
+    assert any("are skipped" in line for line in job.log)
+
+
+def test_exclude_pattern_matching():
+    from engine.web.crawl_settings import excluded
+
+    url = "https://example.com/news/2024/page?sort=asc"
+    assert excluded(url, ["?sort="])  # a part of the address; ? is not special
+    assert excluded(url, ["*/NEWS/*"])  # * is any characters, case is ignored
+    assert not excluded(url, ["*/news"])  # a pattern with * matches the whole address
+    assert not excluded(url, ["/forum/"])
 
 
 def test_whole_site_from_a_folder_by_default(games, site):
@@ -384,6 +403,12 @@ def test_saved_websites_api(client, site):
     assert client.delete(f"/api/websites/{website['id']}").status_code == 204
     assert client.post(f"/api/websites/{website['id']}/crawl").status_code == 404
     assert client.get("/api/collections/games/websites").json()["data"] == []
+
+
+def test_crawl_exclude_setting_api(client):
+    saved = client.put("/api/crawl/settings", json={"exclude": [" /tag/ ", "", "*.pdf", "/tag/"]})
+    assert saved.status_code == 200 and saved.json()["exclude"] == ["/tag/", "*.pdf"]
+    assert client.get("/api/crawl/settings").json()["exclude"] == ["/tag/", "*.pdf"]
 
 
 def test_crawl_settings_api(client, settings, site):
