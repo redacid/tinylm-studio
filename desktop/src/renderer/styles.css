@@ -8,6 +8,18 @@
   --assistant: #f6f8fa;
   --ok: #1a7f37;
   --bad: #cf222e;
+  /* Surfaces and accents that set sections apart */
+  --surface: #f6f8fa;
+  --card: #ffffff;
+  --heading: #0a3069;
+  --accent-fill: #0969da;
+  --accent-soft: #ddf4ff;
+  --on-accent: #ffffff;
+  --th-bg: #eef3f9;
+  --row-hover: #f6f8fa;
+  --ok-soft: #dafbe1;
+  --bad-soft: #ffebe9;
+  --shadow: 0 1px 2px rgba(31, 35, 40, 0.06), 0 1px 3px rgba(31, 35, 40, 0.04);
   color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
@@ -21,6 +33,17 @@
     --assistant: #161b22;
     --ok: #3fb950;
     --bad: #f85149;
+    --surface: #010409;
+    --card: #161b22;
+    --heading: #79c0ff;
+    --accent-fill: #1f6feb;
+    --accent-soft: #0c2d4a;
+    --on-accent: #ffffff;
+    --th-bg: #1c2633;
+    --row-hover: #161b22;
+    --ok-soft: #12261e;
+    --bad-soft: #2d1214;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
   }
 }
 * { box-sizing: border-box; }
@@ -95,9 +118,9 @@ th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border);
 .search .results label { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; overflow-wrap: anywhere; }
 .search .snippet { font-size: 12px; }
 .search .buttons { align-items: center; }
-.search .notice { color: var(--good, #1a7f37); margin-right: 8px; }
+.search .notice { color: var(--ok); margin-right: 8px; }
 .search .mark { font-weight: normal; font-size: 12px; }
-.search .mark.ok { color: var(--good, #1a7f37); }
+.search .mark.ok { color: var(--ok); }
 .search .mark.bad { color: var(--bad); }
 .search .mark.muted { color: var(--muted); }
 .data .actions { flex-wrap: wrap; }
@@ -214,3 +237,68 @@ th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border);
 .download-progress { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
 .download-progress .progress { flex: 1; max-width: 360px; }
 .model-settings select { max-width: 160px; }
+
+/* Visual design: colored titles, table headers and cards so sections stand apart */
+header { background: var(--surface); }
+header > strong { color: var(--accent); font-size: 15px; letter-spacing: 0.01em; }
+nav button { border-color: transparent; background: transparent; }
+nav button:hover { background: var(--accent-soft); }
+nav button.active { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--on-accent); }
+button:not(:disabled):hover { border-color: var(--accent); }
+button[type="submit"]:not(:disabled), button.primary:not(:disabled) { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--on-accent); }
+button.danger:not(:disabled) { background: var(--bad); border-color: var(--bad); color: #ffffff; }
+span.danger { color: var(--bad); }
+a { color: var(--accent); }
+
+/* Section titles: page headings and the first line of a panel */
+h3 { color: var(--heading); font-size: 16px; padding-bottom: 6px; border-bottom: 2px solid var(--accent-soft); }
+.settings-form h3 { padding-bottom: 6px; }
+.settings-form h4, .model-settings h4 { color: var(--accent); }
+.trace-dialog h4 { color: var(--accent); }
+aside > strong:first-child,
+.websites-head > strong,
+.training-form > strong:first-child { color: var(--heading); font-size: 15px; }
+.websites-head > h3 { flex: 1; margin: 0 16px 0 0; }
+
+/* Side lists */
+.data aside { background: var(--surface); }
+.data aside > strong:first-child { text-transform: uppercase; font-size: 12px; letter-spacing: 0.06em; color: var(--muted); }
+.data aside button { background: var(--card); }
+.data aside button.active, .settings aside button.active { background: var(--accent-soft); border-color: var(--accent); }
+
+/* Tables */
+th { background: var(--th-bg); color: var(--heading); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 2px solid var(--border); }
+thead th:first-child { border-top-left-radius: 6px; }
+thead th:last-child { border-top-right-radius: 6px; }
+tbody tr:hover > td { background: var(--row-hover); }
+.repo-files tr:hover > td { background: transparent; }
+.teacher-requests th { color: var(--heading); text-transform: none; letter-spacing: 0; }
+.teacher-requests tr.failed td { background: var(--bad-soft); }
+
+/* Cards */
+.example, .job, .websites, .search, .training-form, .model-settings, .provider, .teacher-form, .example-editor {
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+.data section, .models, .training, .settings-page { background: var(--bg); }
+.provider.active { background: var(--accent-soft); }
+.example-head { padding-bottom: 6px; margin-bottom: 6px; border-bottom: 1px solid var(--border); }
+
+/* Who says what in an example: colored role labels */
+.turn .role { font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.04em; padding-top: 3px; }
+.turn.system .role { color: var(--muted); }
+.turn.system .text { color: var(--muted); font-style: italic; }
+.turn.user .role { color: var(--accent); }
+.turn.assistant .role { color: var(--ok); }
+
+/* Badges with a tint, not only a border */
+.badge { background: var(--surface); }
+.badge.eval, .badge.running, .badge.stopping { background: var(--accent-soft); }
+.badge.done { background: var(--ok-soft); }
+.badge.error { background: var(--bad-soft); }
+
+/* Chat bubbles */
+.message.user { border: 1px solid var(--accent-soft); }
+.message.assistant { border: 1px solid var(--border); }
+/* A first-step delete only hints at danger; the confirming button is filled */
+.data .actions > button.danger:not(:disabled) { background: transparent; color: var(--bad); }

@@ -121,6 +121,7 @@ Requirement (confirmed by the user): the engine supports both APIs as first-clas
 - The main process launches the engine as a child process, waits for `/health`, and shuts it down on exit.
 - Screens: **Chat** (pick model, see cited sources), **Data** (drag-and-drop files and folders, ingestion status), **Datasets** (preview/edit examples), **Training** (configure, start, live loss chart, stop/resume), **Models** (list, export, delete, copy API endpoint snippet), **Settings** (hardware, API keys, storage path).
 - The renderer only talks HTTP; it never touches Python directly. A TypeScript client is generated from the engine's OpenAPI schema.
+- Look: one stylesheet (`desktop/src/renderer/styles.css`) with color tokens for a light and a dark theme, picked by the system setting. Section titles, table headers, side lists and cards get their own colors so a screen does not read as one block of text; the main action of a form is a filled button, a confirmed delete a red one.
 
 ### 3.5 Hardware acceleration
 

@@ -46,6 +46,10 @@ in the engine; each tab keeps its form, selection and progress while another one
 refreshes its lists when you come back. Closing the app stops the engine, and with it a run in
 progress.
 
+The app follows the system's light or dark theme. Colors carry meaning across the tabs: blue for
+section titles, table headers, the selected item and the main button of a form; green for the
+assistant's answers and finished runs; red for errors and for the button that confirms a delete.
+
 ## Chat
 
 ![Chat with answers from a collection](images/chat.png)

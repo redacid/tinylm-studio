@@ -239,7 +239,9 @@ export function ModelSettingsForm({
         {numberField(SOURCES)}
       </div>
       <div className="buttons-row">
-        <button onClick={() => save(value)}>Save</button>{" "}
+        <button className="primary" onClick={() => save(value)}>
+          Save
+        </button>{" "}
         <button onClick={() => save({})}>Reset to defaults</button>{" "}
         <button onClick={onDone}>Cancel</button>
       </div>
