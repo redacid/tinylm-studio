@@ -26,6 +26,8 @@ export function Chat({
     settings.keepConversation && saved.system !== undefined ? saved.system : settings.systemPrompt,
   );
   const [collections, setCollections] = useState<string[]>([]);
+  // The collection each model answers from by default (its settings on the Models tab).
+  const [modelData, setModelData] = useState<Record<string, string>>({});
   const [collection, setCollection] = useState((settings.rememberChoice && saved.collection) || "");
   const [messages, setMessages] = useState<Turn[]>(
     settings.keepConversation ? ((saved.messages ?? []) as Turn[]) : [],
@@ -61,6 +63,10 @@ export function Chat({
   // Reloaded whenever the tab is shown: models and collections may have changed on other tabs.
   useEffect(() => {
     if (!active) return;
+    client.catalogInfo().then(
+      (info) => setModelData(Object.fromEntries(info.models.map((m) => [m.id, m.settings.collection ?? ""]))),
+      () => {},
+    );
     Promise.all([client.installedModels(), client.defaultModel()]).then(([ids, preferred]) => {
       setModels(ids);
       setModel((current) =>
@@ -114,7 +120,8 @@ export function Chat({
         trace,
         params,
         stream: settings.stream,
-        collection: collection || undefined,
+        // "" is sent too: no data, even for a model with its own collection.
+        collection,
         onStart: () => setProgress((p) => p && { ...p, phase: "reading", prepared: performance.now() }),
         onSources: (sources) => updateLast((last) => ({ ...last, sources })),
         onTimings: (timings) => updateLast((last) => ({ ...last, timings })),
@@ -140,7 +147,14 @@ export function Chat({
   return (
     <div className="chat">
       <div className="toolbar">
-        <select value={model} onChange={(e) => setModel(e.target.value)}>
+        <select
+          value={model}
+          onChange={(e) => {
+            setModel(e.target.value);
+            // A model with its own collection brings it along; it can still be changed.
+            if (modelData[e.target.value]) setCollection(modelData[e.target.value]);
+          }}
+        >
           {models.map((id) => <option key={id}>{id}</option>)}
         </select>
         <select value={collection} onChange={(e) => setCollection(e.target.value)} title="Answer from uploaded data">

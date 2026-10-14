@@ -14,6 +14,8 @@ router = APIRouter(dependencies=[Depends(require_api_key)], tags=["export"])
 class ExportRequest(BaseModel):
     quantization: Literal["Q8_0", "Q4_K_M", "F16"] = "Q8_0"
     name: str | None = None  # defaults to "<model>-<quantization>"
+    # Take this collection along: the exported model answers from it, also on another machine.
+    collection: str | None = None
 
 
 def exports(request: Request) -> ExportManager:
@@ -26,7 +28,7 @@ def export_model(
 ) -> dict:
     """Merges a fine-tuned model's adapter into its base model and writes one GGUF file."""
     try:
-        return manager.start(model_id, body.quantization, body.name).to_dict()
+        return manager.start(model_id, body.quantization, body.name, body.collection).to_dict()
     except ExportError as e:
         raise HTTPException(409 if "running" in str(e) else 422, str(e)) from None
 

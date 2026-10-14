@@ -330,3 +330,32 @@ def test_local_teacher(library):
     client.app.state.teachers.models.installed = lambda: ["echo", "tiny"]
     refs = [t["ref"] for t in client.get("/api/teachers").json()["data"]]
     assert refs == ["local:tiny"]
+
+
+def test_generate_examples_with_sources(library, teacher_server):
+    client = library
+    ref = add_teacher(client, teacher_server, "openai")
+    options = {
+        "collection": "games",
+        "teacher": ref,
+        "chunks": 1,
+        "languages": ["uk"],
+        "system_prompt": "Ти помічник гравця.",
+        "with_sources": True,
+        "sources": 2,
+    }
+    job = wait(client, client.post("/api/datasets/hints/generate", json=options).json()["id"])
+    assert job["state"] == "done" and job["added"] == 2, job
+    generated = client.get("/api/datasets/hints/examples", params={"origin": "generated"}).json()
+    for example in generated["data"]:
+        system, question, answer = (m["content"] for m in example["messages"])
+        # The system prompt is the one the chat sends with data: own prompt, then numbered sources.
+        assert system.startswith("Ти помічник гравця.\n\nAnswer the user's question using")
+        assert system.count("\n[1] ") == 1 and "\n[2] " in system
+        if "немає інформації" in answer:
+            assert not answer.endswith("]")  # an unanswerable question cites nothing
+        else:
+            number = int(answer.rsplit("[", 1)[1].rstrip("]"))
+            # The cited source is the text the pair was written from.
+            cited = system.split(f"\n[{number}] ", 1)[1]
+            assert "Ігні" in cited or "Ґундир" in cited

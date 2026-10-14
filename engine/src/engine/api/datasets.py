@@ -44,6 +44,10 @@ class GenerateRequest(BaseModel):
     system_prompt: str = ""
     unanswerable: bool = True
     verify: bool = True
+    # Put sources found in the collection into each example's system prompt, as the chat does
+    # with data: the model learns to answer from given sources.
+    with_sources: bool = False
+    sources: int = Field(4, ge=1, le=20)
     min_answer_chars: int = Field(20, ge=1)
     max_answer_chars: int = Field(2000, ge=1)
 

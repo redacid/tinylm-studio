@@ -170,6 +170,9 @@ export function Models({ client }: { client: EngineClient }) {
                     ) : (
                       <div className="muted">LoRA adapter on {m.base}, from dataset {m.dataset}</div>
                     )}
+                    {byId.get(m.id)?.settings.collection && (
+                      <div className="muted">Answers from the collection {byId.get(m.id)?.settings.collection}</div>
+                    )}
                     {!m.base_installed && <div className="error">The base model {m.base} is not installed.</div>}
                     <ExportStatus job={[...exports].reverse().find((x) => x.model === m.id)} />
                     {exporting === m.id && (
@@ -317,12 +320,17 @@ const QUANTIZATIONS: { value: Quantization; label: string }[] = [
 function ExportForm({ client, model, onDone }: { client: EngineClient; model: string; onDone: () => void }) {
   const [quantization, setQuantization] = useState<Quantization>("Q8_0");
   const [name, setName] = useState("");
+  const [collection, setCollection] = useState("");
+  const [collections, setCollections] = useState<string[]>([]);
+  useEffect(() => {
+    client.collections().then((c) => setCollections(c.map((x) => x.name)), () => setCollections([]));
+  }, [client]);
   const [error, setError] = useState<string | null>(null);
 
   async function start() {
     setError(null);
     try {
-      await client.exportModel(model, quantization, name.trim());
+      await client.exportModel(model, quantization, name.trim(), collection);
       onDone();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -337,6 +345,16 @@ function ExportForm({ client, model, onDone }: { client: EngineClient; model: st
         ))}
       </select>
       <input placeholder={`${model}-${quantization.toLowerCase()}`} value={name} onChange={(e) => setName(e.target.value)} />
+      <select
+        value={collection}
+        onChange={(e) => setCollection(e.target.value)}
+        title="Optional: the model folder takes the collection along and answers from it, also when copied to another machine"
+      >
+        <option value="">Without data</option>
+        {collections.map((c) => (
+          <option key={c} value={c}>With data: {c}</option>
+        ))}
+      </select>
       <button onClick={start}>Start export</button>
       {error && <div className="error">{error}</div>}
     </div>

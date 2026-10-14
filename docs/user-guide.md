@@ -132,12 +132,23 @@ Each model keeps its own settings; an empty field uses the default shown in it.
 | Min P | runtime's (0.05 in llama.cpp) | Drops words less likely than this share of the most likely one. |
 | Repetition penalty | `TINYLM_REPETITION_PENALTY` (1.1) | Above 1 makes repeating words less likely. |
 | Thinking | off | Lets models with a reasoning mode (Qwen3) think before they answer: better, but slower. |
+| Collection | none | Optional. Requests that name no data answer from this collection, with sources. |
+| Sources per answer | `TINYLM_RAG_TOP_K` (4) | How many pieces of the collection an answer gets. |
 
 The first four are used when the model is loaded, so saving a change to them unloads it and the
 next request loads it again. The answer settings apply at once, to every request that does not
 set them itself: API clients that leave them out, and the chat for the fields left empty in
 [Chat settings](#chat-settings). The settings are kept by the engine in
 `<data dir>/models/.model-settings.json`.
+
+**A model with its own collection.** A collection can't be put into the model's weights
+reliably: fine-tuning a small model on facts teaches it the training answers, but on new
+questions it still invents (compare the training and held-out loss of a fine-tuned model).
+Instead, a model can be given a collection: in the chat, picking the model selects its
+collection (it can still be changed, or set to **No data**), and API requests to it that name
+no `collection` answer from it. An exported model can take the collection along, see
+[Exporting to GGUF](#exporting-to-gguf), and **With sources in the prompt** on the generation
+form teaches a model to answer from the sources it is given.
 
 - **Teachers** at the bottom of the screen are the models that write training examples; see
   [Teachers](#teachers).
@@ -240,6 +251,11 @@ Settings:
   the text does not support. It doubles the number of requests but catches made-up answers.
   When the check reply is not JSON, the pairs are kept unchecked and the request shows the start
   of the reply.
+- **With sources in the prompt** (off by default): each example is written the way the chat asks
+  a model with data. Its system prompt gets four sources found in the collection for the
+  question, among them the text the pair was written from, and the answer ends with that
+  source's number, like `[2]`. A model trained on them learns to answer from the sources it is
+  given and to cite them; use it for a model that will answer with a collection.
 
 The progress shows chunks read, pairs written and added, duplicates, and why pairs were dropped
 (wrong language, too short or long, not supported by the text). Below it, every request to
@@ -328,7 +344,11 @@ runs, as fast as any other GGUF model of that size. The result is a new model in
 
 ![Exporting a fine-tuned model](images/export-form.png)
 
-Pick the quantization and, optionally, a name:
+Pick the quantization and, optionally, a name and a collection to take along (**With data**).
+With a collection, the new model folder also holds `collection.jsonl` (its documents, split
+into pieces) and the model answers from it by default. Copied with the folder to another
+machine, the engine there creates the collection when it starts (if there is none of that
+name) and indexes it with its own embedding model.
 
 | Quantization | Size of a 0.6B model | Quality |
 |---|---|---|

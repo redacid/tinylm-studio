@@ -235,7 +235,10 @@ answers learned, checkpoints, stop and resume, progress as server-sent events; f
 served as base + adapter (merged on load) in chat and through both APIs; Training screen with a
 live loss chart; fine-tuned models listed on the Models screen. The Models screen also lists
 every installed model with its size, deletes models, searches Hugging Face and downloads any
-GGUF file or PyTorch model, and keeps per-model loading and answer settings.
+GGUF file or PyTorch model, and keeps per-model loading and answer settings. Optionally a
+model has its own collection (used when a request names none), an export takes the collection
+along in the model folder, and generated examples can carry sources in the prompt so the model
+learns to answer from them.
 
 Measured in the cloud on 4 cores with a randomly initialized model of Qwen3-0.6B's size (fp32,
 LoRA rank 16, examples of ~390 tokens): batches of 4 took 18 s per step and 14 GB of RAM;

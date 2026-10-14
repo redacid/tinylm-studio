@@ -37,6 +37,10 @@ class ModelSettings(BaseModel):
     repetition_penalty: float | None = Field(None, gt=0, le=2)
     # Lets models with a reasoning mode (Qwen3) think before answering.
     thinking: bool | None = None
+    # Data: requests that name no collection answer from this one, with sources; "" turns off
+    # a collection that came bundled with the model.
+    collection: str | None = Field(None, max_length=64)
+    rag_top_k: int | None = Field(None, ge=1, le=20)
 
     def values(self) -> dict:
         return self.model_dump(exclude_none=True)

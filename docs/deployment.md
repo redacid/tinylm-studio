@@ -60,6 +60,10 @@ lists what that means for the code today and what is still missing.
 9. **First start downloads.** The embedding model goes to `<data dir>/embeddings/` on first use
    and models are downloaded on request. Keep them on the volume, or build them into the image to
    start without internet access.
+10. **A model with its data.** A model exported with a collection (its folder holds
+    `collection.jsonl`) can be copied into `<data dir>/models/`: at start the engine creates the
+    collection if there is none of that name and indexes it in the background, so the first
+    answers with sources come once that is done.
 
 ## Not done yet
 

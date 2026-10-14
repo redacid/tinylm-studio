@@ -7,11 +7,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
-from engine.api.deps import manager, require_api_key
+from engine.api.deps import knowledge, manager, require_api_key
 from engine.models import hub
 from engine.models.catalog import DEFAULT_MODEL
 from engine.models.manager import ModelExists, ModelManager, ModelNotFound
 from engine.models.settings import ModelSettings
+from engine.rag.store import KnowledgeStore
 
 router = APIRouter(prefix="/api", dependencies=[Depends(require_api_key)], tags=["admin"])
 
@@ -61,9 +62,14 @@ def model_settings(model_id: str, models: ModelManager = Depends(manager)) -> di
 
 @router.put("/models/{model_id}/settings")
 def save_model_settings(
-    model_id: str, body: ModelSettings, models: ModelManager = Depends(manager)
+    model_id: str,
+    body: ModelSettings,
+    models: ModelManager = Depends(manager),
+    store: KnowledgeStore = Depends(knowledge),
 ) -> dict:
     """Replaces the model's settings; left-out fields go back to the engine's defaults."""
+    if body.collection and body.collection not in {c["name"] for c in store.collections()}:
+        raise HTTPException(422, f"The collection '{body.collection}' does not exist")
     try:
         return models.set_model_settings(model_id, body)
     except ModelNotFound:

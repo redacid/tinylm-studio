@@ -138,6 +138,7 @@ def test_export_checks(fine_tuned):
         ("missing", {}, "not a fine-tuned model"),
         ("tiny-hints", {"name": "tiny"}, "already exists"),
         ("tiny-hints", {"name": "../x"}, "letters, digits"),
+        ("tiny-hints", {"collection": "nope"}, "collection nope does not exist"),
     ]
     for model, body, message in cases:
         response = client.post(f"/api/models/{model}/export", json=body)
@@ -153,7 +154,14 @@ def test_export_checks(fine_tuned):
 def test_export_and_chat(fine_tuned, settings, quantization):
     client = fine_tuned
     client.app.state.exports.llama_cpp_dir = Path(LLAMA_CPP_DIR)
-    started = client.post("/api/models/tiny-hints/export", json={"quantization": quantization})
+    # The model takes a collection along.
+    client.post("/api/collections", json={"name": "hints-data"})
+    client.post(
+        "/api/collections/hints-data/documents",
+        files=[("files", ("hint.md", b"Hint 3: save often."))],
+    )
+    body = {"quantization": quantization, "collection": "hints-data"}
+    started = client.post("/api/models/tiny-hints/export", json=body)
     assert started.status_code == 202, started.json()
     export = wait(client, started.json()["id"])
     assert export["state"] == "done", export
@@ -164,6 +172,12 @@ def test_export_and_chat(fine_tuned, settings, quantization):
 
     folder = settings.models_dir / name
     assert [p.name for p in folder.glob("*.gguf")] == [f"{name}.{quantization}.gguf"]
+    assert "Hint 3" in (folder / "collection.jsonl").read_text()
+    for _ in range(50):  # the collection becomes the model's own in the background
+        if client.app.state.models.settings.get(name):
+            break
+        time.sleep(0.1)
+    assert client.app.state.models.settings.get(name) == {"collection": "hints-data"}
     assert not list(settings.models_dir.glob(".*partial"))
     assert not (settings.workspace_dir / "exports" / export["id"] / "tmp").exists()
 

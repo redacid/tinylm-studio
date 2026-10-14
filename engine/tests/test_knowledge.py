@@ -9,6 +9,7 @@ import openai
 import pytest
 
 from engine.chat import ChatRequest, Message
+from engine.models.settings import ModelSettings
 from engine.rag.chunking import chunk_text
 from engine.rag.convert import UnsupportedFile, convert, strip_markup
 from engine.rag.embeddings import HashEmbedder
@@ -291,3 +292,30 @@ def test_locked_database_explains_what_to_do(tmp_path):
         KnowledgeStore(path, HashEmbedder())
     stuck.rollback()
     KnowledgeStore(path, HashEmbedder())
+
+
+def test_collection_bundled_with_a_model(client, settings, store):
+    """A model folder with collection.jsonl brings its collection to another engine."""
+    import json
+
+    from engine.models.bundles import import_bundles, write_bundle
+
+    client.post("/api/collections", json={"name": "games"})
+    upload(client, "games", ("witcher.txt", WITCHER.encode()))
+    folder = settings.models_dir / "hints-q8_0"
+    folder.mkdir(parents=True)
+    (folder / "hints-q8_0.Q8_0.gguf").write_bytes(b"GGUF")
+    assert write_bundle(store, "games", folder / "collection.jsonl") == 1
+    (folder / "tinylm.json").write_text(json.dumps({"base": "x", "collection": "games"}))
+
+    # On "another machine": an empty knowledge base gets the collection, chunk for chunk.
+    other = KnowledgeStore(settings.data_dir / "other.db", HashEmbedder())
+    models = client.app.state.models
+    assert import_bundles(models, other) == ["games"]
+    assert [c["chunks"] for c in other.collections()] == [c["chunks"] for c in store.collections()]
+    assert other.search("games", "Geralt", 1)[0].document == "witcher.txt"
+    assert models.settings.get("hints-q8_0") == {"collection": "games"}
+    # Done once; a collection of that name is kept, and a changed setting stays.
+    models.settings.set("hints-q8_0", ModelSettings(collection=""))
+    assert import_bundles(models, other) == []
+    assert models.settings.get("hints-q8_0") == {"collection": ""}

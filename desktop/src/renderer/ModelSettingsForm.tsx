@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { EngineClient, InstalledModel, ModelSettings } from "./api";
 import { Field, NumberInput } from "./Settings";
 
-type NumberKey = Exclude<keyof ModelSettings, "thinking">;
+type NumberKey = Exclude<keyof ModelSettings, "thinking" | "collection">;
 
 type NumberField = {
   key: NumberKey;
@@ -112,6 +112,16 @@ const ANSWERS: NumberField[] = [
   },
 ];
 
+const SOURCES: NumberField = {
+  key: "rag_top_k",
+  label: "Sources per answer",
+  hint: "How many pieces of the collection an answer gets. Empty: the engine's setting (TINYLM_RAG_TOP_K).",
+  min: 1,
+  max: 20,
+  step: 1,
+  empty: "4",
+};
+
 /** How one installed model is loaded and the answer settings it uses unless a request sets them. */
 export function ModelSettingsForm({
   client,
@@ -124,10 +134,20 @@ export function ModelSettingsForm({
 }) {
   const [value, setValue] = useState<ModelSettings>(model.settings);
   const [error, setError] = useState<string | null>(null);
-  const set = (key: keyof ModelSettings, v: number | boolean | null) => {
+  const [collections, setCollections] = useState<string[]>([]);
+  useEffect(() => {
+    client.collections().then(
+      (c) => setCollections(c.map((x) => x.name)),
+      () => setCollections([]),
+    );
+  }, [client]);
+  const set = (
+    key: keyof ModelSettings,
+    v: number | boolean | string | null,
+  ) => {
     const next = { ...value };
     if (v === null) delete next[key];
-    else (next as Record<string, number | boolean>)[key] = v;
+    else (next as Record<string, number | boolean | string>)[key] = v;
     setValue(next);
   };
 
@@ -185,6 +205,38 @@ export function ModelSettingsForm({
             <option value="on">On</option>
           </select>
         </Field>
+      </div>
+      <h4>Data</h4>
+      <p className="muted">
+        Optional. With a collection, every request to this model that names no
+        data of its own (in the chat: picking the model selects it) answers from
+        it, with sources.
+      </p>
+      <div className="settings-grid">
+        <Field
+          label="Collection"
+          hint="Searched for each question; the found pieces go into the prompt."
+        >
+          <select
+            value={value.collection ?? ""}
+            onChange={(e) =>
+              // "" keeps a collection that came with the model turned off.
+              set(
+                "collection",
+                e.target.value ||
+                  (model.settings.collection !== undefined ? "" : null),
+              )
+            }
+          >
+            <option value="">No data</option>
+            {collections.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {numberField(SOURCES)}
       </div>
       <div className="buttons-row">
         <button onClick={() => save(value)}>Save</button>{" "}

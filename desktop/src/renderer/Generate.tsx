@@ -18,6 +18,7 @@ const DEFAULTS: GenerationOptions = {
   system_prompt: "",
   unanswerable: true,
   verify: true,
+  with_sources: false,
 };
 const SETTINGS_KEY = "generate-options";
 
@@ -207,6 +208,10 @@ export function GeneratePanel({
           <label title="One more request per chunk: the teacher checks each pair against the text">
             <input type="checkbox" checked={options.verify} onChange={(e) => set({ verify: e.target.checked })} /> Check pairs
             against the text
+          </label>
+          <label title="Each example gets sources found in the collection in its system prompt, as the chat sends them with data, and the answer cites the right one: the model learns to answer from given sources">
+            <input type="checkbox" checked={options.with_sources} onChange={(e) => set({ with_sources: e.target.checked })} />{" "}
+            With sources in the prompt
           </label>
           <span className="buttons">
             {running ? (

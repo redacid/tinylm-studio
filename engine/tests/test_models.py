@@ -285,3 +285,21 @@ def test_download_from_hugging_face_and_delete(client, settings, monkeypatch):
     assert not folder.exists()
     assert client.get("/api/models").json()["models"] == []
     assert "gemma-3-4b-it-bf16" not in (settings.models_dir / ".model-settings.json").read_text()
+
+
+def test_model_collection_answers_with_sources(client):
+    client.post("/api/collections", json={"name": "games"})
+    client.post(
+        "/api/collections/games/documents",
+        files=[("files", ("witcher.md", "Утопці бояться знаку Ігні.".encode()))],
+    )
+    assert "sources" not in chat(client)
+    bad = client.put("/api/models/echo/settings", json={"collection": "nope"})
+    assert bad.status_code == 422
+    client.put("/api/models/echo/settings", json={"collection": "games", "rag_top_k": 1})
+    # A request that names no collection answers from the model's one.
+    answer = chat(client, debug=True)
+    assert answer["collection"] == "games" and len(answer["sources"]) == 1
+    assert "Утопці" in answer["prompt"]["messages"][0]["content"]
+    # "" asks for none.
+    assert "sources" not in chat(client, collection="")

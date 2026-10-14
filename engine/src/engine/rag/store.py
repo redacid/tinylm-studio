@@ -10,6 +10,7 @@ import hashlib
 import re
 import sqlite3
 import threading
+from collections.abc import Iterator
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -265,7 +266,35 @@ class KnowledgeStore:
         ).fetchone()
         if existing:
             return {"id": existing["id"], "name": name, "chunks": 0, "duplicate": True}
-        chunks = chunk_text(text)
+        return self._insert(collection, name, source or name, digest, len(text), chunk_text(text))
+
+    def add_chunks(self, collection: str, name: str, source: str, chunks: list[str]) -> dict:
+        """Indexes a document already split into chunks, e.g. one exported with a model."""
+        self._require(collection)
+        digest = hashlib.sha256("\n\n".join(chunks).encode()).hexdigest()
+        existing = self.db.execute(
+            "SELECT id FROM documents WHERE collection = ? AND sha256 = ?", (collection, digest)
+        ).fetchone()
+        if existing:
+            return {"id": existing["id"], "name": name, "chunks": 0, "duplicate": True}
+        return self._insert(collection, name, source or name, digest, sum(map(len, chunks)), chunks)
+
+    def export_documents(self, collection: str) -> Iterator[dict]:
+        """Every document of the collection with its chunks, for add_chunks elsewhere."""
+        self._require(collection)
+        documents = self.db.execute(
+            "SELECT id, name, source FROM documents WHERE collection = ? ORDER BY id",
+            (collection,),
+        ).fetchall()
+        for d in documents:
+            chunks = self.db.execute(
+                "SELECT text FROM chunks WHERE document_id = ? ORDER BY position", (d["id"],)
+            )
+            yield {"name": d["name"], "source": d["source"], "chunks": [r[0] for r in chunks]}
+
+    def _insert(
+        self, collection: str, name: str, source: str, digest: str, chars: int, chunks: list[str]
+    ) -> dict:
         # Embedding is the slow part; do it before taking the lock.
         vectors = self.embedder.embed_documents(chunks) if chunks else np.zeros((0, 0))
         with self._lock:
@@ -273,7 +302,7 @@ class KnowledgeStore:
             cursor = self.db.execute(
                 "INSERT INTO documents (collection, name, source, sha256, chars, created_at) "
                 "VALUES (?, ?, ?, ?, ?, ?)",
-                (collection, name, source or name, digest, len(text), now()),
+                (collection, name, source, digest, chars, now()),
             )
             document_id = cursor.lastrowid
             for position, (chunk, vector) in enumerate(zip(chunks, vectors, strict=True)):

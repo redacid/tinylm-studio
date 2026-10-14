@@ -41,9 +41,15 @@ def is_anthropic(request: Request) -> bool:
 
 def grounded(
     request: Request, chat: ChatRequest, collection: str | None, top_k: int | None = None
-) -> tuple[ChatRequest, list[dict]]:
-    """Adds retrieved chunks from the collection to the prompt; raises CollectionNotFound."""
+) -> tuple[ChatRequest, list[dict], str | None]:
+    """Adds retrieved chunks from the collection to the prompt and returns the collection used.
+    A request that names no collection uses the model's own (its settings), if it has one; ""
+    asks for none. Raises CollectionNotFound."""
+    model_settings = request.app.state.models.settings.get(chat.model)
+    if collection is None:
+        collection = model_settings.get("collection")
     if not collection:
-        return chat, []
-    top_k = top_k or request.app.state.settings.rag_top_k
-    return retrieve(request.app.state.knowledge, collection, chat, top_k)
+        return chat, [], None
+    top_k = top_k or model_settings.get("rag_top_k") or request.app.state.settings.rag_top_k
+    grounded_chat, sources = retrieve(request.app.state.knowledge, collection, chat, top_k)
+    return grounded_chat, sources, collection

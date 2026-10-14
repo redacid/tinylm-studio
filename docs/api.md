@@ -55,7 +55,9 @@ that the Anthropic API's own default temperature is 1.
 
 ### Answers from uploaded data
 
-Both chat endpoints accept an extra `collection` field. The engine then searches that collection
+Both chat endpoints accept an extra `collection` field. Left out, the model's own collection is
+used if its settings name one (see [Model settings](#model-settings)); `""` asks for none. The
+response then also says which `collection` was used. The engine searches that collection
 for the chunks that best match the last user message, adds them to the system prompt as numbered
 sources and asks the model to cite them as `[1]`, `[2]`. The response carries a `sources` list
 (top level for non-streaming responses, in the first chunk or `message_start` event when
@@ -178,6 +180,8 @@ All are optional; a left-out one uses the default.
 | `batch_size` | 512 | GGUF: prompt tokens per step |
 | `threads` | `TINYLM_THREADS` | CPU threads |
 | `max_tokens`, `temperature`, `top_p`, `top_k`, `min_p`, `repetition_penalty`, `thinking` | as in the chat endpoints | Used for requests that leave them out |
+| `collection` | none | Requests that name no `collection` answer from this one; `""` turns off a collection that came with the model; 422 for an unknown collection |
+| `rag_top_k` | `TINYLM_RAG_TOP_K` (4) | Chunks of that collection per answer |
 
 The first four apply when the model is loaded: saving a change to them unloads the model. The
 others apply to the next request.
@@ -198,7 +202,7 @@ PyPI (downloaded once into `<data dir>/tools/`) or from `TINYLM_LLAMA_CPP_DIR`.
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/api/models/{id}/export` | `{"quantization": "Q8_0" \| "Q4_K_M" \| "F16", "name": "game-hints-0.6b-q8_0"}` (both optional; the name defaults to `<id>-<quantization>`); 202, 422 for a model that is not fine-tuned, a missing base model or a taken name, 409 while another export is running |
+| POST | `/api/models/{id}/export` | `{"quantization": "Q8_0" \| "Q4_K_M" \| "F16", "name": "game-hints-0.6b-q8_0", "collection": "games"}` (all optional; the name defaults to `<id>-<quantization>`; with `collection` the model folder takes it along as `collection.jsonl` and answers from it, and an engine that finds such a folder at start imports the collection if it has none of that name); 202, 422 for a model that is not fine-tuned, a missing base model or a taken name, 409 while another export is running |
 | GET | `/api/exports` | Exports, oldest first |
 | GET | `/api/exports/{id}` | `state` (`running`, `done`, `error`, `interrupted`), `step` of `steps` (`tools`, `merge`, `convert`, `quantize`, `save`), `notes` (downloads, warnings), `size` of the file in bytes, `error` |
 - Gated models (Gemma, Llama) need a token (`TINYLM_HF_TOKEN` or `HF_TOKEN`) and an accepted license on Hugging Face. `GET /api/models` reports `hf_token`: whether downloads send a token (from the settings, `HF_TOKEN` or a saved `hf auth login`). A refused download explains the cause: no token (HTTP 401) or a token whose account has no access to the model yet (HTTP 403).
@@ -368,6 +372,8 @@ POST /api/datasets/game-hints/generate
   "system_prompt": "You are a helpful game guide.",
   "unanswerable": true,
   "verify": true,
+  "with_sources": false,
+  "sources": 4,
   "min_answer_chars": 20,
   "max_answer_chars": 2000
 }
@@ -376,7 +382,9 @@ POST /api/datasets/game-hints/generate
 `teacher` is a `ref` from `GET /api/teachers`. Only `collection` and `teacher` are required.
 `languages` empty means the language of each text; `unanswerable` adds a question the text does
 not answer with an honest answer; `verify` makes a second request per chunk to drop unsupported
-pairs. Up to three examples of the dataset that are not generated are shown to the teacher as
+pairs; `with_sources` writes each example the way a chat with a collection is asked: its system
+prompt gets `sources` chunks found for the question (the source text among them, numbered like
+in grounded answers) and the answer ends with that source's number, e.g. `[2]`. Up to three examples of the dataset that are not generated are shown to the teacher as
 style samples.
 
 | Method | Path | Notes |

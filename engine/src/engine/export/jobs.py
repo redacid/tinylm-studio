@@ -17,8 +17,9 @@ from pathlib import Path
 from typing import Literal
 
 from engine.export.worker import QUANTIZATIONS
+from engine.models.bundles import BUNDLE_FILE, write_bundle
 from engine.models.manager import model_format
-from engine.rag.store import now
+from engine.rag.store import CollectionNotFound, KnowledgeStore, now
 from engine.training.jobs import MODEL_NAME
 from engine.training.worker import read_jsonl
 
@@ -64,6 +65,8 @@ class ExportManager:
         tools_dir: Path,
         llama_cpp_dir: Path | None = None,
         threads: int | None = None,
+        knowledge: KnowledgeStore | None = None,
+        on_done=None,
     ):
         self.folder = folder
         self.folder.mkdir(parents=True, exist_ok=True)
@@ -71,6 +74,9 @@ class ExportManager:
         self.tools_dir = tools_dir
         self.llama_cpp_dir = llama_cpp_dir
         self.threads = threads
+        # For exports that take a collection along, and what to do with a finished model.
+        self.knowledge = knowledge
+        self.on_done = on_done
         self._lock = threading.Lock()
         for export in self.exports():
             if export.state == "running" and not self._alive(export):
@@ -118,7 +124,13 @@ class ExportManager:
 
     # Running
 
-    def start(self, model: str, quantization: str = "Q8_0", name: str | None = None) -> Export:
+    def start(
+        self,
+        model: str,
+        quantization: str = "Q8_0",
+        name: str | None = None,
+        collection: str | None = None,
+    ) -> Export:
         if quantization not in QUANTIZATIONS:
             raise ExportError(f"Use one of {', '.join(QUANTIZATIONS)}.")
         if model_format(self.models_dir / model) != "adapter" or "/" in model:
@@ -137,10 +149,17 @@ class ExportManager:
             export_id = uuid.uuid4().hex[:12]
             folder = self.folder / export_id
             folder.mkdir()
+            if collection:
+                try:
+                    write_bundle(self.knowledge, collection, folder / BUNDLE_FILE)
+                except CollectionNotFound:
+                    shutil.rmtree(folder)
+                    raise ExportError(f"The collection {collection} does not exist.") from None
             settings = {
                 "model": model,
                 "name": name,
                 "quantization": quantization,
+                "collection": collection or None,
                 "models_dir": str(self.models_dir),
                 "tools_dir": str(self.tools_dir),
                 "llama_cpp_dir": str(self.llama_cpp_dir) if self.llama_cpp_dir else None,
@@ -165,12 +184,15 @@ class ExportManager:
         export = self._load(export_id)
         if code == 0 and (self.models_dir / export.name).exists():
             self._finish(export_id, "done")
+            if self.on_done:
+                self.on_done(export.name)
         else:
             log_tail = (self.folder / export_id / "worker.log").read_text(errors="replace")[-2000:]
             self._finish(export_id, "error", export.error or log_tail or f"exit code {code}")
 
     def _finish(self, export_id: str, state: State, error: str | None = None) -> None:
         shutil.rmtree(self.folder / export_id / "tmp", ignore_errors=True)
+        (self.folder / export_id / BUNDLE_FILE).unlink(missing_ok=True)
         export = self._load(export_id)
         shutil.rmtree(self.models_dir / f".{export.name}.partial", ignore_errors=True)
         self._save(export_id, state=state, error=error, finished_at=now())

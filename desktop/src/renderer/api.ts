@@ -36,6 +36,9 @@ export type ModelSettings = {
   min_p?: number;
   repetition_penalty?: number;
   thinking?: boolean;
+  /** Requests that name no collection answer from this one; "" turns off a bundled one. */
+  collection?: string;
+  rag_top_k?: number;
 };
 
 export type InstalledModel = {
@@ -268,6 +271,8 @@ export type GenerationOptions = {
   system_prompt: string;
   unanswerable: boolean;
   verify: boolean;
+  /** Put sources found in the collection into each example's system prompt, as the chat does. */
+  with_sources: boolean;
 };
 
 /** The model and provider that answered a teacher request (OpenRouter may route elsewhere). */
@@ -560,11 +565,12 @@ export class EngineClient {
   }
 
   /** Merges a fine-tuned model into its base model and writes one GGUF file for llama.cpp. */
-  async exportModel(modelId: string, quantization: Quantization, name?: string): Promise<ExportJob> {
+  /** With a collection, the new model folder takes it along and the model answers from it. */
+  async exportModel(modelId: string, quantization: Quantization, name?: string, collection?: string): Promise<ExportJob> {
     return this.json<ExportJob>(`/api/models/${encodeURIComponent(modelId)}/export`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ quantization, name: name || null }),
+      body: JSON.stringify({ quantization, name: name || null, collection: collection || null }),
     });
   }
 

@@ -106,9 +106,11 @@ def create_message(body: MessagesRequest, http: Request, models: ModelManager = 
     timings = Timings()
     try:
         with timings.measure("retrieval_ms"):
-            request, sources = grounded(http, body.to_internal(), body.collection, body.rag_top_k)
-    except CollectionNotFound:
-        return error(404, f"collection: {body.collection}", "not_found_error")
+            request, sources, collection = grounded(
+                http, body.to_internal(), body.collection, body.rag_top_k
+            )
+    except CollectionNotFound as missing:
+        return error(404, f"collection: {missing}", "not_found_error")
     with timings.measure("load_ms"):
         runtime = models.runtime(body.model)
     message_id = f"msg_{uuid.uuid4().hex}"
@@ -124,7 +126,7 @@ def create_message(body: MessagesRequest, http: Request, models: ModelManager = 
             "stop_sequence": stop_sequence,
             "usage": usage or {"input_tokens": 0, "output_tokens": 0},
             # Extension field, only present when a collection was used.
-            **({"sources": sources} if body.collection else {}),
+            **({"sources": sources, "collection": collection} if collection else {}),
         }
 
     if not body.stream:

@@ -27,6 +27,8 @@ Models screen:
 
 - [ ] Cancel a running download (huggingface_hub has no cancel; run it in a worker process).
 - [ ] Load and test a model downloaded from a search right on the Models screen.
+- [ ] Compare on Evaluation: a model fine-tuned with sources in the prompt and its collection
+      against the same model fine-tuned on plain pairs.
 
 ## Dataset generation (Phase 4)
 

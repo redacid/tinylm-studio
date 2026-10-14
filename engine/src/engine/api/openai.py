@@ -119,13 +119,13 @@ def chat_completions(
     timings = Timings()
     try:
         with timings.measure("retrieval_ms"):
-            request, sources = grounded(http, body.to_internal(), body.collection, body.rag_top_k)
-    except CollectionNotFound:
-        return error(
-            404, f"The collection '{body.collection}' does not exist", "invalid_request_error"
-        )
+            request, sources, collection = grounded(
+                http, body.to_internal(), body.collection, body.rag_top_k
+            )
+    except CollectionNotFound as missing:
+        return error(404, f"The collection '{missing}' does not exist", "invalid_request_error")
     # Sources are an extension field, only present when a collection was used.
-    extra = {"sources": sources} if body.collection else {}
+    extra = {"sources": sources, "collection": collection} if collection else {}
     if body.debug:
         extra["prompt"] = asdict(request)
     with timings.measure("load_ms"):

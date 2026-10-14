@@ -6,7 +6,8 @@ worker appends progress to JOB_DIR/events.jsonl. Steps:
 2. merge: load the base model, merge the adapter into its weights and save the result;
 3. convert: write a 16-bit GGUF file with llama.cpp's converter;
 4. quantize: shrink it (Q8_0, Q4_K_M) with llama.cpp's quantizer;
-5. save: a new model folder with the .gguf file and tinylm.json.
+5. save: a new model folder with the .gguf file and tinylm.json (and collection.jsonl when
+   the export takes a collection along, see engine.models.bundles).
 Temporary files stay in JOB_DIR/tmp and are deleted at the end.
 """
 
@@ -216,6 +217,10 @@ def export(config: dict, events: EventLog, job_dir: Path) -> None:
         "exported_from": config["model"],
         "exported_at": datetime.now(UTC).isoformat(timespec="seconds"),
     }
+    if (job_dir / "collection.jsonl").is_file():
+        # The collection goes with the model; engine.models.bundles reads it.
+        shutil.copy2(job_dir / "collection.jsonl", partial / "collection.jsonl")
+        exported["collection"] = config["collection"]
     (partial / "tinylm.json").write_text(json.dumps(exported, indent=2))
     partial.rename(output)
     shutil.rmtree(tmp, ignore_errors=True)

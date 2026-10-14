@@ -25,6 +25,7 @@ from engine.datasets.generate import GenerationManager, Generator
 from engine.datasets.store import DatasetStore
 from engine.evaluation.evaluate import EvaluationManager
 from engine.export.jobs import ExportManager
+from engine.models.bundles import bundled_collection, import_bundles_in_background
 from engine.models.manager import ModelManager
 from engine.rag.embeddings import HashEmbedder, SentenceTransformerEmbedder
 from engine.rag.store import KnowledgeStore
@@ -97,7 +98,12 @@ def create_app(
         settings.data_dir / "tools",
         settings.llama_cpp_dir,
         settings.threads,
+        knowledge=app.state.knowledge,
+        on_done=lambda name: import_bundles_in_background(app.state.models, app.state.knowledge),
     )
+    # Collections that came with models (an export or a model folder copied in).
+    if any(bundled_collection(p) for p in settings.models_dir.glob("*")):
+        import_bundles_in_background(app.state.models, app.state.knowledge)
     app.state.training = TrainingManager(
         settings.workspace_dir / "training", settings.models_dir, app.state.datasets
     )

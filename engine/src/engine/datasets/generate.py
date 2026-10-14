@@ -17,8 +17,10 @@ import uuid
 from dataclasses import asdict, dataclass, field, fields
 from typing import Literal
 
+from engine.chat import ChatRequest, Message
 from engine.datasets.store import DatasetStore
-from engine.rag.store import KnowledgeStore, now
+from engine.rag.prompt import ground
+from engine.rag.store import Hit, KnowledgeStore, now
 from engine.teachers.providers import TeacherError
 
 log = logging.getLogger(__name__)
@@ -62,6 +64,11 @@ class GenerationOptions:
     unanswerable: bool = True
     # Let the teacher check each pair against the text and drop unsupported ones.
     verify: bool = True
+    # Write each example the way the chat asks with data: the system prompt holds sources
+    # found in the collection for the question, among them the text the pair came from, and
+    # the answer cites it. Teaches the model to answer from sources it is given.
+    with_sources: bool = False
+    sources: int = 4
     min_answer_chars: int = 20
     max_answer_chars: int = 2000
 
@@ -360,10 +367,7 @@ class Generator:
             pairs = self._verified(job, teacher, chunk, pairs)
         added = duplicates = 0
         for pair in pairs:
-            messages = [{"role": "user", "content": pair["question"]}]
-            if options.system_prompt.strip():
-                messages.insert(0, {"role": "system", "content": options.system_prompt.strip()})
-            messages.append({"role": "assistant", "content": pair["answer"]})
+            messages = self._messages(options, chunk, pair)
             result = self.datasets.add(job.dataset, messages, "generated", chunk["source"])
             if result["duplicate"]:
                 duplicates += 1
@@ -378,6 +382,26 @@ class Generator:
         )
         self._used(job.dataset, chunk["id"])
         job.note(f"added    {added} from {chunk['name']}")
+
+    def _messages(self, options: GenerationOptions, chunk: dict, pair: dict) -> list[dict]:
+        system = options.system_prompt.strip()
+        answer = pair["answer"]
+        if options.with_sources:
+            hits = self.knowledge.search(options.collection, pair["question"], options.sources)
+            hits = [h for h in hits if h.chunk_id != chunk["id"]][: options.sources - 1]
+            # The text the pair came from goes among the others, not always first.
+            position = len(pair["question"]) % (len(hits) + 1)
+            source = Hit(chunk["id"], 0, chunk["name"], chunk["source"], chunk["text"], 0.0)
+            hits.insert(position, source)
+            grounded = ground(ChatRequest("", [Message("system", system)] if system else []), hits)
+            system = grounded.messages[0].content
+            if not pair["unanswerable"]:
+                answer = f"{answer} [{position + 1}]"
+        messages = [{"role": "user", "content": pair["question"]}]
+        if system:
+            messages.insert(0, {"role": "system", "content": system})
+        messages.append({"role": "assistant", "content": answer})
+        return messages
 
     def _problem(self, item, options: GenerationOptions) -> str | None:
         if not isinstance(item, dict):
