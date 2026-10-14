@@ -17,6 +17,7 @@ import logging
 import os
 import shutil
 import sys
+import traceback
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -40,6 +41,16 @@ def merge(base: Path, adapter: Path, output: Path) -> None:
     model.save_pretrained(output, safe_serialization=True)
     # The adapter folder has the tokenizer and chat template the model was trained with.
     AutoTokenizer.from_pretrained(adapter).save_pretrained(output)
+    copy_tokenizer_model(base, output)
+
+
+def copy_tokenizer_model(base: Path, output: Path) -> None:
+    """A fast tokenizer saves only tokenizer.json, but llama.cpp converts some models (Gemma 3)
+    from the SentencePiece tokenizer.model: without it, it reads tokenizer.json, finds Gemma 3's
+    <image_soft_token> past the end of the vocabulary and fails. Take the base model's file."""
+    source = base / "tokenizer.model"
+    if source.is_file() and not (output / "tokenizer.model").exists():
+        shutil.copy2(source, output / "tokenizer.model")
 
 
 def convert(llama_cpp: Path, model: Path, output: Path, warn) -> None:
@@ -108,8 +119,40 @@ def skip_missing_sentencepiece() -> None:
     base.TextModel._create_vocab_sentencepiece = _create_vocab_sentencepiece
 
 
-def error_message(error: Exception) -> str:
-    message = f"{type(error).__name__}: {error}"
+class StepLog(EventLog):
+    """Remembers the step being run, so an error can say which one failed."""
+
+    step: str | None = None
+
+    def write(self, kind: str, **fields) -> None:
+        if kind == "step":
+            self.step = fields["step"]
+        super().write(kind, **fields)
+
+
+STEP_NAMES = {
+    "tools": "getting the converter",
+    "merge": "merging the adapter into the base model",
+    "convert": "converting to GGUF",
+    "quantize": "quantizing",
+    "save": "saving",
+}
+
+
+def error_message(error: Exception, step: str | None = None) -> str:
+    """What failed, in which step and, for an error without a message (a failed assert in
+    llama.cpp's converter), on which line of code."""
+    text = str(error)
+    if not text:
+        frame = traceback.extract_tb(error.__traceback__)[-1:]
+        if frame:
+            where = f"{Path(frame[0].filename).name}, line {frame[0].lineno}"
+            text = f"{frame[0].line} ({where})" if frame[0].line else where
+    message = type(error).__name__
+    if step:
+        message += f" while {STEP_NAMES.get(step, step)}"
+    if text:
+        message += f": {text}"
     if isinstance(error, ModuleNotFoundError):
         message += " The engine is missing a package; run 'make setup-engine' to update it."
     return message
@@ -186,14 +229,14 @@ def main() -> None:
     job_dir = Path(sys.argv[1])
     exit_with_parent()
     logging.basicConfig(level=logging.INFO)
-    events = EventLog(job_dir / "events.jsonl")
+    events = StepLog(job_dir / "events.jsonl")
     config = json.loads((job_dir / "job.json").read_text())["settings"]
     config.setdefault("threads", os.cpu_count() or 4)
     try:
         export(config, events, job_dir)
     except Exception as e:
         log.exception("Export failed")
-        events.write("error", message=error_message(e))
+        events.write("error", message=error_message(e, events.step))
         shutil.rmtree(job_dir / "tmp", ignore_errors=True)
         sys.exit(1)
 

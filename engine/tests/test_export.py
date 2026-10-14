@@ -206,3 +206,41 @@ def test_convert_without_sentencepiece(tiny_model, tmp_path, monkeypatch):
 
     message = error_message(ModuleNotFoundError("No module named 'x'"))
     assert "make setup-engine" in message
+
+
+def test_error_message_names_the_step_and_the_failed_line(tmp_path):
+    import importlib.util
+
+    from engine.export.worker import error_message
+
+    # Like llama.cpp's converter: a bare assert, in a module pytest does not rewrite.
+    (tmp_path / "base.py").write_text(
+        "def get_vocab_base(vocab, vocab_size):\n    assert max(vocab.values()) < vocab_size\n"
+    )
+    spec = importlib.util.spec_from_file_location("base", tmp_path / "base.py")
+    base = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(base)
+    with pytest.raises(AssertionError) as failed:
+        base.get_vocab_base({"<image_soft_token>": 262144}, 262144)
+    assert error_message(failed.value, "convert") == (
+        "AssertionError while converting to GGUF: assert max(vocab.values()) < vocab_size "
+        "(base.py, line 2)"
+    )
+    assert error_message(RuntimeError("disk full"), "quantize") == (
+        "RuntimeError while quantizing: disk full"
+    )
+
+
+def test_merged_model_gets_the_sentencepiece_tokenizer(tmp_path):
+    """Gemma 3 converts from tokenizer.model; a fast tokenizer saved from the adapter lacks it."""
+    from engine.export.worker import copy_tokenizer_model
+
+    base, merged = tmp_path / "base", tmp_path / "merged"
+    base.mkdir()
+    merged.mkdir()
+    (base / "tokenizer.model").write_bytes(b"spm")
+    copy_tokenizer_model(base, merged)
+    assert (merged / "tokenizer.model").read_bytes() == b"spm"
+    # Models without one (Qwen) stay without one.
+    copy_tokenizer_model(tmp_path / "qwen", tmp_path / "qwen-merged")
+    assert not (tmp_path / "qwen-merged" / "tokenizer.model").exists()

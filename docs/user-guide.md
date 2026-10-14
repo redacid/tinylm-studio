@@ -350,7 +350,12 @@ in free memory and disk while it runs.
   should score the same; Q4_K_M a little lower.
 - If the base model's tokenizer is unknown to llama.cpp, the export still finishes and says so;
   the catalog's base models are all known.
-- "Export failed: ModuleNotFoundError ..." means the engine's environment is older than the
+- A failed export names the error and the step it happened in; for an error without a message,
+  such as a failed check in llama.cpp's converter, it shows the line of code that failed. The
+  whole log is in `<data dir>/workspace/exports/<id>/worker.log`.
+- Gemma 3 models are converted with the base model's SentencePiece `tokenizer.model`, which the
+  export copies next to the merged model.
+- "Export failed: ModuleNotFoundError while ..." means the engine's environment is older than the
   code; see [An export fails with ModuleNotFoundError](#an-export-fails-with-modulenotfounderror).
 
 ## Evaluation
@@ -651,7 +656,7 @@ or to Llama.
 For example, under the model on the Models screen:
 
 ```text
-Export failed: ModuleNotFoundError: No module named 'sentencepiece'
+Export failed: ModuleNotFoundError while converting to GGUF: No module named 'sentencepiece'
 ```
 
 The engine's Python environment lacks a package the code needs: the app installs the engine
