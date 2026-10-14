@@ -184,14 +184,16 @@ A **collection** is a set of documents that chat can answer from. Create one on 
     walked through without downloading them again and are not counted, so every run continues
     where the last one stopped until the whole site is in the collection.
   - *Depth* is how many links away from the start addresses to go.
-  - Links matching the *Exclude patterns* in [Crawler settings](#crawler-settings) (tags,
-    sorting, login pages) are never followed.
   - The crawl never leaves the start sites: links to other sites, and to other subdomains of
     the same site (`auction.example.com` from `example.com`), are not followed.
     *Only under these addresses* keeps it to the start addresses' folders as well: from
     `https://example.com/guides/` it follows `/guides/…` links but not the rest of the site.
     The folder is the address up to its last `/`, so `https://example.com/guides` (no slash at
     the end) means the whole site.
+  - *Skip links matching* lists links this website never follows, one per line: tags, sorting,
+    login pages, a forum. A part of the address (`/tag/`, `?sort=`, `/login`) matches anywhere
+    in it; a pattern with `*` covers the whole address (`*/forum/*`, `*.pdf`). Only `*` is
+    special, and letter case is ignored. The start addresses are always fetched.
   - *Per minute* limits requests to each site. Keep it low (the default is 20) so the site is
     not overloaded and does not ban you.
   - *Browser (CDP)* loads pages in a real Chrome or Chromium, for sites that need JavaScript or
@@ -506,7 +508,6 @@ variables in the table only give the defaults. Changes apply to crawls started a
 | Requests per minute | 20 (`TINYLM_CRAWL_PER_MINUTE`) | To each site, 1 to 120, for new websites and for pages added from search results. |
 | Pages | 50 (`TINYLM_CRAWL_MAX_PAGES`) | New pages a new website downloads per run. |
 | Depth | 2 (`TINYLM_CRAWL_MAX_DEPTH`) | Link hops from the start addresses for a new website. |
-| Exclude patterns | none (`TINYLM_CRAWL_EXCLUDE`) | Links every crawl skips, one per line. A part of the address (`/tag/`, `?sort=`, `/login`) matches anywhere in it; a pattern with `*` covers the whole address (`*/forum/*`, `*.pdf`). Only `*` is special, and letter case is ignored. Start addresses are always fetched. |
 | Fetching | Plain HTTP (`TINYLM_CRAWL_USE_BROWSER`) | **Browser (CDP)**: pages added from search results, and new websites, load in the browser at **Browser address**. A saved website uses its own **Browser (CDP)** box. Setting only the address changes nothing: pages go through the browser only when this or the website's box says so. |
 | User agent | `tinylm-studio/0.1 (local research crawler)` (`TINYLM_USER_AGENT`) | How the crawler introduces itself; robots.txt rules are read for this name. |
 | Browser address (CDP) | `http://127.0.0.1:9222` (`TINYLM_CDP_URL`) | Where the browser for [Browser (CDP)](#browser-cdp) websites listens. |

@@ -10,6 +10,8 @@ type Draft = {
   per_minute: number;
   use_browser: boolean;
   only_under_start: boolean;
+  /** Link patterns never followed, one per line. */
+  exclude: string;
 };
 
 const NEW_SITE: Draft = {
@@ -20,6 +22,7 @@ const NEW_SITE: Draft = {
   per_minute: 20,
   use_browser: false,
   only_under_start: false,
+  exclude: "",
 };
 
 /**
@@ -107,6 +110,7 @@ export function Websites({
             per_minute: website.per_minute,
             use_browser: website.use_browser,
             only_under_start: website.only_under_start,
+            exclude: website.exclude.join("\n"),
           }
         : defaults
           ? {
@@ -122,7 +126,14 @@ export function Websites({
 
   async function save(event: { preventDefault(): void }, crawl: boolean) {
     event.preventDefault();
-    const settings = { ...draft, urls: draft.urls.split(/\s+/).filter(Boolean) };
+    const settings = {
+      ...draft,
+      urls: draft.urls.split(/\s+/).filter(Boolean),
+      exclude: draft.exclude
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean),
+    };
     if (settings.urls.length === 0) return;
     setError(null);
     try {
@@ -193,6 +204,17 @@ export function Websites({
               />{" "}
               Only under these addresses
             </label>
+            <label
+              className="exclude"
+              title="One per line. A part of the address (/tag/, ?sort=, /login) matches anywhere in it; with * the pattern covers the whole address (*/forum/*, *.pdf). Letter case is ignored. The start addresses are always fetched."
+            >
+              Skip links matching
+              <textarea
+                placeholder={"/tag/\n?sort=\n*/forum/*"}
+                value={draft.exclude}
+                onChange={(e) => set({ exclude: e.target.value })}
+              />
+            </label>
             <span className="buttons">
               <button type="button" onClick={() => setEditing(null)}>Cancel</button>
               <button type="button" onClick={(e) => save(e, false)} disabled={!draft.urls.trim()}>Save</button>
@@ -221,6 +243,7 @@ export function Websites({
               <div className="muted">
                 {w.max_pages} new pages · depth {w.max_depth} · {w.per_minute}/min{w.use_browser && " · browser"}
                 {w.only_under_start && " · only under these addresses"}
+                {w.exclude.length > 0 && ` · skips ${w.exclude.join(", ")}`}
                 <div>{w.last_crawled_at ? `Last crawled ${new Date(w.last_crawled_at).toLocaleString()}` : "Not crawled yet"}</div>
               </div>
               <div className="buttons">

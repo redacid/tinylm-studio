@@ -160,13 +160,11 @@ def games(store):
 
 
 def crawl(
-    store, urls, proxy=None, cdp_url="http://127.0.0.1:9", robots=True, exclude=(), **options
+    store, urls, proxy=None, cdp_url="http://127.0.0.1:9", robots=True, **options
 ) -> CrawlJob:
     options.setdefault("per_minute", 6000)
     job = CrawlJob("games", CrawlOptions(urls, **options))
-    current = CrawlSettings(
-        user_agent="test", cdp_url=cdp_url, respect_robots=robots, exclude=list(exclude)
-    )
+    current = CrawlSettings(user_agent="test", cdp_url=cdp_url, respect_robots=robots)
     Crawler(store, proxy, lambda: current).run(job)
     return job
 
@@ -200,7 +198,7 @@ def test_exclude_patterns_skip_links(games, site):
 
 
 def test_exclude_pattern_matching():
-    from engine.web.crawl_settings import excluded
+    from engine.web.crawler import excluded
 
     url = "https://example.com/news/2024/page?sort=asc"
     assert excluded(url, ["?sort="])  # a part of the address; ? is not special
@@ -390,6 +388,16 @@ def test_saved_websites_api(client, site):
     )
     assert edited.json()["name"] == "Witcher fans" and edited.json()["max_pages"] == 2
     assert edited.json()["only_under_start"] is True
+    edited = client.put(
+        f"/api/websites/{website['id']}",
+        json={**body, "exclude": [" /tag/ ", "", "*.pdf", "/tag/"]},
+    )
+    assert edited.json()["exclude"] == ["/tag/", "*.pdf"]
+    assert client.get("/api/collections/games/websites").json()["data"][0]["exclude"] == [
+        "/tag/",
+        "*.pdf",
+    ]
+    client.put(f"/api/websites/{website['id']}", json={**body, "name": "Witcher fans"})
     listed = client.get("/api/collections/games/websites").json()["data"]
     assert [w["name"] for w in listed] == ["Witcher fans"]
 
@@ -403,12 +411,6 @@ def test_saved_websites_api(client, site):
     assert client.delete(f"/api/websites/{website['id']}").status_code == 204
     assert client.post(f"/api/websites/{website['id']}/crawl").status_code == 404
     assert client.get("/api/collections/games/websites").json()["data"] == []
-
-
-def test_crawl_exclude_setting_api(client):
-    saved = client.put("/api/crawl/settings", json={"exclude": [" /tag/ ", "", "*.pdf", "/tag/"]})
-    assert saved.status_code == 200 and saved.json()["exclude"] == ["/tag/", "*.pdf"]
-    assert client.get("/api/crawl/settings").json()["exclude"] == ["/tag/", "*.pdf"]
 
 
 def test_crawl_settings_api(client, settings, site):
@@ -481,4 +483,5 @@ def test_older_database_gets_the_new_website_column(tmp_path):
     old.commit()
     old.close()
     store = KnowledgeStore(path, HashEmbedder())
-    assert WebsiteStore(store).website(1).only_under_start is False
+    old_website = WebsiteStore(store).website(1)
+    assert old_website.only_under_start is False and old_website.exclude == []

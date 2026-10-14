@@ -27,6 +27,21 @@ class CrawlRequest(BaseModel):
     respect_robots: bool = True
     # Follow only links under the start addresses' folders, not the whole site.
     only_under_start: bool = False
+    # Links never followed: a part of the address ("/tag/", "?sort="), or a pattern with * that
+    # covers the whole address ("*/forum/*"). Letter case is ignored.
+    exclude: list[str] = Field(default_factory=list, max_length=200)
+
+    @field_validator("exclude")
+    @classmethod
+    def patterns(cls, patterns: list[str]) -> list[str]:
+        found = []
+        for text in patterns:
+            text = text.strip()
+            if len(text) > 300:
+                raise ValueError(f"Pattern longer than 300 characters: {text[:40]}…")
+            if text and text not in found:
+                found.append(text)
+        return found
 
     @field_validator("urls")
     @classmethod
@@ -80,6 +95,7 @@ def options(website: Website) -> CrawlOptions:
         use_browser=website.use_browser,
         respect_robots=website.respect_robots,
         only_under_start=website.only_under_start,
+        exclude=website.exclude,
     )
 
 
@@ -194,7 +210,6 @@ class CrawlSettingsChanges(BaseModel, extra="forbid"):
     use_browser: bool | None = None
     user_agent: str | None = None
     cdp_url: str | None = None
-    exclude: list[str] | None = None
 
 
 @router.get("/crawl/settings")

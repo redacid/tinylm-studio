@@ -12,7 +12,6 @@ const draftOf = (s: CrawlerSettings): Draft => ({
   use_browser: s.use_browser,
   user_agent: s.user_agent,
   cdp_url: s.cdp_url,
-  exclude: s.exclude.join("\n"),
 });
 
 /** The engine's crawler settings: robots.txt, request rate, defaults for new crawls, fetching. */
@@ -70,17 +69,11 @@ export function CrawlerSettingsForm({
         use_browser: draft!.use_browser as boolean,
         user_agent: String(draft!.user_agent),
         cdp_url: String(draft!.cdp_url),
-        exclude: String(draft!.exclude)
-          .split("\n")
-          .map((line) => line.trim())
-          .filter(Boolean),
       };
       // Only what changed, so the other settings keep following the engine's TINYLM_* defaults.
       const changes = Object.fromEntries(
         Object.entries(values).filter(
-          ([name, value]) =>
-            JSON.stringify(saved![name as keyof CrawlerSettings]) !==
-            JSON.stringify(value),
+          ([name, value]) => saved![name as keyof CrawlerSettings] !== value,
         ),
       );
       const next = await client!.saveCrawlerSettings(changes);
@@ -178,19 +171,6 @@ export function CrawlerSettingsForm({
         A new website starts with these values; each saved website keeps its own
         after that.
       </p>
-
-      <h4>Links to skip</h4>
-      <Field
-        label="Exclude patterns"
-        hint="One per line; every crawl skips links that match. A part of the address (/tag/, ?sort=, /login) matches anywhere in it; with * the pattern covers the whole address (*/forum/*, *.pdf). Letter case is ignored. Start addresses are always fetched."
-      >
-        <textarea
-          rows={5}
-          placeholder={"/tag/\n?sort=\n*/forum/*"}
-          value={draft.exclude as string}
-          onChange={(e) => set({ exclude: e.target.value })}
-        />
-      </Field>
 
       <h4>Fetching</h4>
       <div className="provider-list">

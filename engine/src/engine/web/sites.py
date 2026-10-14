@@ -6,7 +6,7 @@ already has without downloading them again, and spend its page budget only on ne
 """
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 
 from engine.rag.store import KnowledgeStore, now
 
@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS websites (
     use_browser INTEGER NOT NULL,
     respect_robots INTEGER NOT NULL,
     only_under_start INTEGER NOT NULL DEFAULT 0,
+    exclude TEXT NOT NULL DEFAULT '[]',  -- JSON list of link patterns never followed
     created_at TEXT NOT NULL,
     last_crawled_at TEXT
 );
@@ -50,6 +51,7 @@ class Website:
     use_browser: bool = False
     respect_robots: bool = True
     only_under_start: bool = False
+    exclude: list[str] = field(default_factory=list)
     id: int | None = None
     collection: str = ""
     created_at: str | None = None
@@ -67,9 +69,13 @@ FIELDS = (
     "use_browser",
     "respect_robots",
     "only_under_start",
+    "exclude",
 )
 # Columns added after the first release, with their definitions, for older databases.
-ADDED_COLUMNS = {"only_under_start": "INTEGER NOT NULL DEFAULT 0"}
+ADDED_COLUMNS = {
+    "only_under_start": "INTEGER NOT NULL DEFAULT 0",
+    "exclude": "TEXT NOT NULL DEFAULT '[]'",
+}
 
 
 class WebsiteStore:
@@ -137,7 +143,9 @@ class WebsiteStore:
 
     @staticmethod
     def _values(website: Website) -> tuple:
-        return tuple(getattr(website, f) for f in FIELDS)
+        return tuple(
+            json.dumps(website.exclude) if f == "exclude" else getattr(website, f) for f in FIELDS
+        )
 
     @staticmethod
     def _website(row) -> Website:
@@ -146,6 +154,7 @@ class WebsiteStore:
         data["use_browser"] = bool(data["use_browser"])
         data["respect_robots"] = bool(data["respect_robots"])
         data["only_under_start"] = bool(data["only_under_start"])
+        data["exclude"] = json.loads(data["exclude"])
         return Website(**data)
 
     # Pages already downloaded

@@ -115,6 +115,8 @@ export type CrawlSettings = {
   use_browser: boolean;
   /** Follow only links under the start addresses' folders, not the whole site. */
   only_under_start: boolean;
+  /** Links never followed: a part of the address, or a pattern with * for the whole address. */
+  exclude: string[];
 };
 
 /** Options left out come from the crawler settings (Settings > Crawler). */
@@ -129,8 +131,6 @@ export type CrawlerSettings = {
   use_browser: boolean;
   user_agent: string;
   cdp_url: string;
-  /** Links every crawl skips: a part of the address, or a pattern with * for the whole address. */
-  exclude: string[];
 };
 
 /** A saved website: start addresses and crawl settings that can be run again. */

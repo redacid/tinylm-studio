@@ -1,9 +1,9 @@
 """Crawls websites into a collection: follows links within each start site, politely.
 
 A site is one host (www. aside): links to other sites and to other subdomains are never
-followed, nor links matching the exclude patterns of the crawler settings. With
-only_under_start, links are also kept inside the folders of the start addresses, like wget
---no-parent: from https://example.com/guides/ the crawl stays under /guides/.
+followed, nor links matching the crawl's exclude patterns. With only_under_start, links are
+also kept inside the folders of the start addresses, like wget --no-parent: from
+https://example.com/guides/ the crawl stays under /guides/.
 
 Pages downloaded by earlier crawls into the same collection are not downloaded again: the crawl
 walks through them using their remembered links and spends its page budget only on new pages,
@@ -11,6 +11,7 @@ so repeated crawls of a site gradually cover all of it.
 """
 
 import logging
+import re
 import threading
 import time
 import uuid
@@ -24,7 +25,7 @@ from urllib.parse import urldefrag, urljoin, urlsplit
 
 from engine.rag.convert import UnsupportedFile, convert
 from engine.rag.store import KnowledgeStore
-from engine.web.crawl_settings import CrawlSettings, excluded
+from engine.web.crawl_settings import CrawlSettings
 from engine.web.fetch import DEFAULT_USER_AGENT, CdpFetcher, FetchError, HttpFetcher, Page
 from engine.web.politeness import RateLimiter, Robots, site
 from engine.web.sites import WebsiteStore
@@ -63,6 +64,9 @@ class CrawlOptions:
     respect_robots: bool = True
     # Follow only links under the start addresses' folders, not the whole site.
     only_under_start: bool = False
+    # Links never followed: a part of the address ("/tag/", "?sort="), or a pattern with * that
+    # covers the whole address ("*/forum/*", "*.pdf"); see excluded().
+    exclude: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -139,6 +143,20 @@ def under(url: str, folders: dict[str, set[str]]) -> bool:
     return any(path.startswith(f) for f in folders.get(site(url), ()))
 
 
+def excluded(url: str, patterns: list[str]) -> bool:
+    """Whether a link matches one of the exclude patterns; letter case is ignored. Only * is
+    special (any characters); "?" and the rest match themselves."""
+    url = url.lower()
+    for pattern in patterns:
+        pattern = pattern.lower()
+        if "*" not in pattern:
+            if pattern in url:
+                return True
+        elif re.fullmatch(".*".join(map(re.escape, pattern.split("*"))), url):
+            return True
+    return False
+
+
 def worth_fetching(url: str) -> bool:
     return PurePosixPath(urlsplit(url).path).suffix.lower() not in SKIP_SUFFIXES
 
@@ -169,10 +187,8 @@ class Crawler:
         if options.respect_robots and not respect_robots:
             job.note("robots.txt is ignored (Settings > Crawler)")
         limiter = RateLimiter(options.per_minute, sleep=job.cancelled.wait)
-        if current.exclude:
-            job.note(
-                f"links matching {', '.join(current.exclude)} are skipped (Settings > Crawler)"
-            )
+        if options.exclude:
+            job.note(f"links matching {', '.join(options.exclude)} are skipped")
 
         def robots_text(url: str) -> str | None:
             limiter.wait(site(url))
@@ -200,7 +216,7 @@ class Crawler:
                     and site(link) in start_sites
                     and (not options.only_under_start or under(link, folders))
                     and worth_fetching(link)
-                    and not excluded(link, current.exclude)
+                    and not excluded(link, options.exclude)
                 ):
                     seen.add(link)
                     queue.append((link, depth + 1))

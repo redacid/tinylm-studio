@@ -234,8 +234,9 @@ or the Data tab) adds pages of websites to a collection in the background:
 - Starts from the given addresses and follows links **within the same sites** (the same host,
   `www.` aside; other subdomains are other sites) up to `max_depth` hops; with
   `only_under_start: true`, only links under the start addresses' folders (from
-  `https://example.com/guides/`, only `/guides/…`); links matching the crawler settings'
-  `exclude` patterns are skipped; until `max_pages` **new** pages are
+  `https://example.com/guides/`, only `/guides/…`); links matching `exclude` are skipped (a
+  part of the address like `"/tag/"`, or a pattern with `*` for the whole address like
+  `"*/forum/*"`; letter case is ignored); until `max_pages` **new** pages are
   downloaded. Images, video, archives, scripts and styles are never requested. Pages with little text (listings, navigation) are followed but not indexed;
   web pages keep only their main text (menus and footers are dropped); PDFs are indexed too.
 - **Repeated crawls continue where the last one stopped.** Every downloaded page is remembered
@@ -267,7 +268,7 @@ or the Data tab) adds pages of websites to a collection in the background:
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/api/collections/{name}/crawl` | One-off crawl: `{"urls": [...], "max_pages": 50, "max_depth": 2, "per_minute": 20, "use_browser": false, "respect_robots": true, "only_under_start": false}` |
+| POST | `/api/collections/{name}/crawl` | One-off crawl: `{"urls": [...], "max_pages": 50, "max_depth": 2, "per_minute": 20, "use_browser": false, "respect_robots": true, "only_under_start": false, "exclude": []}` |
 | GET | `/api/collections/{name}/websites` | Saved websites of a collection, with `last_crawled_at` |
 | POST | `/api/collections/{name}/websites` | Saves a website: the crawl fields above plus an optional `name` (defaults to the host) |
 | PUT | `/api/websites/{id}` | Changes a saved website (same body) |
@@ -276,7 +277,7 @@ or the Data tab) adds pages of websites to a collection in the background:
 | GET | `/api/crawls` | All crawls since the engine started |
 | GET | `/api/crawls/{id}` | Progress: `state`, `website_id`, `fetched` (new pages), `known` (downloaded before), `indexed`, `duplicates`, `skipped`, `failed`, `current`, `log`, and `outcomes`: per start address `added`, `duplicate`, `known`, `skipped` or `failed` (missing: not reached) |
 | POST | `/api/crawls/{id}/cancel` | Stops a crawl after the current page |
-| GET | `/api/crawl/settings` | `respect_robots`, `per_minute`, `max_pages`, `max_depth`, `use_browser`, `user_agent`, `cdp_url`, `exclude` |
+| GET | `/api/crawl/settings` | `respect_robots`, `per_minute`, `max_pages`, `max_depth`, `use_browser`, `user_agent`, `cdp_url` |
 | PUT | `/api/crawl/settings` | Any of those fields; fields left out keep their value. Saved in `workspace/crawl-settings.json`, wins over the `TINYLM_*` variables and applies to crawls started afterwards; 422 names a wrong value |
 
 ## Web search
@@ -504,7 +505,6 @@ POST /api/evaluations
 | `TINYLM_CRAWL_RESPECT_ROBOTS` | `true` | `false`: robots.txt is not read for any crawl |
 | `TINYLM_CRAWL_MAX_PAGES` / `TINYLM_CRAWL_MAX_DEPTH` | `50` / `2` | Defaults for new crawls and websites |
 | `TINYLM_CRAWL_USE_BROWSER` | `false` | `true`: new crawls and websites load pages in the browser at `TINYLM_CDP_URL` |
-| `TINYLM_CRAWL_EXCLUDE` | `[]` | Links no crawl follows (JSON list): a part of the address like `"/tag/"`, or a pattern with `*` for the whole address like `"*/forum/*"` |
 | `TINYLM_USER_AGENT` | `tinylm-studio/0.1 (local research crawler)` | User-Agent of plain HTTP requests |
 | `TINYLM_SEARCH_PROVIDER` | `searxng` | Web search: `searxng`, `brave`, `tavily`, `exa`, `perplexity` or `serper`. This and the search variables below are defaults; the saved search settings win |
 | `TINYLM_SEARXNG_URL` | `http://127.0.0.1:8888` | SearXNG address (`make searxng` starts one) |

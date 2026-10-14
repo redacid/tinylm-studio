@@ -53,8 +53,6 @@ class Settings(BaseSettings):
     crawl_max_depth: int = 2
     # Load pages in the browser at cdp_url by default (for sites that need JavaScript).
     crawl_use_browser: bool = False
-    # Links the crawler never follows: URL patterns (see engine.web.crawl_settings).
-    crawl_exclude: list[str] = []
     user_agent: str = DEFAULT_USER_AGENT
     # Web search for finding pages and videos: a self-hosted SearXNG (free, no key), or Brave,
     # Tavily, Exa, Perplexity or Serper (each needs its API key; see engine.web.search).
