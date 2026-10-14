@@ -23,6 +23,11 @@ Model changes:
 - [ ] Investigate trimming Gemma 3's 262k vocabulary to uk/ru/en tokens (smaller output layer; risky).
 - [ ] Layer pruning only together with fine-tuning or distillation (Phase 3).
 
+Models screen:
+
+- [ ] Cancel a running download (huggingface_hub has no cancel; run it in a worker process).
+- [ ] Load and test a model downloaded from a search right on the Models screen.
+
 ## Dataset generation (Phase 4)
 
 - [ ] Real run with OpenRouter free models on the game collections: compare a few models

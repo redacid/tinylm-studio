@@ -1,21 +1,44 @@
 import { useCallback, useEffect, useState } from "react";
-import { CatalogEntry, EngineClient, ExportJob, Quantization, TrainedModel } from "./api";
+import {
+  CatalogEntry,
+  Download,
+  EngineClient,
+  ExportJob,
+  InstalledModel,
+  Quantization,
+  TrainedModel,
+} from "./api";
+import { formatSize } from "./format";
+import { HubSearch } from "./HubSearch";
+import { ModelSettingsForm } from "./ModelSettingsForm";
 import { Teachers } from "./Teachers";
 import { useTabActive } from "./tabActive";
 
+const FORMATS: Record<InstalledModel["format"], string> = {
+  gguf: "GGUF, llama.cpp",
+  hf: "PyTorch",
+  adapter: "LoRA adapter",
+};
+
 export function Models({ client }: { client: EngineClient }) {
+  const [models, setModels] = useState<InstalledModel[]>([]);
+  const [downloads, setDownloads] = useState<Download[]>([]);
   const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
   const [trained, setTrained] = useState<TrainedModel[]>([]);
   const [hfToken, setHfToken] = useState(true);
   const [exports, setExports] = useState<ExportJob[]>([]);
   // The fine-tuned model whose export form is open.
   const [exporting, setExporting] = useState<string | null>(null);
+  // The model whose settings are open.
+  const [configuring, setConfiguring] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(
     () =>
       Promise.all([client.catalogInfo(), client.trainedModels(), client.exports()]).then(([c, t, x]) => {
+        setModels(c.models);
+        setDownloads(c.downloads);
         setCatalog(c.catalog);
         setExports(x);
         setHfToken(c.hf_token);
@@ -26,6 +49,7 @@ export function Models({ client }: { client: EngineClient }) {
 
   async function remove(id: string) {
     setConfirmDelete(null);
+    setConfiguring(null);
     await client.deleteModel(id).catch((e) => setError(e instanceof Error ? e.message : String(e)));
     await refresh();
   }
@@ -49,9 +73,83 @@ export function Models({ client }: { client: EngineClient }) {
     }
   }
 
+  const byId = new Map(models.map((m) => [m.id, m]));
+  const trainedIds = new Set(trained.map((m) => m.id));
+  // Fine-tuned models and their exports have a table of their own.
+  const base = models.filter((m) => !trainedIds.has(m.id));
+  const catalogIds = new Set(catalog.map((m) => m.id));
+  const hubDownloads = downloads.filter((d) => !catalogIds.has(d.model_id) && d.state !== "done");
+
+  const deleteButtons = (id: string, usedBy: string[] = []) =>
+    confirmDelete === id ? (
+      <>
+        {usedBy.length > 0 && (
+          <div className="error">Fine-tuned models {usedBy.join(", ")} need it and stop working.</div>
+        )}
+        <button className="danger" onClick={() => remove(id)}>Delete</button>{" "}
+        <button onClick={() => setConfirmDelete(null)}>Cancel</button>
+      </>
+    ) : (
+      <button onClick={() => setConfirmDelete(id)}>Delete</button>
+    );
+
+  const settingsButton = (id: string) =>
+    byId.has(id) && (
+      <button onClick={() => setConfiguring(configuring === id ? null : id)}>Settings</button>
+    );
+
+  const settingsForm = (id: string) => {
+    const model = byId.get(id);
+    return (
+      configuring === id &&
+      model && (
+        <ModelSettingsForm
+          key={id}
+          client={client}
+          model={model}
+          onDone={() => {
+            setConfiguring(null);
+            refresh();
+          }}
+        />
+      )
+    );
+  };
+
   return (
     <div className="models">
       {error && <p className="error">{error}</p>}
+      <h3>Installed models</h3>
+      {base.length === 0 ? (
+        <p className="muted">No models yet: download one below.</p>
+      ) : (
+        <table className="installed-models">
+          <thead>
+            <tr><th>Model</th><th>Format</th><th>Size</th><th /></tr>
+          </thead>
+          <tbody>
+            {base.map((m) => (
+              <tr key={m.id}>
+                <td>
+                  {m.id} {m.loaded && <span className="badge done">loaded</span>}
+                  <div className="muted">
+                    {m.source
+                      ? `${m.source.repo}${m.source.file ? ` · ${m.source.file}` : ""}`
+                      : "copied into the models folder"}
+                  </div>
+                  {Object.keys(m.settings).length > 0 && <div className="muted">{describe(m.settings)}</div>}
+                  {settingsForm(m.id)}
+                </td>
+                <td className="nowrap">{FORMATS[m.format]}</td>
+                <td className="nowrap">{formatSize(m.size)}</td>
+                <td className="nowrap">
+                  {confirmDelete !== m.id && settingsButton(m.id)} {deleteButtons(m.id, m.used_by)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
       {trained.length > 0 && (
         <>
           <h3>Fine-tuned models</h3>
@@ -63,7 +161,7 @@ export function Models({ client }: { client: EngineClient }) {
               {trained.map((m) => (
                 <tr key={m.id}>
                   <td>
-                    {m.id}
+                    {m.id} {byId.get(m.id)?.loaded && <span className="badge done">loaded</span>}
                     {m.format === "gguf" ? (
                       <div className="muted">
                         GGUF {m.quantization} for llama.cpp, exported from {m.exported_from} ({m.base}, dataset{" "}
@@ -84,6 +182,7 @@ export function Models({ client }: { client: EngineClient }) {
                         }}
                       />
                     )}
+                    {settingsForm(m.id)}
                   </td>
                   <td className="nowrap">
                     {new Date(m.created_at).toLocaleString()}
@@ -96,12 +195,7 @@ export function Models({ client }: { client: EngineClient }) {
                     {m.eval_loss != null && <div className="muted">held-out {m.eval_loss.toFixed(3)}</div>}
                   </td>
                   <td className="nowrap">
-                    {confirmDelete === m.id ? (
-                      <>
-                        <button className="danger" onClick={() => remove(m.id)}>Delete</button>{" "}
-                        <button onClick={() => setConfirmDelete(null)}>Cancel</button>
-                      </>
-                    ) : (
+                    {confirmDelete !== m.id && (
                       <>
                         {m.format === "adapter" && (
                           <button
@@ -112,17 +206,25 @@ export function Models({ client }: { client: EngineClient }) {
                             Export to GGUF
                           </button>
                         )}{" "}
-                        <button onClick={() => setConfirmDelete(m.id)}>Delete</button>
+                        {settingsButton(m.id)}{" "}
                       </>
                     )}
+                    {deleteButtons(m.id)}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <h3>Base models</h3>
         </>
       )}
+
+      <h3>Find models on Hugging Face</h3>
+      {hubDownloads.map((d) => (
+        <DownloadStatus key={d.model_id} download={d} />
+      ))}
+      <HubSearch client={client} hfToken={hfToken} downloads={downloads} onDownload={refresh} />
+
+      <h3>Recommended models</h3>
       <table>
         <thead>
           <tr><th>Model</th><th>Size</th><th>Description</th><th /></tr>
@@ -145,6 +247,7 @@ export function Models({ client }: { client: EngineClient }) {
                   </div>
                 )}
                 {m.download?.state === "error" && <div className="error">{m.download.error}</div>}
+                {m.download?.state === "downloading" && <DownloadProgress download={m.download} />}
               </td>
               <td>
                 {m.installed ? (
@@ -163,6 +266,44 @@ export function Models({ client }: { client: EngineClient }) {
         Any GGUF or Hugging Face-format model folder copied into the models directory also appears here.
       </p>
       <Teachers client={client} />
+    </div>
+  );
+}
+
+function describe(settings: InstalledModel["settings"]): string {
+  return Object.entries(settings)
+    .map(([k, v]) => `${k.replace(/_/g, " ")} ${v === true ? "on" : v}`)
+    .join(" · ");
+}
+
+function DownloadStatus({ download }: { download: Download }) {
+  return (
+    <div className="download-status">
+      <div>
+        {download.state === "error" ? "Download failed" : "Downloading"} {download.model_id}{" "}
+        <span className="muted">from {download.repo}</span>
+      </div>
+      {download.state === "error" ? (
+        <div className="error">{download.error}</div>
+      ) : (
+        <DownloadProgress download={download} />
+      )}
+    </div>
+  );
+}
+
+function DownloadProgress({ download }: { download: Download }) {
+  const { total, downloaded } = download;
+  if (!total) return <div className="muted">{downloaded ? formatSize(downloaded) : "Starting…"}</div>;
+  const share = Math.min(1, (downloaded ?? 0) / total);
+  return (
+    <div className="download-progress">
+      <div className="progress">
+        <div style={{ width: `${100 * share}%` }} />
+      </div>
+      <span className="muted">
+        {formatSize(downloaded ?? 0)} of {formatSize(total)}
+      </span>
     </div>
   );
 }
@@ -238,10 +379,4 @@ function ExportStatus({ job }: { job?: ExportJob }) {
     );
   }
   return <div className="error">Export {job.state === "interrupted" ? "interrupted" : "failed"}: {job.error}</div>;
-}
-
-function formatSize(bytes: number): string {
-  if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`;
-  if (bytes >= 1e6) return `${Math.round(bytes / 1e6)} MB`;
-  return `${Math.max(1, Math.round(bytes / 1e3))} KB`;
 }

@@ -204,3 +204,13 @@ th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border);
 .teacher-requests td { overflow-wrap: anywhere; }
 .teacher-requests tr.failed td { color: var(--bad); }
 .teacher-requests button { margin-top: 4px; }
+.models h3 { margin-top: 22px; }
+.model-settings { margin: 10px 0; padding: 12px; border: 1px solid var(--border); border-radius: 8px; max-width: 760px; }
+.hub-search form { margin-bottom: 8px; flex-wrap: wrap; }
+.hub-search form input { flex: 1; min-width: 260px; }
+.repo-files { margin-top: 6px; }
+.repo-files td { padding: 3px 8px 3px 0; border: none; }
+.download-status { margin-bottom: 10px; }
+.download-progress { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.download-progress .progress { flex: 1; max-width: 360px; }
+.model-settings select { max-width: 160px; }

@@ -29,6 +29,7 @@ class LlamaCppRuntime:
         repetition_penalty: float = 1.1,
         context_size: int = 4096,
         gpu_layers: int = -1,
+        batch_size: int = 512,
     ):
         from llama_cpp import Llama
 
@@ -43,6 +44,7 @@ class LlamaCppRuntime:
             n_ctx=context_size,
             n_threads=self.threads,
             n_gpu_layers=gpu_layers,
+            n_batch=batch_size,
             verbose=False,
         )
         self.template = self._compile_template()
@@ -72,7 +74,7 @@ class LlamaCppRuntime:
         return self.template.render(
             messages=[{"role": m.role, "content": m.content} for m in request.messages],
             add_generation_prompt=True,
-            enable_thinking=False,
+            enable_thinking=bool(request.thinking),
             bos_token=self._token_text("tokenizer.ggml.bos_token_id"),
             eos_token=self._token_text("tokenizer.ggml.eos_token_id"),
         )
@@ -90,6 +92,8 @@ class LlamaCppRuntime:
                 top_p=request.top_p,
                 repeat_penalty=request.repetition_penalty or self.repetition_penalty,
                 stream=True,
+                # Unset: llama.cpp's own defaults.
+                **{k: v for k in ("top_k", "min_p") if (v := getattr(request, k)) is not None},
             )
             stop = StopSequenceFilter(request.stop)
             output_tokens = 0

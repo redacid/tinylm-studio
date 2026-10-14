@@ -116,3 +116,19 @@ def test_llamacpp_streaming(client):
     ) as response:
         body = response.read().decode()
     assert body.rstrip().endswith("data: [DONE]")
+
+
+def test_llamacpp_model_settings(client):
+    ask = {"model": "tiny-gguf", "messages": [{"role": "user", "content": "hi"}], "max_tokens": 3}
+    assert client.post("/v1/chat/completions", json=ask).status_code == 200
+    models = client.app.state.models
+    assert models.runtime("tiny-gguf").runtime.llm.n_ctx() == 4096
+    settings = {"context_size": 512, "batch_size": 64, "top_k": 5, "min_p": 0.1, "thinking": True}
+    assert client.put("/api/models/tiny-gguf/settings", json=settings).status_code == 200
+    # A loading setting unloads the model; it is loaded with the new one on the next request.
+    assert models.loaded() is None
+    assert client.post("/v1/chat/completions", json=ask).status_code == 200
+    assert models.runtime("tiny-gguf").runtime.llm.n_ctx() == 512
+    # Answer settings apply at once, without loading the model again.
+    client.put("/api/models/tiny-gguf/settings", json=settings | {"top_k": 1})
+    assert models.loaded() == "tiny-gguf"

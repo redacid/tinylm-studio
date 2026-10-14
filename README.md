@@ -30,7 +30,8 @@ make setup   # create the engine environment and install desktop dependencies
 make run     # start the desktop app (it starts the engine)
 ```
 
-Download a model (Models tab in the app, or):
+Download a model (Models tab in the app, which also searches all GGUF and PyTorch models on
+Hugging Face, or):
 
 ```bash
 make download MODEL=gemma-3-4b-gguf

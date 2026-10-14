@@ -10,7 +10,74 @@ export type CatalogEntry = {
   description: string;
   gated: boolean;
   installed: boolean;
-  download: { state: "downloading" | "done" | "error"; error: string | null } | null;
+  download: Download | null;
+};
+
+export type Download = {
+  model_id: string;
+  repo: string;
+  state: "downloading" | "done" | "error";
+  error: string | null;
+  /** Bytes, when Hugging Face told the sizes. */
+  total: number | null;
+  downloaded: number | null;
+};
+
+/** Per-model settings; a left-out field is the engine's default. */
+export type ModelSettings = {
+  context_size?: number;
+  threads?: number;
+  gpu_layers?: number;
+  batch_size?: number;
+  max_tokens?: number;
+  temperature?: number;
+  top_p?: number;
+  top_k?: number;
+  min_p?: number;
+  repetition_penalty?: number;
+  thinking?: boolean;
+};
+
+export type InstalledModel = {
+  id: string;
+  format: "gguf" | "hf" | "adapter";
+  /** Bytes on disk. */
+  size: number;
+  /** The Hugging Face repo (and GGUF file) it was downloaded from; null for a copied folder. */
+  source: { repo: string; file?: string | null } | null;
+  loaded: boolean;
+  settings: ModelSettings;
+  /** Fine-tuned models that need this one as their base. */
+  used_by: string[];
+};
+
+export type ModelInfo = {
+  installed: string[];
+  models: InstalledModel[];
+  downloads: Download[];
+  catalog: CatalogEntry[];
+  hf_token: boolean;
+};
+
+export type HubFormat = "gguf" | "hf";
+
+export type HubModel = {
+  repo: string;
+  downloads: number;
+  likes: number;
+  gated: boolean;
+  updated: string | null;
+  pipeline: string | null;
+  params: number | null;
+  context_length: number | null;
+};
+
+export type HubFiles = {
+  repo: string;
+  gated: boolean;
+  gguf: { file: string; size: number; parts: number; quantization: string | null }[];
+  /** The Hugging Face-format weights, or null when the repo has none. */
+  hf: { size: number } | null;
 };
 
 export type Collection = { name: string; documents: number; chunks: number };
@@ -411,6 +478,7 @@ export type ChatOptions = {
 };
 
 export type ChatParams = {
+  /** Left out: the model's settings from the Models tab, then the engine's defaults. */
   max_tokens?: number;
   temperature?: number;
   top_p?: number;
@@ -446,9 +514,36 @@ export class EngineClient {
     return (await this.catalogInfo()).catalog;
   }
 
-  /** The catalog and whether downloads send a Hugging Face token. */
-  async catalogInfo(): Promise<{ catalog: CatalogEntry[]; hf_token: boolean }> {
+  /** Installed models, downloads, the catalog and whether downloads send a Hugging Face token. */
+  async catalogInfo(): Promise<ModelInfo> {
     return this.json("/api/models");
+  }
+
+  async saveModelSettings(modelId: string, settings: ModelSettings): Promise<ModelSettings> {
+    return this.json(`/api/models/${encodeURIComponent(modelId)}/settings`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(settings),
+    });
+  }
+
+  /** The most downloaded models on Hugging Face that match. */
+  async searchHub(query: string, format: HubFormat): Promise<HubModel[]> {
+    const params = new URLSearchParams({ q: query, format });
+    return (await this.json<{ data: HubModel[] }>(`/api/hub/models?${params}`)).data;
+  }
+
+  async hubFiles(repo: string): Promise<HubFiles> {
+    return this.json(`/api/hub/files?${new URLSearchParams({ repo })}`);
+  }
+
+  /** Downloads one GGUF file of a repo or, without a file, its Hugging Face-format weights. */
+  async downloadFromHub(repo: string, file?: string): Promise<Download> {
+    return this.json("/api/hub/download", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ repo, file: file ?? null }),
+    });
   }
 
   async download(modelId: string): Promise<void> {

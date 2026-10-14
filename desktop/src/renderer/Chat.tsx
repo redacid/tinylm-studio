@@ -102,9 +102,9 @@ export function Chat({
         );
       };
       const params: ChatParams = {
-        max_tokens: settings.maxTokens,
-        temperature: settings.temperature,
-        top_p: settings.topP,
+        max_tokens: settings.maxTokens ?? undefined,
+        temperature: settings.temperature ?? undefined,
+        top_p: settings.topP ?? undefined,
         stop: settings.stop.some(Boolean) ? settings.stop.filter(Boolean) : undefined,
         repetition_penalty: settings.repetitionPenalty ?? undefined,
         rag_top_k: collection && settings.sources ? settings.sources : undefined,

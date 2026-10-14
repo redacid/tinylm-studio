@@ -3,9 +3,10 @@
 export type ChatSettings = {
   /** The system prompt a new chat starts with. */
   systemPrompt: string;
-  maxTokens: number;
-  temperature: number;
-  topP: number;
+  /** Empty (null): the model's setting from the Models tab, then the engine's default. */
+  maxTokens: number | null;
+  temperature: number | null;
+  topP: number | null;
   /** Empty: the engine's default (TINYLM_REPETITION_PENALTY). */
   repetitionPenalty: number | null;
   /** Answering stops at any of these; empty lines are ignored. */
@@ -20,13 +21,14 @@ export type ChatSettings = {
   rememberChoice: boolean;
   /** Keep the conversation when the app is closed. */
   keepConversation: boolean;
+  version?: number;
 };
 
 export const CHAT_DEFAULTS: ChatSettings = {
   systemPrompt: "",
-  maxTokens: 512,
-  temperature: 0.7,
-  topP: 1,
+  maxTokens: null,
+  temperature: null,
+  topP: null,
   repetitionPenalty: null,
   stop: [],
   sources: null,
@@ -39,7 +41,14 @@ export const CHAT_DEFAULTS: ChatSettings = {
 const SETTINGS_KEY = "chat-settings";
 
 export function loadChatSettings(): ChatSettings {
-  return { ...CHAT_DEFAULTS, ...read(SETTINGS_KEY) };
+  const saved = read(SETTINGS_KEY) ?? {};
+  if (!saved.version) {
+    // Before version 2 the chat always sent these; the old defaults now mean "the model's".
+    for (const [key, old] of [["maxTokens", 512], ["temperature", 0.7], ["topP", 1]] as const) {
+      if (saved[key] === old) saved[key] = null;
+    }
+  }
+  return { ...CHAT_DEFAULTS, ...saved, version: 2 };
 }
 
 export function saveChatSettings(settings: ChatSettings): void {

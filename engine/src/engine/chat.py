@@ -18,11 +18,16 @@ class Message:
 class ChatRequest:
     model: str
     messages: list[Message]
-    max_tokens: int = 512
-    temperature: float = 0.7
-    top_p: float = 1.0
+    # None: the model's settings, then the defaults (models/settings.py fills them in
+    # before a runtime sees the request).
+    max_tokens: int | None = None
+    temperature: float | None = None
+    top_p: float | None = None
     stop: list[str] = field(default_factory=list)
-    repetition_penalty: float | None = None  # None: the runtime's default (settings)
+    repetition_penalty: float | None = None  # None at the runtime: TINYLM_REPETITION_PENALTY
+    top_k: int | None = None  # None at the runtime: the runtime's own default
+    min_p: float | None = None
+    thinking: bool | None = None  # reasoning mode of models that have one (Qwen3)
 
 
 @dataclass

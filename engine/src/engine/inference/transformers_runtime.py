@@ -66,9 +66,12 @@ class TransformersRuntime:
 
     def _encode(self, request: ChatRequest):
         messages = [{"role": m.role, "content": m.content} for m in request.messages]
-        # enable_thinking=False disables the Qwen3 reasoning mode; other templates ignore it.
+        # enable_thinking switches the Qwen3 reasoning mode; other templates ignore it.
         prompt = self.tokenizer.apply_chat_template(
-            messages, add_generation_prompt=True, tokenize=False, enable_thinking=False
+            messages,
+            add_generation_prompt=True,
+            tokenize=False,
+            enable_thinking=bool(request.thinking),
         )
         return self.tokenizer(prompt, return_tensors="pt", add_special_tokens=False).to(self.device)
 
@@ -92,6 +95,10 @@ class TransformersRuntime:
             )
             if sampling:
                 kwargs.update(temperature=request.temperature, top_p=request.top_p)
+                if request.top_k is not None:
+                    kwargs["top_k"] = request.top_k
+                if request.min_p is not None:
+                    kwargs["min_p"] = request.min_p
 
             result: dict = {}
 

@@ -42,8 +42,9 @@ class ChatCompletionRequest(BaseModel):
     messages: list[ChatMessage]
     max_tokens: int | None = None
     max_completion_tokens: int | None = None
-    temperature: float = 0.7
-    top_p: float = 1.0
+    # Left out: the model's settings (Models tab), then 0.7 and 1.
+    temperature: float | None = Field(None, ge=0, le=2)
+    top_p: float | None = Field(None, gt=0, le=1)
     stop: str | list[str] | None = None
     stream: bool = False
     stream_options: StreamOptions | None = None
@@ -53,6 +54,11 @@ class ChatCompletionRequest(BaseModel):
     # and the repetition penalty (TINYLM_REPETITION_PENALTY by default).
     rag_top_k: int | None = Field(None, ge=1, le=20)
     repetition_penalty: float | None = Field(None, gt=0, le=2)
+    # tinylm extensions: sampling settings llama.cpp and transformers know, and the reasoning
+    # mode of models that have one (Qwen3); left out: the model's settings.
+    top_k: int | None = Field(None, ge=0)
+    min_p: float | None = Field(None, ge=0, le=1)
+    thinking: bool | None = None
     # tinylm extension: also return the request as the model got it, with the added sources.
     debug: bool = False
 
@@ -69,11 +75,14 @@ class ChatCompletionRequest(BaseModel):
         return ChatRequest(
             model=self.model,
             messages=messages,
-            max_tokens=self.max_completion_tokens or self.max_tokens or 512,
+            max_tokens=self.max_completion_tokens or self.max_tokens,
             temperature=self.temperature,
             top_p=self.top_p,
             stop=stop,
             repetition_penalty=self.repetition_penalty,
+            top_k=self.top_k,
+            min_p=self.min_p,
+            thinking=self.thinking,
         )
 
 

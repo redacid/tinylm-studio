@@ -112,3 +112,176 @@ def test_hugging_face_token_and_gated_errors(monkeypatch, tmp_path):
         "accept the license" in refused and "https://huggingface.co/google/gemma-3-1b-it" in refused
     )
     assert download_error("x/y", RuntimeError("disk full")) == "disk full"
+
+
+def chat(client, **params) -> dict:
+    body = {"model": "echo", "messages": [{"role": "user", "content": "one two three"}]}
+    return client.post("/v1/chat/completions", json=body | params).json()
+
+
+def test_model_settings_fill_in_what_a_request_leaves_out(client):
+    assert client.get("/api/models/echo/settings").json() == {}
+    saved = client.put("/api/models/echo/settings", json={"max_tokens": 2, "top_k": None})
+    assert saved.json() == {"max_tokens": 2}
+    # The model's setting limits an answer that sets no length; a request's own length wins.
+    assert chat(client)["usage"]["completion_tokens"] == 2
+    assert chat(client, max_tokens=50)["choices"][0]["message"]["content"] == "Echo: one two three"
+    # Saving replaces all settings: left out goes back to the engine's default.
+    client.put("/api/models/echo/settings", json={})
+    assert chat(client)["choices"][0]["message"]["content"] == "Echo: one two three"
+    assert client.put("/api/models/echo/settings", json={"temperature": 5}).status_code == 422
+    assert client.get("/api/models/nope/settings").status_code == 404
+
+
+def test_answer_defaults():
+    from engine.chat import ChatRequest
+    from engine.models.settings import with_defaults
+
+    request = with_defaults(ChatRequest("m", [], temperature=0.2), {"temperature": 1, "top_k": 20})
+    assert (request.max_tokens, request.temperature, request.top_p) == (512, 0.2, 1.0)
+    assert (request.top_k, request.min_p, request.repetition_penalty) == (20, None, None)
+    assert request.thinking is False
+
+
+def test_hub_names():
+    from engine.models import hub
+
+    assert hub.quantization("gemma-3-4b-it-Q4_K_M.gguf") == "Q4_K_M"
+    assert hub.quantization("Qwen3-4B-IQ4_XS.gguf") == "IQ4_XS"
+    assert hub.quantization("model-bf16.gguf") == "BF16"
+    assert hub.model_id("unsloth/gemma-3-4b-it-GGUF", "gguf", "gemma-3-4b-it-Q4_K_M.gguf") == (
+        "gemma-3-4b-it-q4_k_m"
+    )
+    split = "Q8_0/Big-Model-Q8_0-00001-of-00002.gguf"
+    assert hub.model_id("x/Big-Model-GGUF", "gguf", split) == "big-model-q8_0"
+    assert hub.gguf_patterns(split) == ["Q8_0/Big-Model-Q8_0-*-of-00002.gguf"]
+    assert hub.model_id("Qwen/Qwen2.5-0.5B-Instruct", "hf") == "qwen2.5-0.5b-instruct"
+
+
+class FakeHub:
+    """Stands in for huggingface_hub.HfApi: two repos, one GGUF and one with safetensors."""
+
+    def __init__(self, token=None):
+        pass
+
+    def list_models(self, search=None, filter=None, **kwargs):
+        from datetime import UTC, datetime
+        from types import SimpleNamespace
+
+        when = datetime(2026, 5, 1, tzinfo=UTC)
+        if filter == "gguf":
+            gguf = {"total": 4_000_000_000, "context_length": 131072}
+            yield SimpleNamespace(
+                id="unsloth/gemma-3-4b-it-GGUF",
+                downloads=900,
+                likes=50,
+                gated=False,
+                last_modified=when,
+                pipeline_tag="image-text-to-text",
+                gguf=gguf,
+            )
+            return
+        for repo, pipeline in [("Qwen/Qwen3-0.6B", "text-generation"), ("x/bert", "fill-mask")]:
+            yield SimpleNamespace(
+                id=repo,
+                downloads=10,
+                likes=1,
+                gated="manual" if repo == "x/bert" else False,
+                last_modified=None,
+                pipeline_tag=pipeline,
+                safetensors=SimpleNamespace(total=600_000_000),
+            )
+
+    def model_info(self, repo, files_metadata=False):
+        from types import SimpleNamespace
+
+        names = {
+            "unsloth/gemma-3-4b-it-GGUF": {
+                "gemma-3-4b-it-Q4_K_M.gguf": 2500,
+                "gemma-3-4b-it-Q8_0.gguf": 4100,
+                "mmproj-F16.gguf": 800,
+                "BF16/gemma-3-4b-it-BF16-00001-of-00002.gguf": 4000,
+                "BF16/gemma-3-4b-it-BF16-00002-of-00002.gguf": 3000,
+                "README.md": 10,
+            },
+            "Qwen/Qwen3-0.6B": {"config.json": 1, "model.safetensors": 1200, "README.md": 5},
+        }[repo]
+        siblings = [SimpleNamespace(rfilename=n, size=s) for n, s in names.items()]
+        return SimpleNamespace(siblings=siblings, gated=False)
+
+
+def test_search_hugging_face(client, monkeypatch):
+    from engine.models import hub
+
+    monkeypatch.setattr(hub, "HfApi", FakeHub)
+    gguf = client.get("/api/hub/models", params={"q": "gemma", "format": "gguf"}).json()["data"]
+    assert gguf[0]["repo"] == "unsloth/gemma-3-4b-it-GGUF"
+    assert (gguf[0]["params"], gguf[0]["context_length"]) == (4_000_000_000, 131072)
+    # Models that do not write text are left out.
+    hf = client.get("/api/hub/models", params={"q": "", "format": "hf"}).json()["data"]
+    assert [m["repo"] for m in hf] == ["Qwen/Qwen3-0.6B"]
+
+    files = client.get("/api/hub/files", params={"repo": "unsloth/gemma-3-4b-it-GGUF"}).json()
+    assert [(f["quantization"], f["size"], f["parts"]) for f in files["gguf"]] == [
+        ("Q4_K_M", 2500, 1),
+        ("Q8_0", 4100, 1),
+        ("BF16", 7000, 2),
+    ]
+    assert files["gguf"][2]["file"] == "BF16/gemma-3-4b-it-BF16-00001-of-00002.gguf"
+    assert files["hf"] is None
+    assert client.get("/api/hub/files", params={"repo": "Qwen/Qwen3-0.6B"}).json()["hf"] == {
+        "size": 1201
+    }
+
+
+def test_download_from_hugging_face_and_delete(client, settings, monkeypatch):
+    import time
+
+    import huggingface_hub
+
+    asked = []
+
+    def snapshot_download(repo, local_dir, token, allow_patterns):
+        asked.append(allow_patterns)
+        local_dir.mkdir(parents=True, exist_ok=True)
+        (local_dir / "BF16").mkdir()
+        (local_dir / "BF16" / "gemma-3-4b-it-BF16-00001-of-00002.gguf").write_bytes(b"x" * 40)
+        (local_dir / "BF16" / "gemma-3-4b-it-BF16-00002-of-00002.gguf").write_bytes(b"x" * 30)
+
+    monkeypatch.setattr(huggingface_hub, "HfApi", FakeHub)
+    monkeypatch.setattr(huggingface_hub, "snapshot_download", snapshot_download)
+    body = {
+        "repo": "unsloth/gemma-3-4b-it-GGUF",
+        "file": "BF16/gemma-3-4b-it-BF16-00001-of-00002.gguf",
+    }
+    job = client.post("/api/hub/download", json=body).json()
+    assert job["model_id"] == "gemma-3-4b-it-bf16"
+    for _ in range(50):
+        info = client.get("/api/models").json()
+        if info["downloads"][0]["state"] != "downloading":
+            break
+        time.sleep(0.1)
+    assert info["downloads"][0] | {"error": None} == {
+        "model_id": "gemma-3-4b-it-bf16",
+        "repo": "unsloth/gemma-3-4b-it-GGUF",
+        "state": "done",
+        "error": None,
+        "total": 7000,
+        "downloaded": 7000,
+    }
+    assert asked == [["BF16/gemma-3-4b-it-BF16-*-of-00002.gguf"]]
+    [model] = info["models"]
+    assert model["id"] == "gemma-3-4b-it-bf16" and model["format"] == "gguf"
+    assert model["source"] == body and model["size"] > 70 and not model["loaded"]
+    # Both parts sit at the top of the folder, where llama.cpp finds the first one.
+    folder = settings.models_dir / "gemma-3-4b-it-bf16"
+    assert len(list(folder.glob("*.gguf"))) == 2
+    assert client.post("/api/hub/download", json=body).status_code == 409
+    bad = client.post("/api/hub/download", json={"repo": "x/y", "file": "README.md"})
+    assert bad.status_code == 400
+
+    client.put("/api/models/gemma-3-4b-it-bf16/settings", json={"context_size": 8192})
+    assert client.delete("/api/models/gemma-3-4b-it-bf16").status_code == 204
+    assert not folder.exists()
+    assert client.get("/api/models").json()["models"] == []
+    assert "gemma-3-4b-it-bf16" not in (settings.models_dir / ".model-settings.json").read_text()

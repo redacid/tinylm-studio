@@ -69,43 +69,49 @@ function ChatSettingsForm({ value, onChange }: { value: ChatSettings; onChange: 
       <div className="settings-grid">
         <Field
           label="Max answer length"
-          hint="In tokens; a token is about ¾ of an English word, less in Ukrainian or Russian."
+          hint="In tokens; a token is about ¾ of an English word, less in Ukrainian or Russian. Empty: the model's setting (Models tab), 512 by default."
         >
           <NumberInput
             value={value.maxTokens}
             min={16}
             max={8192}
             step={16}
-            onChange={(n) => set({ maxTokens: n ?? CHAT_DEFAULTS.maxTokens })}
+            optional
+            placeholder="model's"
+            onChange={(n) => set({ maxTokens: n })}
           />
         </Field>
         <Field
           label="Temperature"
-          hint="0 always picks the most likely word: the same answer every time. Higher is more varied."
+          hint="0 always picks the most likely word: the same answer every time. Higher is more varied. Empty: the model's setting, 0.7 by default."
         >
           <NumberInput
             value={value.temperature}
             min={0}
             max={2}
             step={0.05}
-            onChange={(n) => set({ temperature: n ?? CHAT_DEFAULTS.temperature })}
+            optional
+            placeholder="model's"
+            onChange={(n) => set({ temperature: n })}
           />
         </Field>
         <Field
           label="Top P"
-          hint="Picks only from the most likely words that together make up this share. 1 turns it off."
+          hint="Picks only from the most likely words that together make up this share. 1 turns it off. Empty: the model's setting, 1 by default."
         >
           <NumberInput
             value={value.topP}
             min={0.05}
             max={1}
             step={0.05}
-            onChange={(n) => set({ topP: n ?? CHAT_DEFAULTS.topP })}
+            optional
+            placeholder="model's"
+            onChange={(n) => set({ topP: n })}
           />
         </Field>
         <Field
           label="Repetition penalty"
-          hint="Above 1 makes repeating words less likely; helps small models that loop. Empty: the engine's setting (1.1 by default)."
+          hint="Above 1 makes repeating words less likely; helps small models that loop. Empty: the model's setting, then the engine's (1.1 by default)."
         >
           <NumberInput
             value={value.repetitionPenalty}
@@ -148,7 +154,7 @@ function ChatSettingsForm({ value, onChange }: { value: ChatSettings; onChange: 
   );
 }
 
-function Field({ label, hint, children }: { label: string; hint: string; children: ReactNode }) {
+export function Field({ label, hint, children }: { label: string; hint: string; children: ReactNode }) {
   return (
     <label className="settings-field">
       <span>{label}</span>
@@ -158,7 +164,7 @@ function Field({ label, hint, children }: { label: string; hint: string; childre
   );
 }
 
-function Check({
+export function Check({
   checked,
   onChange,
   children,
@@ -176,12 +182,13 @@ function Check({
 }
 
 /** A number kept as typed; only valid values reach the settings. */
-function NumberInput({
+export function NumberInput({
   value,
   min,
   max,
   step,
   optional,
+  placeholder,
   onChange,
 }: {
   value: number | null;
@@ -189,6 +196,8 @@ function NumberInput({
   max: number;
   step: number;
   optional?: boolean;
+  /** Shown in an empty optional field: the value used then. */
+  placeholder?: string;
   onChange: (n: number | null) => void;
 }) {
   const [text, setText] = useState(value === null ? "" : String(value));
@@ -208,7 +217,7 @@ function NumberInput({
         max={max}
         step={step}
         value={text}
-        placeholder={optional ? "default" : undefined}
+        placeholder={optional ? (placeholder ?? "default") : undefined}
         className={valid ? "" : "invalid"}
         onChange={(e) => {
           const raw = e.target.value;

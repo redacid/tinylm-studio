@@ -7,6 +7,7 @@ For the HTTP API see [api.md](api.md); for the design and roadmap see the
 - [Start](#start)
 - [Chat](#chat)
 - [Models](#models)
+  - [Model settings: context, threads, sampling, thinking](#model-settings)
 - [Data: collections, files, web search and websites](#data)
 - [Datasets](#datasets)
   - [Generating examples from your documents](#generating-examples)
@@ -80,12 +81,26 @@ can use them (see [api.md](api.md)).
 
 ## Models
 
-![Models: fine-tuned and base models](images/models.png)
+![Models: installed models and a download from Hugging Face](images/models.png)
 
-- **Base models** can be downloaded with one click. GGUF models (`-gguf`) run through llama.cpp
-  and are the fast choice for chatting on a CPU; the default is `gemma-3-4b-gguf`. Models with
-  PyTorch weights (e.g. `qwen3-0.6b`) are slower to chat with but are the ones that can be
-  fine-tuned.
+- **Installed models** lists every model in `<data dir>/models/`: its format, size on disk and
+  the Hugging Face repo (and file) it came from; **loaded** marks the one in memory. Any GGUF
+  file or Hugging Face model folder copied into `<data dir>/models/<name>/` appears too.
+- **Delete** removes the model's folder and its settings. Deleting a base model that fine-tuned
+  models need warns first: they stop working until it is downloaded again.
+- **Settings** opens the model's own settings (see below); the ones changed from the defaults
+  are listed under its name.
+- **Find models on Hugging Face** searches all open models, most downloaded first. Pick
+  **GGUF** for fast answers through llama.cpp, or **PyTorch** for models that can be fine-tuned.
+  **Choose** lists a GGUF repo's files: one per quantization (Q4_K_M is a good balance, Q8_0 is
+  close to the original, smaller ones lose quality) with its size; **Download** gets that one
+  file (all parts of a split one). For PyTorch, **Download** gets the weights, config and
+  tokenizer. The model is saved under the file or repo name, e.g. `gemma-3-4b-it-q4_k_m`, and
+  the progress shows above the search.
+- **Recommended models** are the tested ones, downloaded with one click. GGUF models (`-gguf`)
+  run through llama.cpp and are the fast choice for chatting on a CPU; the default is
+  `gemma-3-4b-gguf`. Models with PyTorch weights (e.g. `qwen3-0.6b`) are slower to chat with but
+  are the ones that can be fine-tuned.
 - Gemma and Llama models are gated: accept their license on Hugging Face and put your token into
   `.env` as `HF_TOKEN=...`. A token also makes downloads faster. `.env` is read by `make`, so
   start the app with `make run` (or export `HF_TOKEN` yourself). If the token is missing,
@@ -95,7 +110,35 @@ can use them (see [api.md](api.md)).
 - **Fine-tuned models** show the base model, the dataset and the final loss. Deleting one
   removes its folder; the base model stays. **Export to GGUF** turns one into a fast llama.cpp
   model, see [Exporting to GGUF](#exporting-to-gguf).
-- Any GGUF file or Hugging Face model folder copied into `<data dir>/models/<name>/` appears too.
+
+![Searching Hugging Face and choosing a GGUF file](images/models-search.png)
+
+### Model settings
+
+![The settings of one model](images/model-settings.png)
+
+Each model keeps its own settings; an empty field uses the default shown in it.
+
+| Setting | Default | What it does |
+|---|---|---|
+| Context size | 4096 | GGUF only. Tokens the model sees at once: prompt, sources and answer. More takes more memory. |
+| GPU layers | -1 (all) | GGUF only. Layers put on the GPU when llama.cpp was built with GPU support; 0 is CPU only. |
+| Batch size | 512 | GGUF only. Prompt tokens read in one step; larger reads long prompts faster. |
+| CPU threads | `TINYLM_THREADS` | Threads for this model. |
+| Max answer length | 512 | Tokens an answer may take. |
+| Temperature | 0.7 | 0 always picks the most likely word; higher is more varied. |
+| Top P | 1 | Picks only from the most likely words that make up this share. |
+| Top K | runtime's (40 in llama.cpp) | Picks only from this many most likely words; 0 turns it off. |
+| Min P | runtime's (0.05 in llama.cpp) | Drops words less likely than this share of the most likely one. |
+| Repetition penalty | `TINYLM_REPETITION_PENALTY` (1.1) | Above 1 makes repeating words less likely. |
+| Thinking | off | Lets models with a reasoning mode (Qwen3) think before they answer: better, but slower. |
+
+The first four are used when the model is loaded, so saving a change to them unloads it and the
+next request loads it again. The answer settings apply at once, to every request that does not
+set them itself: API clients that leave them out, and the chat for the fields left empty in
+[Chat settings](#chat-settings). The settings are kept by the engine in
+`<data dir>/models/.model-settings.json`.
+
 - **Teachers** at the bottom of the screen are the models that write training examples; see
   [Teachers](#teachers).
 
@@ -297,7 +340,7 @@ The export runs in the background in its own process: getting the converter, mer
 and quantizing. It takes a minute or two for a 0.6B model and needs about twice the model's size
 in free memory and disk while it runs.
 
-![The exported model on the Models screen](images/models.png)
+![The exported model on the Models screen](images/models-trained.png)
 
 - The converter is llama.cpp's own `convert_hf_to_gguf.py`, taken from the source package of the
   installed llama-cpp-python, so the file matches the llama.cpp that runs it. The first export
@@ -356,10 +399,10 @@ settings (proxy, hardware, folders) go into `.env`; see below.
 | Setting | Default | What it does |
 |---|---|---|
 | Default system prompt | empty | The system prompt the chat starts with; changing it here replaces the one above the chat. |
-| Max answer length | 512 | Tokens an answer may take (16 to 8192). |
-| Temperature | 0.7 | 0 always picks the most likely word, so the same question gets the same answer; higher is more varied. |
-| Top P | 1 | Picks only from the most likely words that together make up this share; 1 turns it off. |
-| Repetition penalty | engine's, 1.1 | Above 1 makes repeated words less likely; raise it (1.2 to 1.3) when a small model loops. Empty uses `TINYLM_REPETITION_PENALTY`. |
+| Max answer length | model's, 512 | Tokens an answer may take (16 to 8192). |
+| Temperature | model's, 0.7 | 0 always picks the most likely word, so the same question gets the same answer; higher is more varied. |
+| Top P | model's, 1 | Picks only from the most likely words that together make up this share; 1 turns it off. |
+| Repetition penalty | model's, then engine's 1.1 | Above 1 makes repeated words less likely; raise it (1.2 to 1.3) when a small model loops. |
 | Sources from data | engine's, 4 | How many chunks of the chosen data an answer gets. More can answer more, but the prompt is longer and slower. Empty uses `TINYLM_RAG_TOP_K`. |
 | Stop sequences | none | One per line; the answer ends before any of them. |
 | Show the answer as it is written | on | Off: the chat asks for one complete response (`"stream": false`) and shows it at once. |
@@ -367,9 +410,11 @@ settings (proxy, hardware, folders) go into `.env`; see below.
 | Start with the model and data chosen last time | on | Otherwise the chat starts with the default model and no data. |
 | Keep the conversation after the app is closed | on | The conversation and the system prompt come back on the next start; **New chat** still clears it. |
 
-**Reset to defaults** restores the table's defaults. The settings live in the desktop app's own
-storage (`~/.config/tinylm-studio-desktop/`), not in `.env`, and apply to the chat screen only; API
-clients pass the same values in their requests (see [api.md](api.md)).
+An empty answer setting uses the chosen model's own [settings](#model-settings) from the Models
+tab, then the engine's default. **Reset to defaults** restores the table's defaults. The settings
+live in the desktop app's own storage (`~/.config/tinylm-studio-desktop/`), not in `.env`, and
+apply to the chat screen only; API clients pass the same values in their requests (see
+[api.md](api.md)).
 
 ### Search settings
 

@@ -35,8 +35,10 @@ class MessagesRequest(BaseModel):
     max_tokens: int
     messages: list[InputMessage]
     system: str | list[TextBlock] | None = None
-    temperature: float = 1.0
-    top_p: float = 1.0
+    # Left out: the model's settings (Models tab), then 0.7 and 1.
+    temperature: float | None = Field(None, ge=0, le=1)
+    top_p: float | None = Field(None, gt=0, le=1)
+    top_k: int | None = Field(None, ge=0)
     stop_sequences: list[str] = []
     stream: bool = False
     # tinylm extension: answer from this collection of uploaded data, with cited sources.
@@ -45,6 +47,9 @@ class MessagesRequest(BaseModel):
     # and the repetition penalty (TINYLM_REPETITION_PENALTY by default).
     rag_top_k: int | None = Field(None, ge=1, le=20)
     repetition_penalty: float | None = Field(None, gt=0, le=2)
+    # tinylm extensions, left out: the model's settings.
+    min_p: float | None = Field(None, ge=0, le=1)
+    thinking: bool | None = None
 
     def to_internal(self) -> ChatRequest:
         messages: list[Message] = []
@@ -59,6 +64,9 @@ class MessagesRequest(BaseModel):
             top_p=self.top_p,
             stop=self.stop_sequences,
             repetition_penalty=self.repetition_penalty,
+            top_k=self.top_k,
+            min_p=self.min_p,
+            thinking=self.thinking,
         )
 
 

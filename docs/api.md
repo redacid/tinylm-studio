@@ -49,6 +49,10 @@ print(message.content[0].text)
 Both protocols run through the same internal request type and runtime, so the same request
 with `temperature: 0` returns the same text through either API.
 
+`max_tokens` (OpenAI), `temperature` and `top_p` may be left out: the model's own settings are
+used then (see [Model settings](#model-settings)), and after them 512 tokens, 0.7 and 1. Note
+that the Anthropic API's own default temperature is 1.
+
 ### Answers from uploaded data
 
 Both chat endpoints accept an extra `collection` field. The engine then searches that collection
@@ -69,14 +73,17 @@ print([s["document"] for s in reply.sources])
 
 With the Anthropic SDK, pass the same `extra_body` and read `message.model_extra["sources"]`.
 
-### Sources count and repetition penalty
+### Sources count and sampling
 
-Two more extension fields work in both chat endpoints:
+More extension fields work in both chat endpoints:
 
 | Field | Default | Meaning |
 |---|---|---|
 | `rag_top_k` | `TINYLM_RAG_TOP_K` (4) | How many chunks of `collection` to add, 1 to 20 |
-| `repetition_penalty` | `TINYLM_REPETITION_PENALTY` (1.1) | Above 1 makes repeated tokens less likely, up to 2 |
+| `repetition_penalty` | the model's, then `TINYLM_REPETITION_PENALTY` (1.1) | Above 1 makes repeated tokens less likely, up to 2 |
+| `top_k` | the model's, then the runtime's (40 in llama.cpp) | Samples only from this many most likely tokens; 0 turns it off (a standard field in the Anthropic API) |
+| `min_p` | the model's, then the runtime's (0.05 in llama.cpp) | Drops tokens less likely than this share of the most likely one |
+| `thinking` | the model's, then `false` | `true` lets models with a reasoning mode (Qwen3) think first; the thinking is part of the answer text |
 
 ```python
 client.chat.completions.create(
@@ -100,7 +107,8 @@ it to show what the model was given.
     {"role": "system", "content": "Answer the user's question using the numbered sources below. ..."},
     {"role": "user", "content": "Who is Geralt?"}
   ],
-  "max_tokens": 512, "temperature": 0.7, "top_p": 1.0, "stop": [], "repetition_penalty": null
+  "max_tokens": null, "temperature": null, "top_p": null, "stop": [], "repetition_penalty": null,
+  "top_k": null, "min_p": null, "thinking": null
 }
 ```
 
@@ -126,10 +134,15 @@ Not supported yet: tool use / function calling, images, logprobs, `n > 1`, batch
 |---|---|---|
 | GET | `/health` | Liveness and version |
 | GET | `/api/system` | Python path and hardware |
-| GET | `/api/models` | Catalog with install and download state; `trainable`: installed models that can be fine-tuned |
-| POST | `/api/models/{id}/download` | Starts a background download from Hugging Face |
+| GET | `/api/models` | `models`: installed models with `format`, `size` in bytes, `source` (`repo`, `file`), `loaded`, `settings` and `used_by` (fine-tuned models that need it); `downloads` with `state`, `total` and `downloaded` bytes; the catalog with install and download state; `trainable`: installed models that can be fine-tuned |
+| POST | `/api/models/{id}/download` | Starts a background download of a catalog model from Hugging Face |
+| GET | `/api/models/{id}/settings` | The model's settings (only the ones set) |
+| PUT | `/api/models/{id}/settings` | Replaces them; see [Model settings](#model-settings); 422 for a value out of range |
+| GET | `/api/hub/models` | `?q=gemma&format=gguf\|hf`: matching models on Hugging Face, most downloaded first: `repo`, `downloads`, `likes`, `gated`, `updated`, `params`, `context_length` (GGUF); 502 when Hugging Face cannot be reached |
+| GET | `/api/hub/files` | `?repo=unsloth/gemma-3-4b-it-GGUF`: `gguf` files (`file`, `size`, `parts`, `quantization`; a split file is one entry) and `hf`: the size of the safetensors weights, or null |
+| POST | `/api/hub/download` | `{"repo": "...", "file": "gemma-3-4b-it-Q4_K_M.gguf"}`: one GGUF file (all parts of a split one), or without `file` the Hugging Face-format weights; saved as `<data dir>/models/<file or repo name>`; 202, 409 when a model of that name is installed |
 | GET | `/api/models/trained` | Fine-tuned models: `base`, `dataset`, `loss`, `eval_loss`, `settings`, `base_installed` |
-| DELETE | `/api/models/{id}` | Deletes an installed model folder |
+| DELETE | `/api/models/{id}` | Deletes an installed model folder and its settings |
 | GET | `/api/collections` | Collections with document and chunk counts |
 | POST | `/api/collections` | `{"name": "games"}`: letters, digits, `_`, `-` |
 | DELETE | `/api/collections/{name}` | Deletes the collection and its documents |
@@ -147,9 +160,32 @@ Interactive docs: `http://127.0.0.1:8765/docs`.
   - **GGUF** (`*.gguf`, quantized) runs with llama.cpp: the fast option on CPU and the default.
   - **Hugging Face** (`config.json` + safetensors) runs with PyTorch; used as a base for fine-tuning.
 - Any such model folder copied into `<data dir>/models/` is served under the folder name.
+- A model downloaded through the engine gets `tinylm-source.json` with the repo (and file) it
+  came from.
 - `GET /api/models/trained` lists fine-tuned models with `format`: `adapter` (a LoRA adapter,
   served through PyTorch on top of its base model) or `gguf` (an export, with `quantization`
   and `exported_from`).
+
+### Model settings
+
+Each installed model has its own settings, kept in `<data dir>/models/.model-settings.json`.
+All are optional; a left-out one uses the default.
+
+| Field | Default | Meaning |
+|---|---|---|
+| `context_size` | 4096 | GGUF: context window in tokens, 256 to 262144 |
+| `gpu_layers` | -1 (all) | GGUF: layers offloaded to the GPU in a GPU build of llama.cpp |
+| `batch_size` | 512 | GGUF: prompt tokens per step |
+| `threads` | `TINYLM_THREADS` | CPU threads |
+| `max_tokens`, `temperature`, `top_p`, `top_k`, `min_p`, `repetition_penalty`, `thinking` | as in the chat endpoints | Used for requests that leave them out |
+
+The first four apply when the model is loaded: saving a change to them unloads the model. The
+others apply to the next request.
+
+```bash
+curl -X PUT http://127.0.0.1:8765/api/models/gemma-3-4b-gguf/settings \
+  -H 'content-type: application/json' -d '{"context_size": 8192, "temperature": 0.6}'
+```
 
 ### Exporting to GGUF
 
