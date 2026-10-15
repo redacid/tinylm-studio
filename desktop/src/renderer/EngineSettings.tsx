@@ -399,6 +399,14 @@ const AVAILABILITY: Record<Availability, string> = {
   LOW: "few free",
   NONE: "none free",
 };
+/** What RunPod's availability levels mean; it gives no exact counts. */
+const AVAILABILITY_HINT: Record<Availability, string> = {
+  HIGH: "RunPod: HIGH. Plenty free now; a pod should be created at once.",
+  MEDIUM: "RunPod: MEDIUM. Some free now, not many.",
+  LOW: "RunPod: LOW. Few left; creating a pod can fail if others take them first.",
+  NONE: "RunPod: NONE. None free now; a pod with it cannot be created. Try later or another one.",
+};
+
 const RANK: Record<Availability, number> = {
   HIGH: 0,
   MEDIUM: 1,
@@ -548,8 +556,9 @@ function PodForm({
                 {gpu
                   ? `${maker(gpu.manufacturer)} ${gpu.name}, ${gpu.memory} GB of video memory; ${AVAILABILITY[gpu.availability]} now.`
                   : `${spec.gpu || "None"} is not in RunPod's list for this cloud: choose one.`}{" "}
-                The green price is the cheapest GPU free now. Only hosts with
-                CUDA {MIN_CUDA}+, which the image needs.
+                The green price is the cheapest GPU free now; hover a column or
+                value for what it means. Only hosts with CUDA {MIN_CUDA}+, which
+                the image needs.
               </small>
             </div>
           ) : (
@@ -584,7 +593,11 @@ function PodForm({
                     <option value={spec.cpu}>{spec.cpu || "Choose"}</option>
                   )}
                   {sortedCpus.map((c) => (
-                    <option key={c.id} value={c.id}>
+                    <option
+                      key={c.id}
+                      value={c.id}
+                      title={`${c.vcpu.min}–${c.vcpu.max} vCPUs, ${c.ramGbPerVcpu} GB of memory per vCPU. ${AVAILABILITY_HINT[c.availability]}`}
+                    >
                       {c.name} ({c.group}) · {money(c.pricePerVcpu)}/vCPU·h ·{" "}
                       {AVAILABILITY[c.availability]}
                     </option>
@@ -680,7 +693,11 @@ function PodForm({
                   </option>
                 )}
               {centers.map((d) => (
-                <option key={d.id} value={d.id}>
+                <option
+                  key={d.id}
+                  value={d.id}
+                  title={AVAILABILITY_HINT[d.availability]}
+                >
                   {centerName(d.id)} · {AVAILABILITY[d.availability]}
                 </option>
               ))}
@@ -761,11 +778,25 @@ function GpuTable({
       <table>
         <thead>
           <tr>
-            <th>Maker</th>
-            <th>GPU</th>
-            <th className="num">Memory</th>
-            <th className="num">Price</th>
-            <th>Free now</th>
+            <th title="Who makes the GPU. The engine image runs on NVIDIA (CUDA) only.">
+              Maker
+            </th>
+            <th title="The GPU model. Click a row to choose it.">GPU</th>
+            <th
+              className="num"
+              title="Video memory (VRAM). The model and its context must fit: about 1 GB per 1B parameters at Q8, half of that at Q4; fine-tuning needs two to three times the model's size."
+            >
+              Memory
+            </th>
+            <th
+              className="num"
+              title="Dollars per hour for one GPU in the chosen cloud, billed by the second while the pod runs; storage is extra. Green: the cheapest GPU free now."
+            >
+              Price
+            </th>
+            <th title="How many RunPod has free now, in its own four levels (no exact counts): many, some, few, none. Hover a value for more.">
+              Free now
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -780,7 +811,9 @@ function GpuTable({
                 ].join(" ")}
                 aria-selected={g.id === chosen}
                 title={
-                  ok ? g.id : "The engine image runs on NVIDIA (CUDA) only"
+                  ok
+                    ? undefined
+                    : "Cannot be chosen: the engine image runs on NVIDIA (CUDA) only"
                 }
                 onClick={() => ok && choose(g.id)}
               >
@@ -791,13 +824,33 @@ function GpuTable({
                     {maker(g.manufacturer)}
                   </span>
                 </td>
-                <td className="gpu-name">{g.name}</td>
+                <td
+                  className="gpu-name"
+                  title={
+                    ok ? `RunPod id: ${g.id}. Click to choose.` : undefined
+                  }
+                >
+                  {g.name}
+                </td>
                 <td className="num">
-                  <span className="vram">{g.memory} GB</span>
+                  <span
+                    className="vram"
+                    title={ok ? `${g.memory} GB of video memory` : undefined}
+                  >
+                    {g.memory} GB
+                  </span>
                 </td>
                 <td className="num">
                   <span
                     className={`price ${usable(g) && g.price === cheapest ? "cheapest" : ""}`}
+                    title={
+                      ok
+                        ? `${money(g.price)} per hour while the pod runs` +
+                          (usable(g) && g.price === cheapest
+                            ? ": the cheapest GPU free now"
+                            : "")
+                        : undefined
+                    }
                   >
                     {money(g.price)}/h
                   </span>
@@ -806,6 +859,7 @@ function GpuTable({
                   {ok ? (
                     <span
                       className={`free free-${g.availability.toLowerCase()}`}
+                      title={AVAILABILITY_HINT[g.availability]}
                     >
                       {AVAILABILITY[g.availability]}
                     </span>

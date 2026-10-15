@@ -341,3 +341,5 @@ tbody tr:hover > td { background: var(--row-hover); }
 .gpu-table .free-medium { background: var(--ok-soft); color: var(--ok); opacity: 0.85; }
 .gpu-table .free-low { background: var(--warn-soft); color: var(--warn); }
 .gpu-table .free-none { background: var(--bad-soft); color: var(--bad); }
+.gpu-table th[title] { cursor: help; }
+.gpu-table th[title] { text-decoration: underline dotted; text-underline-offset: 3px; }

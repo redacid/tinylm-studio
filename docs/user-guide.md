@@ -462,12 +462,18 @@ prices and what is free now (**Refresh lists** loads them again; a typed new key
 | Name | `tinylm-engine` | The pod's name on runpod.io |
 | Pod type | GPU | **GPU** (the `cuda` image): answers and fine-tuning on the GPU. **CPU only** (the `cpu` image): cheaper, for answers with small GGUF models |
 | Cloud | Secure | **Secure** (RunPod's data centers) or **Community** (cheaper, other people's machines); CPU pods are Secure only. Prices in the lists follow it |
-| GPU | NVIDIA GeForce RTX 4090 | A table of RunPod's GPUs; click a row to choose. Each shows its maker (NVIDIA, AMD), video memory, price per hour (green: the cheapest one free now) and how many are free now (many, some, few, none, colored). NVIDIA GPUs come first, then free ones, then cheaper ones. Only GPUs on hosts with CUDA 12.6 or newer, which the image needs; AMD GPUs are shown greyed out, as the image runs on NVIDIA (CUDA) only |
+| GPU | NVIDIA GeForce RTX 4090 | A table of RunPod's GPUs; click a row to choose. Each shows its maker (NVIDIA, AMD), video memory, price per hour (green: the cheapest one free now) and how many are free now (many, some, few, none, colored). NVIDIA GPUs come first, then free ones, then cheaper ones. Only GPUs on hosts with CUDA 12.6 or newer, which the image needs; AMD GPUs are shown greyed out, as the image runs on NVIDIA (CUDA) only. Hovering a column title or a value shows what it means |
 | CPU, vCPUs | none, 8 | For a CPU pod: the CPU type with its price per vCPU, and the number of vCPUs (memory grows with it) |
 | Network volume | none | One of your network volumes, to keep the data on; it outlives the pod and sets the data center |
 | Data center | Any | Where the chosen GPU or CPU is free now; **Any** lets RunPod choose |
 | Pod volume, GB | 50 | GPU pods without a network volume: the pod's own volume on `/workspace`, kept while it is stopped, deleted with it |
 | Container disk, GB | 30 | The image and temporary files; emptied when the pod stops. A CPU pod without a network volume keeps its data here, so it is lost when the pod stops |
+
+**Free now** is RunPod's own availability level (`availability` in its catalog), not a count:
+**many free** (`HIGH`) means a pod should be created at once, **some free** (`MEDIUM`) that
+there are some, **few free** (`LOW`) that creating one can fail if others take them first, and
+**none free** (`NONE`) that it cannot be created now. It is for the chosen cloud and one GPU; the
+data center list shows the same levels per data center.
 
 Under the fields the app shows what the pod costs per hour while it runs, and warns when the
 chosen GPU or CPU is not free anywhere, or not in the chosen data center.
