@@ -178,8 +178,10 @@ chrome-stop: ## Stop the headless Chrome
 # IMAGE=docker.io/<you>/tinylm-engine to push it to Docker Hub. Each build is tagged
 # <engine version>-<commit>-<variant> (e.g. 0.1.0-5a0d901-cuda), which never changes, and
 # <variant>, which moves to the latest build. Uncommitted changes add "-dirty" to the commit.
-IMAGE   ?= tinylm-engine
-VARIANT ?= cpu
+REPO	?= redacid/
+IMAGE   ?= "$(REPO)"tinylm-engine
+## VARIANT cpu cuda
+VARIANT ?= cuda
 ENGINE_VERSION := $(shell sed -n 's/^version = "\(.*\)"/\1/p' $(ENGINE_DIR)/pyproject.toml)
 GIT_COMMIT     := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)$(if $(shell git status --porcelain 2>/dev/null),-dirty)
 IMAGE_TAG      := $(ENGINE_VERSION)-$(GIT_COMMIT)-$(VARIANT)
