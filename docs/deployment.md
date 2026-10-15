@@ -8,7 +8,7 @@ development and single-user use.
 Every change to the engine has to keep working in a container: configured only by environment
 variables, with no desktop, no browser and no home folder of a real user around it. This page
 lists what that means for the code today and what is still missing. The same image also runs
-on a [RunPod](#runpod) GPU pod, which the desktop app can create, start and stop itself.
+on a [RunPod](#runpod) GPU or CPU pod, which the desktop app can create, start and stop itself.
 
 ## What already fits
 
@@ -109,8 +109,8 @@ TINYLM_API_KEY=<key> make run-image          # try it on 127.0.0.1:8765, data in
 
 ## RunPod
 
-[RunPod](https://www.runpod.io/) rents GPU pods by the second. The engine runs in a pod from the
-`cuda` image; the desktop app talks to it through RunPod's HTTPS proxy
+[RunPod](https://www.runpod.io/) rents GPU and CPU pods by the second. The engine runs in a GPU pod
+from the `cuda` image or a CPU pod from the `cpu` image; the desktop app talks to it through RunPod's HTTPS proxy
 (`https://<pod id>-8765.proxy.runpod.net`) with the engine's API key, as to any
 [remote engine](user-guide.md#engine).
 
@@ -121,10 +121,12 @@ TINYLM_API_KEY=<key> make run-image          # try it on 127.0.0.1:8765, data in
 2. Create an API key on runpod.io (console > [Credentials](https://console.runpod.io/user/credentials)
    > API Keys > **Create API Key**) with **All** permissions: the app creates, starts and stops pods.
 3. In the app, Settings > Engine > **RunPod**: enter the key and the image
-   (`docker.io/<you>/tinylm-engine:0.1.0-5a0d901-cuda`), choose a GPU and click **Create pod**. The app creates
-   the pod through RunPod's REST API (`POST https://api.runpod.io/v2/pods`) with port `8765/http`,
-   the volume on `/workspace`, a newly generated `TINYLM_API_KEY` and the `HF_TOKEN` from `.env`,
-   waits for it to run and connects.
+   (`docker.io/<you>/tinylm-engine:0.1.0-5a0d901-cuda`). The app loads RunPod's catalog
+   (`GET /v2/catalog/gpus`, `/v2/catalog/cpus`, `/v2/catalog/datacenters`, `/v2/network-volumes`):
+   choose a GPU or CPU by price and what is free now, a data center and a network volume, and click
+   **Create pod**. The app creates the pod through RunPod's REST API (`POST
+   https://api.runpod.io/v2/pods`) with port `8765/http`, the volume on `/workspace`, a newly
+   generated `TINYLM_API_KEY` and the `HF_TOKEN` from `.env`, waits for it to run and connects.
 4. **Stop** stops the pod (billing stops, except for the volume); **Start**, or the next app start,
    starts it again; **Terminate** deletes it with its pod volume. With **Stop the pod when the app
    closes** on (the default), quitting the app stops a running pod, also after switching to another
@@ -132,9 +134,15 @@ TINYLM_API_KEY=<key> make run-image          # try it on 127.0.0.1:8765, data in
 
 Notes:
 
-- **Data.** Without a network volume the data lives on the pod volume (50 GB by default): it is kept
-  while the pod is stopped and deleted with it. A [network volume](https://docs.runpod.io/storage/network-volumes)
-  (its id in **Network volume**) outlives the pod; it ties the pod to that volume's data center.
+- **Data.** Without a network volume a GPU pod keeps the data on its pod volume (50 GB by default):
+  kept while the pod is stopped, deleted with it. A CPU pod has no pod volume: without a network
+  volume its data is on the container disk and is lost when it stops. A
+  [network volume](https://docs.runpod.io/storage/network-volumes) outlives the pod; it ties the
+  pod to that volume's data center, so the app sets the data center from it.
+- **GPU pods need CUDA 12.6 or newer** on the host, which the `cuda` image is built for: the app
+  lists only GPUs offered with it and asks for it when creating the pod (`minCudaVersion`).
+- **CPU pods** run in RunPod's own data centers (Secure cloud) with the `cpu` image. They answer with
+  small GGUF models; fine-tuning on them is slow.
 - **A stopped pod can come back without a GPU.** When the machine's GPUs are taken, starting the
   pod fails or waits; terminate it and create a new one (on a network volume nothing is lost).
 - **A pod made on runpod.io** works too: give it the image, expose `8765` as an HTTP port, set

@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { Check, Field } from "./Settings";
 import type {
+  Availability,
   EngineConnection,
   EngineConnectionChanges,
   EngineMode,
   EngineState,
   Pod,
+  RunPodCatalog,
 } from "./types";
 
 const MODES: { mode: EngineMode; title: string; text: string }[] = [
@@ -22,22 +24,8 @@ const MODES: { mode: EngineMode; title: string; text: string }[] = [
   {
     mode: "runpod",
     title: "RunPod",
-    text: "A GPU pod on runpod.io running the engine image; the app starts and stops it.",
+    text: "A GPU or CPU pod on runpod.io running the engine image; the app starts and stops it.",
   },
-];
-
-// RunPod's GPU type ids; any other id from runpod.io works too.
-const GPUS = [
-  "NVIDIA GeForce RTX 4090",
-  "NVIDIA GeForce RTX 3090",
-  "NVIDIA RTX A4000",
-  "NVIDIA RTX A5000",
-  "NVIDIA RTX A6000",
-  "NVIDIA L4",
-  "NVIDIA A40",
-  "NVIDIA L40S",
-  "NVIDIA A100 80GB PCIe",
-  "NVIDIA H100 80GB HBM3",
 ];
 
 const ACTIVE: Pod["status"][] = ["PROVISIONING", "STARTING", "RUNNING"];
@@ -63,6 +51,7 @@ export function EngineSettingsForm({ engine }: { engine: EngineState }) {
   const [runpod, setRunpod] = useState<EngineConnection["runpod"] | null>(null);
   const [name, setName] = useState("tinylm-engine");
   const [pod, setPod] = useState<Pod | null>(null);
+  const [catalog, setCatalog] = useState<RunPodCatalog | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmTerminate, setConfirmTerminate] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -98,6 +87,21 @@ export function EngineSettingsForm({ engine }: { engine: EngineState }) {
     const timer = setInterval(refreshPod, 10_000);
     return () => clearInterval(timer);
   }, [podId, refreshPod]);
+
+  // The lists of GPUs, CPUs, data centers and volumes, once there is a key and no pod yet.
+  const cloud = runpod?.cloud;
+  const keySet = !!saved?.runpod.apiKeySet;
+  useEffect(() => {
+    if (mode !== "runpod" || !keySet || podId || !cloud) return;
+    let current = true;
+    window.tinylm
+      .runpod("catalog", cloud)
+      .then((c) => current && setCatalog(c))
+      .catch((e) => current && setError(message(e)));
+    return () => {
+      current = false;
+    };
+  }, [mode, keySet, podId, cloud]);
 
   if (!saved || !runpod) return <p className="muted">Loading…</p>;
 
@@ -142,6 +146,13 @@ export function EngineSettingsForm({ engine }: { engine: EngineState }) {
       loaded(await window.tinylm.setConnection(changes(), false));
       setPod(await window.tinylm.runpod("create", name.trim()));
       loaded(await window.tinylm.getConnection());
+    });
+
+  // The lists depend on the key and the cloud, so the form is saved first.
+  const loadCatalog = () =>
+    act(async () => {
+      loaded(await window.tinylm.setConnection(changes(), false));
+      setCatalog(await window.tinylm.runpod("catalog", runpod.cloud));
     });
 
   const connected = engine.phase === "ready" && saved.mode === mode;
@@ -232,7 +243,8 @@ export function EngineSettingsForm({ engine }: { engine: EngineState }) {
               {pod && (
                 <div className="muted">
                   {[
-                    pod.gpu,
+                    pod.hardware,
+                    pod.dataCenter,
                     pod.cost !== null &&
                       `$${pod.cost.toFixed(2)}/hour while running`,
                     pod.uptime !== null &&
@@ -289,94 +301,26 @@ export function EngineSettingsForm({ engine }: { engine: EngineState }) {
                 for building and pushing it), or enter the id of a pod you made
                 on runpod.io below.
               </p>
-              <div className="settings-grid">
-                <Field label="Name" hint="Shown on runpod.io.">
-                  <input
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                  />
-                </Field>
-                <Field
-                  label="Engine image"
-                  hint="The CUDA image make image-push printed, e.g. docker.io/you/tinylm-engine:0.1.0-5a0d901-cuda."
+              <PodForm
+                name={name}
+                setName={setName}
+                spec={runpod}
+                set={setPodField}
+                catalog={catalog}
+              />
+              <div className="buttons-row">
+                <button
+                  disabled={busy || !(runpodKey || saved.runpod.apiKeySet)}
+                  onClick={loadCatalog}
                 >
-                  <input
-                    value={runpod.image}
-                    onChange={(e) => setPodField({ image: e.target.value })}
-                  />
-                </Field>
-                <Field
-                  label="GPU"
-                  hint="A RunPod GPU type id; the list has common ones, any from runpod.io works."
-                >
-                  <input
-                    list="runpod-gpus"
-                    value={runpod.gpu}
-                    onChange={(e) => setPodField({ gpu: e.target.value })}
-                  />
-                </Field>
-                <Field
-                  label="Cloud"
-                  hint="Secure: RunPod's data centers. Community: cheaper, hosted by others."
-                >
-                  <select
-                    value={runpod.cloud}
-                    onChange={(e) =>
-                      setPodField({
-                        cloud: e.target.value as "SECURE" | "COMMUNITY",
-                      })
-                    }
-                  >
-                    <option value="SECURE">Secure</option>
-                    <option value="COMMUNITY">Community</option>
-                  </select>
-                </Field>
-                <Field
-                  label="Network volume"
-                  hint="Optional id of a network volume: the data outlives the pod and can move to a new one."
-                >
-                  <input
-                    value={runpod.networkVolume}
-                    onChange={(e) =>
-                      setPodField({ networkVolume: e.target.value })
-                    }
-                  />
-                </Field>
-                <Field
-                  label="Pod volume, GB"
-                  hint="Without a network volume: models and data, kept while the pod exists."
-                >
-                  <input
-                    type="number"
-                    min={10}
-                    max={2000}
-                    disabled={!!runpod.networkVolume}
-                    value={runpod.volumeSize}
-                    onChange={(e) =>
-                      setPodField({ volumeSize: Number(e.target.value) })
-                    }
-                  />
-                </Field>
-                <Field
-                  label="Container disk, GB"
-                  hint="The image and temporary files; emptied when the pod stops."
-                >
-                  <input
-                    type="number"
-                    min={20}
-                    max={500}
-                    value={runpod.disk}
-                    onChange={(e) =>
-                      setPodField({ disk: Number(e.target.value) })
-                    }
-                  />
-                </Field>
+                  {catalog ? "Refresh lists" : "Load lists from RunPod"}
+                </button>
+                {catalog && (
+                  <span className="muted">
+                    Prices and what is free now, from RunPod.
+                  </span>
+                )}
               </div>
-              <datalist id="runpod-gpus">
-                {GPUS.map((g) => (
-                  <option key={g} value={g} />
-                ))}
-              </datalist>
               <div className="buttons-row">
                 <button
                   className="primary"
@@ -444,5 +388,349 @@ export function EngineSettingsForm({ engine }: { engine: EngineState }) {
         )}
       </div>
     </div>
+  );
+}
+
+type Spec = EngineConnection["runpod"];
+
+const AVAILABILITY: Record<Availability, string> = {
+  HIGH: "many free",
+  MEDIUM: "some free",
+  LOW: "few free",
+  NONE: "none free",
+};
+const RANK: Record<Availability, number> = {
+  HIGH: 0,
+  MEDIUM: 1,
+  LOW: 2,
+  NONE: 3,
+};
+
+const money = (dollars: number) =>
+  `$${dollars < 1 ? dollars.toFixed(3).replace(/0$/, "") : dollars.toFixed(2)}`;
+
+/** Powers of two from min to max: the vCPU counts RunPod accepts. */
+function vcpuCounts(min: number, max: number): number[] {
+  const counts = [];
+  for (let n = 2; n <= max; n *= 2) if (n >= min) counts.push(n);
+  return counts;
+}
+
+/** How a new pod is made: GPU or CPU, where, and on which volume. With the catalog loaded the
+ * choices come from RunPod, with prices and what is free now; without it, ids are typed. */
+function PodForm({
+  name,
+  setName,
+  spec,
+  set,
+  catalog,
+}: {
+  name: string;
+  setName: (name: string) => void;
+  spec: Spec;
+  set: (change: Partial<Spec>) => void;
+  catalog: RunPodCatalog | null;
+}) {
+  const gpu = catalog?.gpus.find((g) => g.id === spec.gpu);
+  const cpu = catalog?.cpus.find((c) => c.id === spec.cpu);
+  const volume = catalog?.volumes.find((v) => v.id === spec.networkVolume);
+  const chosen = spec.kind === "gpu" ? gpu : cpu;
+  const centerName = (id: string) =>
+    catalog?.dataCenters.find((d) => d.id === id)?.name ?? id;
+
+  // Data centers where the chosen GPU or CPU is free now; a network volume pins its own.
+  const centers = chosen
+    ? chosen.dataCenters
+        .filter((d) => d.availability !== "NONE")
+        .sort((a, b) => RANK[a.availability] - RANK[b.availability])
+    : [];
+  const price =
+    spec.kind === "gpu"
+      ? gpu?.price
+      : cpu
+        ? cpu.pricePerVcpu * spec.vcpus
+        : undefined;
+  const sortedGpus = [...(catalog?.gpus ?? [])].sort(
+    (a, b) => RANK[a.availability] - RANK[b.availability] || a.price - b.price,
+  );
+  const sortedCpus = [...(catalog?.cpus ?? [])].sort(
+    (a, b) =>
+      RANK[a.availability] - RANK[b.availability] ||
+      a.pricePerVcpu - b.pricePerVcpu,
+  );
+  const chooseCpu = (id: string) => {
+    const flavor = catalog?.cpus.find((c) => c.id === id);
+    const counts = flavor ? vcpuCounts(flavor.vcpu.min, flavor.vcpu.max) : [];
+    set({
+      cpu: id,
+      vcpus: counts.includes(spec.vcpus) ? spec.vcpus : (counts[0] ?? 2),
+    });
+  };
+  const chooseVolume = (id: string) => {
+    const v = catalog?.volumes.find((x) => x.id === id);
+    set({ networkVolume: id, ...(v ? { dataCenter: v.dataCenter } : {}) });
+  };
+
+  return (
+    <>
+      <div className="settings-grid">
+        <Field label="Name" hint="Shown on runpod.io.">
+          <input value={name} onChange={(e) => setName(e.target.value)} />
+        </Field>
+        <Field
+          label="Engine image"
+          hint={`The ${spec.kind === "gpu" ? "cuda" : "cpu"} image make image-push printed, e.g. docker.io/you/tinylm-engine:0.1.0-5a0d901-${spec.kind === "gpu" ? "cuda" : "cpu"}.`}
+        >
+          <input
+            value={spec.image}
+            onChange={(e) => set({ image: e.target.value })}
+          />
+        </Field>
+        <Field
+          label="Pod type"
+          hint="GPU: answers and fine-tuning on the GPU. CPU: cheaper, for answers with small GGUF models."
+        >
+          <select
+            value={spec.kind}
+            onChange={(e) =>
+              set({ kind: e.target.value as Spec["kind"], dataCenter: "" })
+            }
+          >
+            <option value="gpu">GPU</option>
+            <option value="cpu">CPU only</option>
+          </select>
+        </Field>
+        <Field
+          label="Cloud"
+          hint={
+            spec.kind === "gpu"
+              ? "Secure: RunPod's data centers. Community: cheaper, hosted by others."
+              : "CPU pods run in RunPod's own data centers."
+          }
+        >
+          <select
+            value={spec.kind === "gpu" ? spec.cloud : "SECURE"}
+            disabled={spec.kind === "cpu"}
+            onChange={(e) =>
+              set({
+                cloud: e.target.value as Spec["cloud"],
+                dataCenter: volume ? spec.dataCenter : "",
+              })
+            }
+          >
+            <option value="SECURE">Secure</option>
+            <option value="COMMUNITY">Community</option>
+          </select>
+        </Field>
+
+        {spec.kind === "gpu" ? (
+          <Field
+            label="GPU"
+            hint={
+              gpu
+                ? `${gpu.memory} GB of video memory; ${AVAILABILITY[gpu.availability]} now.`
+                : catalog
+                  ? "Not in RunPod's list for this cloud."
+                  : "A RunPod GPU type id; load the lists to choose with prices."
+            }
+          >
+            {catalog ? (
+              <select
+                value={spec.gpu}
+                onChange={(e) => set({ gpu: e.target.value, dataCenter: "" })}
+              >
+                {!gpu && (
+                  <option value={spec.gpu}>{spec.gpu || "Choose"}</option>
+                )}
+                {sortedGpus.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name} · {g.memory} GB · {money(g.price)}/h ·{" "}
+                    {AVAILABILITY[g.availability]}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                value={spec.gpu}
+                onChange={(e) => set({ gpu: e.target.value })}
+              />
+            )}
+          </Field>
+        ) : (
+          <>
+            <Field
+              label="CPU"
+              hint={
+                cpu
+                  ? `${cpu.name}: ${AVAILABILITY[cpu.availability]} now.`
+                  : catalog
+                    ? "Choose a CPU type."
+                    : "A RunPod CPU flavor id, e.g. cpu3c; load the lists to choose."
+              }
+            >
+              {catalog ? (
+                <select
+                  value={spec.cpu}
+                  onChange={(e) => chooseCpu(e.target.value)}
+                >
+                  {!cpu && (
+                    <option value={spec.cpu}>{spec.cpu || "Choose"}</option>
+                  )}
+                  {sortedCpus.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({c.group}) · {money(c.pricePerVcpu)}/vCPU·h ·{" "}
+                      {AVAILABILITY[c.availability]}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  value={spec.cpu}
+                  onChange={(e) => set({ cpu: e.target.value.trim() })}
+                />
+              )}
+            </Field>
+            <Field
+              label="vCPUs"
+              hint={
+                cpu
+                  ? `${spec.vcpus * cpu.ramGbPerVcpu} GB of memory with ${spec.vcpus} vCPUs.`
+                  : "A power of two."
+              }
+            >
+              <select
+                value={spec.vcpus}
+                onChange={(e) => set({ vcpus: Number(e.target.value) })}
+              >
+                {(cpu
+                  ? vcpuCounts(cpu.vcpu.min, cpu.vcpu.max)
+                  : [2, 4, 8, 16, 32]
+                ).map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </>
+        )}
+
+        <Field
+          label="Network volume"
+          hint={
+            volume
+              ? `Keeps the data when the pod is gone; the pod runs in ${centerName(volume.dataCenter)}, where the volume is.`
+              : "None: the data is on the pod" +
+                (spec.kind === "gpu"
+                  ? "'s volume, deleted with the pod."
+                  : "'s container disk, lost when it stops.")
+          }
+        >
+          {catalog ? (
+            <select
+              value={spec.networkVolume}
+              onChange={(e) => chooseVolume(e.target.value)}
+            >
+              <option value="">None</option>
+              {!volume && spec.networkVolume && (
+                <option value={spec.networkVolume}>{spec.networkVolume}</option>
+              )}
+              {catalog.volumes.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name} · {v.size} GB · {centerName(v.dataCenter)}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              value={spec.networkVolume}
+              placeholder="volume id"
+              onChange={(e) => set({ networkVolume: e.target.value.trim() })}
+            />
+          )}
+        </Field>
+        <Field
+          label="Data center"
+          hint={
+            volume
+              ? "Set by the network volume."
+              : catalog
+                ? "Where the chosen hardware is free now; Any lets RunPod choose."
+                : "A data center id, e.g. EU-RO-1; empty lets RunPod choose."
+          }
+        >
+          {catalog ? (
+            <select
+              value={spec.dataCenter}
+              disabled={!!volume}
+              onChange={(e) => set({ dataCenter: e.target.value })}
+            >
+              <option value="">Any</option>
+              {spec.dataCenter &&
+                !centers.some((d) => d.id === spec.dataCenter) && (
+                  <option value={spec.dataCenter}>
+                    {centerName(spec.dataCenter)} (none free now)
+                  </option>
+                )}
+              {centers.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {centerName(d.id)} · {AVAILABILITY[d.availability]}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              value={spec.dataCenter}
+              onChange={(e) => set({ dataCenter: e.target.value.trim() })}
+            />
+          )}
+        </Field>
+        {spec.kind === "gpu" && (
+          <Field
+            label="Pod volume, GB"
+            hint="Without a network volume: models and data, kept while the pod exists."
+          >
+            <input
+              type="number"
+              min={10}
+              max={2000}
+              disabled={!!spec.networkVolume}
+              value={spec.volumeSize}
+              onChange={(e) => set({ volumeSize: Number(e.target.value) })}
+            />
+          </Field>
+        )}
+        <Field
+          label="Container disk, GB"
+          hint="The image and temporary files; emptied when the pod stops."
+        >
+          <input
+            type="number"
+            min={20}
+            max={500}
+            value={spec.disk}
+            onChange={(e) => set({ disk: Number(e.target.value) })}
+          />
+        </Field>
+      </div>
+      {price !== undefined && (
+        <p className="pod-price">
+          About <strong>{money(price)} per hour</strong> while it runs, plus
+          storage.
+          {chosen && chosen.availability === "NONE" && (
+            <span className="bad"> None free now: choose another.</span>
+          )}
+          {chosen &&
+            chosen.availability !== "NONE" &&
+            spec.dataCenter &&
+            !centers.some((d) => d.id === spec.dataCenter) && (
+              <span className="bad">
+                {" "}
+                None free in {centerName(spec.dataCenter)} now.
+              </span>
+            )}
+        </p>
+      )}
+    </>
   );
 }

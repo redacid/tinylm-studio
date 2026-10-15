@@ -16,7 +16,9 @@ export type Pod = {
   name: string;
   status: PodStatus;
   image: string;
-  gpu: string | null;
+  /** "NVIDIA GeForce RTX 4090", "2 × NVIDIA A40", or "cpu3c · 8 vCPU". */
+  hardware: string | null;
+  dataCenter: string | null;
   /** Dollars per hour while it runs. */
   cost: number | null;
   /** How long it has been running, in seconds, while it runs. */
@@ -29,15 +31,54 @@ export type Pod = {
 export type PodSpec = {
   name: string;
   image: string;
+  /** A GPU pod (the cuda image), or a CPU-only one (the cpu image). */
+  kind: "gpu" | "cpu";
   gpu: string;
+  /** CPU flavor and vCPUs, for a CPU pod. */
+  cpu: string;
+  vcpus: number;
   cloud: "SECURE" | "COMMUNITY";
+  /** Data center id, e.g. "EU-RO-1"; "" lets RunPod choose. */
+  dataCenter: string;
   /** Container disk, in GB: the image and temporary files. */
   disk: number;
-  /** A network volume to keep the data on; without one, a pod volume of volumeSize GB. */
+  /** A network volume to keep the data on; without one, a pod volume of volumeSize GB (GPU pods). */
   networkVolume: string;
   volumeSize: number;
   env: Record<string, string>;
 };
+
+export type Availability = "NONE" | "LOW" | "MEDIUM" | "HIGH";
+
+/** RunPod's catalog for this account: what a pod can be made of, and where. */
+export type Catalog = {
+  gpus: {
+    id: string;
+    name: string;
+    memory: number;
+    /** Dollars per hour for one GPU in the chosen cloud. */
+    price: number;
+    availability: Availability;
+    /** Data centers with this GPU free now, and how many. */
+    dataCenters: { id: string; availability: Availability }[];
+  }[];
+  cpus: {
+    id: string;
+    name: string;
+    group: string;
+    vcpu: { min: number; max: number };
+    ramGbPerVcpu: number;
+    /** Dollars per hour per vCPU. */
+    pricePerVcpu: number;
+    availability: Availability;
+    dataCenters: { id: string; availability: Availability }[];
+  }[];
+  dataCenters: { id: string; name: string; region: string }[];
+  volumes: { id: string; name: string; size: number; dataCenter: string }[];
+};
+
+/** The engine image is built for CUDA 12.6: hosts with an older driver cannot run it. */
+const MIN_CUDA = "12.6";
 
 export class RunPodError extends Error {}
 
@@ -53,20 +94,76 @@ export class RunPod {
   }
 
   async create(spec: PodSpec): Promise<Pod> {
+    // CPU pods take no pod volume: without a network volume their data is on the container disk.
     const mounts = spec.networkVolume
       ? { network: [{ volumeId: spec.networkVolume, path: "/workspace" }] }
-      : { persistent: { size: spec.volumeSize, path: "/workspace" } };
+      : spec.kind === "gpu"
+        ? { persistent: { size: spec.volumeSize, path: "/workspace" } }
+        : undefined;
     const body = {
       name: spec.name,
       image: spec.image,
-      gpu: { id: spec.gpu, count: 1 },
-      cloud: spec.cloud,
+      ...(spec.kind === "gpu"
+        ? { gpu: { id: spec.gpu, count: 1, minCudaVersion: MIN_CUDA } }
+        : { cpu: { id: spec.cpu, vcpuCount: spec.vcpus } }),
+      // CPU pods run in RunPod's own data centers only.
+      cloud: spec.kind === "gpu" ? spec.cloud : "SECURE",
+      ...(spec.dataCenter ? { dataCenterIds: [spec.dataCenter] } : {}),
       disk: spec.disk,
       ports: [`${ENGINE_PORT}/http`],
-      mounts,
+      ...(mounts ? { mounts } : {}),
       env: spec.env,
     };
     return this.toPod(await this.call("POST", "/pods", body));
+  }
+
+  /** GPUs and CPUs with their prices and where they are free now, data centers and volumes. */
+  async catalog(cloud: "SECURE" | "COMMUNITY"): Promise<Catalog> {
+    const gpuQuery = new URLSearchParams({ include: "AVAILABILITY", product: "POD", cloud, minCudaVersion: MIN_CUDA });
+    const [gpus, cpus, centers, volumes] = await Promise.all([
+      this.call("GET", `/catalog/gpus?${gpuQuery}`),
+      this.call("GET", "/catalog/cpus?include=AVAILABILITY&product=POD"),
+      this.call("GET", "/catalog/datacenters"),
+      this.call("GET", "/network-volumes"),
+    ]);
+    const list = (data: Record<string, unknown>, key: string) =>
+      (Array.isArray(data[key]) ? data[key] : []) as Record<string, any>[];
+    const places = (item: Record<string, any>) =>
+      list(item, "dataCenters").map((d) => ({ id: String(d.id), availability: d.availability as Availability }));
+    const secure = cloud === "SECURE";
+    return {
+      gpus: list(gpus, "gpus")
+        .filter((g) => (secure ? g.secure : g.community))
+        .map((g) => ({
+          id: String(g.id),
+          name: String(g.name ?? g.id),
+          memory: Number(g.memory ?? 0),
+          price: Number((secure ? g.price?.secure : g.price?.community) ?? 0),
+          availability: (g.availability ?? "NONE") as Availability,
+          dataCenters: places(g),
+        })),
+      cpus: list(cpus, "cpus").map((c) => ({
+        id: String(c.id),
+        name: String(c.name ?? c.id),
+        group: String(c.group ?? ""),
+        vcpu: { min: Number(c.vcpu?.min ?? 2), max: Number(c.vcpu?.max ?? 2) },
+        ramGbPerVcpu: Number(c.ramGbPerVcpu ?? 0),
+        pricePerVcpu: Number(c.price?.securePerVcpu ?? 0),
+        availability: (c.availability ?? "NONE") as Availability,
+        dataCenters: places(c),
+      })),
+      dataCenters: list(centers, "dataCenters").map((d) => ({
+        id: String(d.id),
+        name: String(d.name ?? d.id),
+        region: String(d.region ?? ""),
+      })),
+      volumes: list(volumes, "networkVolumes").map((v) => ({
+        id: String(v.id),
+        name: String(v.name ?? v.id),
+        size: Number(v.size ?? 0),
+        dataCenter: String(v.dataCenter ?? ""),
+      })),
+    };
   }
 
   async action(id: string, action: "start" | "stop"): Promise<void> {
@@ -110,6 +207,7 @@ export class RunPod {
 
   private toPod(data: Record<string, unknown>): Pod {
     const gpu = data.gpu as { id?: string; count?: number } | null | undefined;
+    const cpu = data.cpu as { id?: string; vcpuCount?: number } | null | undefined;
     const runtime = data.runtime as { uptime?: number } | null | undefined;
     const id = String(data.id);
     return {
@@ -117,7 +215,14 @@ export class RunPod {
       name: String(data.name ?? ""),
       status: (data.status as PodStatus) ?? "PROVISIONING",
       image: String(data.image ?? ""),
-      gpu: gpu?.id ? (gpu.count && gpu.count > 1 ? `${gpu.count} × ${gpu.id}` : gpu.id) : null,
+      hardware: gpu?.id
+        ? gpu.count && gpu.count > 1
+          ? `${gpu.count} × ${gpu.id}`
+          : gpu.id
+        : cpu?.id
+          ? `${cpu.id} · ${cpu.vcpuCount ?? "?"} vCPU`
+          : null,
+      dataCenter: typeof data.dataCenterId === "string" ? data.dataCenterId : null,
       cost: typeof data.cost === "number" ? data.cost : null,
       uptime: typeof runtime?.uptime === "number" ? runtime.uptime : null,
       url: engineUrl(id),

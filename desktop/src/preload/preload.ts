@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld("tinylm", {
     ipcRenderer.on("engine:state", (_event, state) => callback(state)),
   getConnection: () => ipcRenderer.invoke("engine:get-connection"),
   setConnection: (changes: unknown, reconnect: boolean) => ipcRenderer.invoke("engine:set-connection", changes, reconnect),
-  runpod: (action: "pod" | "create" | "start" | "stop" | "terminate", name?: string) =>
+  // name: the new pod's name for create, the cloud for catalog.
+  runpod: (action: "catalog" | "pod" | "create" | "start" | "stop" | "terminate", name?: string) =>
     ipcRenderer.invoke(`runpod:${action}`, name),
 });

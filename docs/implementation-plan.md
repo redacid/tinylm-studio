@@ -15,7 +15,7 @@ Status: approved direction, in progress · Last updated: 2026-10-15
 | Reference scenario | Video game assistant (section 3.8) |
 | Repository | Local git repository for now; remote added later |
 | Engine deployment | A container in a Kubernetes cluster; the desktop app and API clients connect to it. Running it locally from the desktop app stays supported ([deployment.md](deployment.md)) |
-| GPU in the cloud | **Decided (2026-10-15):** the same engine image (`cuda` variant) on a RunPod GPU pod, which the desktop app creates, starts and stops through RunPod's REST API; not RunPod Serverless, which keeps no state between requests ([deployment.md](deployment.md#runpod)) |
+| GPU in the cloud | **Decided (2026-10-15):** the same engine image (`cuda` variant) on a RunPod GPU pod, or the `cpu` one on a CPU pod, chosen from RunPod's catalog with prices, which the desktop app creates, starts and stops through RunPod's REST API; not RunPod Serverless, which keeps no state between requests ([deployment.md](deployment.md#runpod)) |
 
 ## 1. Goal
 

@@ -14,7 +14,7 @@ any llama.cpp model. The
 
 - **engine/** – Python service: data ingestion, retrieval, training and inference, exposed through OpenAI- and Anthropic-compatible APIs.
 - **desktop/** – Electron app that starts the engine and drives it over HTTP, or connects to an
-  engine running elsewhere: a server, a cluster, or a RunPod GPU pod it starts and stops itself
+  engine running elsewhere: a server, a cluster, or a RunPod GPU or CPU pod it starts and stops itself
   ([deployment.md](docs/deployment.md)).
 - **docs/** – the [user guide](docs/user-guide.md), the [API reference](docs/api.md) and the
   [implementation plan](docs/implementation-plan.md).

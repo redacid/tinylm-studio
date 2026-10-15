@@ -208,7 +208,7 @@ th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border);
 .settings-number input.invalid { border-color: var(--bad); }
 .settings-check { display: flex; gap: 8px; align-items: center; cursor: pointer; }
 .bad { color: var(--bad); }
-.settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 24px; }
+.settings-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px 24px; }
 .sources a { color: var(--accent); text-decoration: none; }
 .sources a:hover { text-decoration: underline; }
 .sources .source-where { color: var(--muted); }
@@ -313,3 +313,4 @@ tbody tr:hover > td { background: var(--row-hover); }
 .badge.pod-error, .badge.pod-terminated { border-color: var(--bad); color: var(--bad); background: var(--bad-soft); }
 .pod-existing summary { cursor: pointer; color: var(--accent); }
 .pod-existing .settings-grid { margin-top: 10px; }
+.pod-price { margin: 4px 0 10px; }

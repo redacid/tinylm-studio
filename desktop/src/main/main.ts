@@ -53,10 +53,14 @@ ipcMain.handle("engine:set-connection", (_event, changes: ConnectionChanges, rec
   if (reconnect) engine.connect(connection);
   return view(connection);
 });
+ipcMain.handle("runpod:catalog", (_event, cloud?: "SECURE" | "COMMUNITY") =>
+  runpod().catalog(cloud ?? connection.runpod.cloud),
+);
 ipcMain.handle("runpod:pod", () => (connection.runpod.podId ? runpod().pod(connection.runpod.podId) : null));
 ipcMain.handle("runpod:create", async (_event, name: string) => {
   const settings = connection.runpod;
-  if (!settings.image) throw new Error("Enter the engine image, e.g. docker.io/you/tinylm-engine:cuda");
+  if (!settings.image) throw new Error("Enter the engine image, e.g. docker.io/you/tinylm-engine:0.1.0-5a0d901-cuda");
+  if (settings.kind === "cpu" && !settings.cpu) throw new Error("Choose a CPU type");
   const engineKey = newKey();
   const env: Record<string, string> = { TINYLM_API_KEY: engineKey };
   // Gated models (Gemma, Llama) download in the pod with the same token as here.

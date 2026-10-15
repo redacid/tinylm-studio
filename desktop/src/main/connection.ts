@@ -17,10 +17,14 @@ export type Connection = {
     podId: string;
     /** The TINYLM_API_KEY given to the pod's engine; generated when the pod is created. */
     engineKey: string;
-    // How a new pod is made.
+    // How a new pod is made (see PodSpec).
     image: string;
+    kind: "gpu" | "cpu";
     gpu: string;
+    cpu: string;
+    vcpus: number;
     cloud: "SECURE" | "COMMUNITY";
+    dataCenter: string;
     disk: number;
     networkVolume: string;
     volumeSize: number;
@@ -50,8 +54,12 @@ export const DEFAULTS: Connection = {
     podId: "",
     engineKey: "",
     image: "",
+    kind: "gpu",
     gpu: "NVIDIA GeForce RTX 4090",
+    cpu: "",
+    vcpus: 8,
     cloud: "SECURE",
+    dataCenter: "",
     disk: 30,
     networkVolume: "",
     volumeSize: 50,

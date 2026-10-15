@@ -443,7 +443,7 @@ pod):
   on a server or in a cluster. Enter its address (`https://engine.example:8765`) and its
   `TINYLM_API_KEY`, then **Connect**. A wrong key shows **The engine refused the API key**.
 - **RunPod**: a GPU pod on [runpod.io](https://www.runpod.io/) running the engine's `cuda` image,
-  which the app creates, starts and stops (see [RunPod](deployment.md#runpod) for building and
+  or a CPU pod running the `cpu` image, which the app creates, starts and stops (see [RunPod](deployment.md#runpod) for building and
   pushing the image).
 
 ![A remote engine](images/engine-remote.png)
@@ -453,23 +453,33 @@ other engine's, nothing is copied. The chat settings below stay with the app.
 
 For **RunPod**, enter your RunPod API key (console > Credentials > API Keys, with **All**
 permissions) and the image `make image-push` printed, e.g.
-`docker.io/<you>/tinylm-engine:0.1.0-5a0d901-cuda` (engine version, commit, variant), then:
+`docker.io/<you>/tinylm-engine:0.1.0-5a0d901-cuda` (engine version, commit, variant). With the
+key set, the app loads RunPod's lists of GPUs, CPUs, data centers and your network volumes, with
+prices and what is free now (**Refresh lists** loads them again; a typed new key is saved first):
 
 | Field | Default | Meaning |
 |---|---|---|
 | Name | `tinylm-engine` | The pod's name on runpod.io |
-| GPU | NVIDIA GeForce RTX 4090 | A RunPod GPU type id; the list has common ones, any other works too |
-| Cloud | Secure | **Secure** (RunPod's data centers) or **Community** (cheaper, other people's machines) |
-| Network volume | none | The id of a network volume to keep the data on; it outlives the pod |
-| Pod volume, GB | 50 | Without a network volume: the pod's own volume on `/workspace`, kept while it is stopped, deleted with it |
-| Container disk, GB | 30 | The image and temporary files; emptied when the pod stops |
+| Pod type | GPU | **GPU** (the `cuda` image): answers and fine-tuning on the GPU. **CPU only** (the `cpu` image): cheaper, for answers with small GGUF models |
+| Cloud | Secure | **Secure** (RunPod's data centers) or **Community** (cheaper, other people's machines); CPU pods are Secure only. Prices in the lists follow it |
+| GPU | NVIDIA GeForce RTX 4090 | Video memory, price per hour and how many are free now (many, some, few, none); free ones first, cheapest first. Only GPUs on hosts with CUDA 12.6 or newer, which the image needs |
+| CPU, vCPUs | none, 8 | For a CPU pod: the CPU type with its price per vCPU, and the number of vCPUs (memory grows with it) |
+| Network volume | none | One of your network volumes, to keep the data on; it outlives the pod and sets the data center |
+| Data center | Any | Where the chosen GPU or CPU is free now; **Any** lets RunPod choose |
+| Pod volume, GB | 50 | GPU pods without a network volume: the pod's own volume on `/workspace`, kept while it is stopped, deleted with it |
+| Container disk, GB | 30 | The image and temporary files; emptied when the pod stops. A CPU pod without a network volume keeps its data here, so it is lost when the pod stops |
+
+Under the fields the app shows what the pod costs per hour while it runs, and warns when the
+chosen GPU or CPU is not free anywhere, or not in the chosen data center.
 
 ![Creating a RunPod pod](images/engine-runpod-create.png)
 
+![A CPU pod on a network volume](images/engine-runpod-cpu.png)
+
 **Create pod** creates it with a new engine API key (and the `HF_TOKEN` from `.env`, for gated
 models), waits until it runs (the first start pulls the image, which takes a few minutes) and
-connects; the header shows **Pod provisioning…** until then. The pod's card shows its state, GPU,
-price per hour, uptime and address:
+connects; the header shows **Pod provisioning…** until then. The pod's card shows its state, GPU or CPU,
+data center, price per hour, uptime and address:
 
 ![The engine in a RunPod pod](images/engine-runpod.png)
 
