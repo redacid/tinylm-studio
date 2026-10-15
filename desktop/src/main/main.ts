@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { apply, Connection, ConnectionChanges, load, newKey, save, view } from "./connection";
 import { Engine } from "./engine";
-import { RunPod } from "./runpod";
+import { createRequest, RunPod } from "./runpod";
 
 const repoRoot = join(__dirname, "..", "..", "..");
 let window: BrowserWindow | undefined;
@@ -57,16 +57,30 @@ ipcMain.handle("runpod:catalog", (_event, cloud?: "SECURE" | "COMMUNITY") =>
   runpod().catalog(cloud ?? connection.runpod.cloud),
 );
 ipcMain.handle("runpod:pod", () => (connection.runpod.podId ? runpod().pod(connection.runpod.podId) : null));
+// The pod's environment: its engine key and, for gated models (Gemma, Llama) to download in the
+// pod, the same Hugging Face token as here.
+function podEnv(engineKey: string): Record<string, string> {
+  const env: Record<string, string> = { TINYLM_API_KEY: engineKey };
+  const hfToken = process.env.HF_TOKEN ?? process.env.TINYLM_HF_TOKEN;
+  if (hfToken) env.HF_TOKEN = hfToken;
+  return env;
+}
+// The request "Create pod" would send for these settings, with the secrets in env hidden.
+ipcMain.handle("runpod:request", (_event, settings: Connection["runpod"], name: string) => {
+  const env = Object.fromEntries(
+    Object.keys(podEnv("")).map((key) => [
+      key,
+      key === "TINYLM_API_KEY" ? "<new key, made when the pod is created>" : "<hidden: from this computer>",
+    ]),
+  );
+  return createRequest({ ...settings, name: name || "tinylm-engine", env });
+});
 ipcMain.handle("runpod:create", async (_event, name: string) => {
   const settings = connection.runpod;
   if (!settings.image) throw new Error("Enter the engine image, e.g. docker.io/you/tinylm-engine:0.1.0-5a0d901-cuda");
   if (settings.kind === "cpu" && !settings.cpu) throw new Error("Choose a CPU type");
   const engineKey = newKey();
-  const env: Record<string, string> = { TINYLM_API_KEY: engineKey };
-  // Gated models (Gemma, Llama) download in the pod with the same token as here.
-  const hfToken = process.env.HF_TOKEN ?? process.env.TINYLM_HF_TOKEN;
-  if (hfToken) env.HF_TOKEN = hfToken;
-  const pod = await runpod().create({ ...settings, name: name || "tinylm-engine", env });
+  const pod = await runpod().create({ ...settings, name: name || "tinylm-engine", env: podEnv(engineKey) });
   update({ mode: "runpod", runpod: { podId: pod.id, engineKey } });
   engine.connect(connection);
   return pod;

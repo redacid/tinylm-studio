@@ -8,6 +8,7 @@ import type {
   EngineState,
   Pod,
   RunPodCatalog,
+  RunPodRequest,
 } from "./types";
 
 const MODES: { mode: EngineMode; title: string; text: string }[] = [
@@ -54,6 +55,8 @@ export function EngineSettingsForm({ engine }: { engine: EngineState }) {
   const [catalog, setCatalog] = useState<RunPodCatalog | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmTerminate, setConfirmTerminate] = useState(false);
+  const [showRequest, setShowRequest] = useState(false);
+  const [request, setRequest] = useState<RunPodRequest | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const loaded = (c: EngineConnection) => {
@@ -102,6 +105,19 @@ export function EngineSettingsForm({ engine }: { engine: EngineState }) {
       current = false;
     };
   }, [mode, keySet, podId, cloud]);
+
+  // The request "Create pod" would send, kept up to date with the form while it is shown.
+  useEffect(() => {
+    if (!showRequest || !runpod) return;
+    let current = true;
+    window.tinylm
+      .runpod("request", runpod, name.trim())
+      .then((r) => current && setRequest(r))
+      .catch((e) => current && setError(message(e)));
+    return () => {
+      current = false;
+    };
+  }, [showRequest, runpod, name]);
 
   if (!saved || !runpod) return <p className="muted">Loading…</p>;
 
@@ -333,7 +349,22 @@ export function EngineSettingsForm({ engine }: { engine: EngineState }) {
                 >
                   Create pod
                 </button>
+                <button onClick={() => setShowRequest(!showRequest)}>
+                  {showRequest ? "Hide request" : "Show request"}
+                </button>
               </div>
+              {showRequest && request && (
+                <div className="pod-request">
+                  <p className="muted">
+                    What Create pod sends to RunPod for the settings above. The
+                    engine key is made when the pod is created; the Hugging Face
+                    token is not shown.
+                  </p>
+                  <pre>
+                    {`${request.method} ${request.url}\n${JSON.stringify(request.body, null, 2)}`}
+                  </pre>
+                </div>
+              )}
             </>
           )}
           <details className="pod-existing">

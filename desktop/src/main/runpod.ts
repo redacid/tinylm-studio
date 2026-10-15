@@ -88,6 +88,35 @@ export function engineUrl(podId: string): string {
   return PROXY_URL.replace("{id}", podId);
 }
 
+/** The body of POST /pods that makes a pod from the spec. */
+export function podBody(spec: PodSpec): Record<string, unknown> {
+  // CPU pods take no pod volume: without a network volume their data is on the container disk.
+  const mounts = spec.networkVolume
+    ? { network: [{ volumeId: spec.networkVolume, path: "/workspace" }] }
+    : spec.kind === "gpu"
+      ? { persistent: { size: spec.volumeSize, path: "/workspace" } }
+      : undefined;
+  return {
+    name: spec.name,
+    image: spec.image,
+    ...(spec.kind === "gpu"
+      ? { gpu: { id: spec.gpu, count: 1, minCudaVersion: MIN_CUDA } }
+      : { cpu: { id: spec.cpu, vcpuCount: spec.vcpus } }),
+    // CPU pods run in RunPod's own data centers only.
+    cloud: spec.kind === "gpu" ? spec.cloud : "SECURE",
+    ...(spec.dataCenter ? { dataCenterIds: [spec.dataCenter] } : {}),
+    disk: spec.disk,
+    ports: [`${ENGINE_PORT}/http`],
+    ...(mounts ? { mounts } : {}),
+    env: spec.env,
+  };
+}
+
+/** The request the app sends to RunPod to create a pod. */
+export function createRequest(spec: PodSpec): { method: string; url: string; body: Record<string, unknown> } {
+  return { method: "POST", url: `${API_URL}/pods`, body: podBody(spec) };
+}
+
 export class RunPod {
   constructor(private readonly apiKey: string) {}
 
@@ -96,27 +125,7 @@ export class RunPod {
   }
 
   async create(spec: PodSpec): Promise<Pod> {
-    // CPU pods take no pod volume: without a network volume their data is on the container disk.
-    const mounts = spec.networkVolume
-      ? { network: [{ volumeId: spec.networkVolume, path: "/workspace" }] }
-      : spec.kind === "gpu"
-        ? { persistent: { size: spec.volumeSize, path: "/workspace" } }
-        : undefined;
-    const body = {
-      name: spec.name,
-      image: spec.image,
-      ...(spec.kind === "gpu"
-        ? { gpu: { id: spec.gpu, count: 1, minCudaVersion: MIN_CUDA } }
-        : { cpu: { id: spec.cpu, vcpuCount: spec.vcpus } }),
-      // CPU pods run in RunPod's own data centers only.
-      cloud: spec.kind === "gpu" ? spec.cloud : "SECURE",
-      ...(spec.dataCenter ? { dataCenterIds: [spec.dataCenter] } : {}),
-      disk: spec.disk,
-      ports: [`${ENGINE_PORT}/http`],
-      ...(mounts ? { mounts } : {}),
-      env: spec.env,
-    };
-    return this.toPod(await this.call("POST", "/pods", body));
+    return this.toPod(await this.call("POST", "/pods", podBody(spec)));
   }
 
   /** GPUs and CPUs with their prices and where they are free now, data centers and volumes. */

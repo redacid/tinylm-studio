@@ -318,6 +318,7 @@ tbody tr:hover > td { background: var(--row-hover); }
 .pod-existing summary { cursor: pointer; color: var(--accent); }
 .pod-existing .settings-grid { margin-top: 10px; }
 .pod-price { margin: 4px 0 10px; }
+.pod-request pre { margin: 0 0 10px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; white-space: pre; overflow: auto; max-height: 360px; user-select: text; }
 /* RunPod's GPUs: memory, price and availability stand out. */
 .settings-field.wide { grid-column: 1 / -1; }
 .gpu-table { max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; background: var(--card); }

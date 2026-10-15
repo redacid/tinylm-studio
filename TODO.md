@@ -73,4 +73,5 @@ The engine runs in a container in a Kubernetes cluster or a RunPod pod; see
 - [x] RunPod in Settings > Engine: create a pod from the image, start, stop, terminate, stop on quit.
 - [x] RunPod: GPU, CPU, data center and network volume chosen from RunPod's catalog, with prices
       and what is free now; CPU-only pods.
+- [x] RunPod: **Show request** shows the pod request before it is sent, with the secrets hidden.
 - [ ] RunPod: show the pod's logs in the app (RunPod's "Stream pod logs" API).

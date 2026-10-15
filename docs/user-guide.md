@@ -482,6 +482,12 @@ chosen GPU or CPU is not free anywhere, or not in the chosen data center.
 
 ![A CPU pod on a network volume](images/engine-runpod-cpu.png)
 
+**Show request** shows the request **Create pod** would send to RunPod for the settings in the
+form (`POST /v2/pods` and its JSON body), and follows the form as it changes. The engine key is
+made only when the pod is created, and the Hugging Face token is not shown:
+
+![The request Create pod sends](images/engine-runpod-request.png)
+
 **Create pod** creates it with a new engine API key (and the `HF_TOKEN` from `.env`, for gated
 models), waits until it runs (the first start pulls the image, which takes a few minutes) and
 connects; the header shows **Pod provisioning…** until then. The pod's card shows its state, GPU or CPU,

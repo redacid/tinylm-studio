@@ -80,6 +80,9 @@ export type RunPodCatalog = {
   volumes: { id: string; name: string; size: number; dataCenter: string }[];
 };
 
+/** The request "Create pod" sends to RunPod, with the secrets in env hidden. */
+export type RunPodRequest = { method: string; url: string; body: Record<string, unknown> };
+
 declare global {
   interface Window {
     tinylm: {
@@ -90,6 +93,7 @@ declare global {
       runpod(action: "catalog", cloud?: "SECURE" | "COMMUNITY"): Promise<RunPodCatalog>;
       runpod(action: "pod"): Promise<Pod | null>;
       runpod(action: "create", name: string): Promise<Pod>;
+      runpod(action: "request", settings: EngineConnection["runpod"], name: string): Promise<RunPodRequest>;
       runpod(action: "start" | "stop" | "terminate"): Promise<void>;
     };
   }

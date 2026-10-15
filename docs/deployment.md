@@ -124,8 +124,8 @@ from the `cuda` image or a CPU pod from the `cpu` image; the desktop app talks t
    (`docker.io/<you>/tinylm-engine:0.1.0-5a0d901-cuda`). The app loads RunPod's catalog
    (`GET /v2/catalog/gpus`, `/v2/catalog/cpus`, `/v2/catalog/datacenters`, `/v2/network-volumes`):
    choose a GPU or CPU by price and what is free now, a data center and a network volume, and click
-   **Create pod**. The app creates the pod through RunPod's REST API (`POST
-   https://api.runpod.io/v2/pods`) with port `8765/http`, the volume on `/workspace`, a newly
+   **Create pod** (**Show request** shows the request first, with the secrets hidden). The app
+   creates the pod through RunPod's REST API (`POST https://api.runpod.io/v2/pods`) with port `8765/http`, the volume on `/workspace`, a newly
    generated `TINYLM_API_KEY` and the `HF_TOKEN` from `.env`, waits for it to run and connects.
 4. **Stop** stops the pod (billing stops, except for the volume); **Start**, or the next app start,
    starts it again; **Terminate** deletes it with its pod volume. With **Stop the pod when the app
