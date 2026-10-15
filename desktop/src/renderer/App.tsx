@@ -70,7 +70,8 @@ export function App() {
           {PHASE_LABELS[engine.phase]}
           {engine.phase === "starting" && engine.where && ` · ${engine.where}`}
           {engine.phase === "starting" && engine.detail && ` · ${engine.detail}`}
-          {engine.phase === "ready" && ` · v${engine.version} · ${engine.where}`}
+          {engine.phase === "ready" &&
+            ` · v${engine.version}${engine.commit ? ` (${engine.commit})` : ""} · ${engine.where}`}
           {engine.phase === "error" && ` · ${engine.message}`}
           {engine.phase === "stopped" && engine.message && ` · ${engine.message}`}
         </span>

@@ -38,11 +38,13 @@ def serve(settings: Settings, args: argparse.Namespace) -> None:
 
     import uvicorn
 
+    from engine import __version__, commit
     from engine.main import create_app
 
     if os.environ.get("TINYLM_EXIT_WITH_PARENT"):
         exit_with_parent()
     settings.host, settings.port = args.host, args.port
+    print(f"tinylm-studio engine {__version__}, commit {commit() or 'unknown'}", flush=True)
     uvicorn.run(create_app(settings), host=args.host, port=args.port, log_level="info")
 
 

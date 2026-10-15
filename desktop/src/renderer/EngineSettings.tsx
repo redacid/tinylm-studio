@@ -298,7 +298,7 @@ export function EngineSettingsForm({ engine }: { engine: EngineState }) {
                 </Field>
                 <Field
                   label="Engine image"
-                  hint="The CUDA image you pushed, e.g. docker.io/you/tinylm-engine:cuda."
+                  hint="The CUDA image make image-push printed, e.g. docker.io/you/tinylm-engine:0.1.0-5a0d901-cuda."
                 >
                   <input
                     value={runpod.image}

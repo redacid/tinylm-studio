@@ -137,7 +137,7 @@ Not supported yet: tool use / function calling, images, logprobs, `n > 1`, batch
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/health` | Liveness and version |
+| GET | `/health` | Liveness, `version` and `commit`: the git commit the engine was built from (`TINYLM_BUILD_COMMIT` in the container image, else the checkout it runs from, with `-dirty` for uncommitted changes; `null` when unknown) |
 | GET | `/api/system` | Python path and hardware; needs the API key when one is set (unlike `/health`) |
 | GET | `/api/models` | `models`: installed models with `format`, `size` in bytes, `source` (`repo`, `file`), `loaded`, `settings` and `used_by` (fine-tuned models that need it); `downloads` with `state`, `total` and `downloaded` bytes; the catalog with install and download state; `trainable`: installed models that can be fine-tuned |
 | POST | `/api/models/{id}/download` | Starts a background download of a catalog model from Hugging Face |
@@ -495,6 +495,7 @@ POST /api/evaluations
 | `TINYLM_DATA_DIR` | `~/.local/share/tinylm-studio` | Models and workspace |
 | `TINYLM_HOST` / `TINYLM_PORT` | `127.0.0.1` / `8765` | Listen address; `0.0.0.0` in a container (see [deployment.md](deployment.md)) |
 | `TINYLM_API_KEY` | none | Require an API key |
+| `TINYLM_BUILD_COMMIT` | set by the container image | The git commit `/health` reports; outside the image the engine asks git |
 | `TINYLM_HF_TOKEN` | none | Hugging Face token: needed for gated models, gives faster downloads (`HF_TOKEN` works too) |
 | `TINYLM_ENABLE_ECHO` | `false` | Offer the `echo` test model |
 | `TINYLM_CORS_ORIGINS` | `[]` | Allowed browser origins (JSON list) |

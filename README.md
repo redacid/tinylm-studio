@@ -131,7 +131,7 @@ make test        # engine tests only
 make lint        # ruff for the engine, TypeScript type check for the desktop app
 make format      # auto-format and fix engine code
 make build       # compile the desktop app into desktop/dist
-make image       # engine container image (VARIANT=cuda for NVIDIA GPUs and RunPod)
+make image       # engine container image tagged <version>-<commit>-<variant> (VARIANT=cuda for RunPod)
 make clean       # remove build outputs and caches
 make distclean   # also remove node_modules and the managed engine environment
 ```

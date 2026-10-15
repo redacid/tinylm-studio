@@ -60,6 +60,8 @@ The engine runs in a container in a Kubernetes cluster or a RunPod pod; see
 
 - [x] Container image (`engine/Dockerfile`, `make image`): CPU and CUDA variants with llama.cpp
       and PyTorch; refuses to start without `TINYLM_API_KEY`.
+- [x] Image tags name the engine version and git commit (`0.1.0-5a0d901-cuda`); the commit is in
+      the image labels, `/health` and the app's header.
 - [ ] Optional build arguments to include the embedding model and the GGUF converter.
 - [ ] Build and push the `cuda` image, and run a GGUF model and a fine-tune on a real RunPod GPU
       pod (only tested against a fake RunPod API and the CPU image so far).

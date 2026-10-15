@@ -77,11 +77,23 @@ variants:
 | `cuda` | `nvidia/cuda:12.6.3-runtime-ubuntu24.04` | NVIDIA GPUs (Volta to Hopper): GGUF answers through llama.cpp on the GPU, fine-tuning with CUDA PyTorch; RunPod |
 
 ```bash
-make image                                   # tinylm-engine:cpu
-make image VARIANT=cuda                      # tinylm-engine:cuda
+make image                                   # tinylm-engine:0.1.0-5a0d901-cpu and :cpu
+make image VARIANT=cuda                      # tinylm-engine:0.1.0-5a0d901-cuda and :cuda
 make image-push VARIANT=cuda IMAGE=docker.io/<you>/tinylm-engine   # after docker login
 TINYLM_API_KEY=<key> make run-image          # try it on 127.0.0.1:8765, data in <data dir>/container
 ```
+
+- **Version and commit.** Every build is tagged `<engine version>-<commit>-<variant>`, e.g.
+  `0.1.0-5a0d901-cuda`, a tag that always means the same code, and `<variant>`, which moves to
+  the latest build. With uncommitted changes the commit gets `-dirty` (`0.1.0-5a0d901-dirty-cpu`),
+  and `make image-push` refuses to push until they are committed (`ALLOW_DIRTY=1` pushes anyway).
+  Use the fixed tag on RunPod and in a cluster, so you know what runs and a restart does not pick
+  up another build.
+- The version and commit are also in the image's labels (`org.opencontainers.image.version`,
+  `org.opencontainers.image.revision`; `docker inspect`), in the engine's log at start
+  (`tinylm-studio engine 0.1.0, commit 5a0d901`), in `GET /health` and in the app's header
+  (**Engine ready · v0.1.0 (5a0d901) · …**). The engine version is the one in
+  `engine/pyproject.toml`; the build fails if `ENGINE_VERSION` says otherwise.
 
 - llama.cpp is compiled in the image without `-march=native`, so it runs on any x86-64 CPU. The CUDA
   build compiles it for six GPU generations and takes much longer than the CPU one.
@@ -103,12 +115,13 @@ TINYLM_API_KEY=<key> make run-image          # try it on 127.0.0.1:8765, data in
 [remote engine](user-guide.md#engine).
 
 1. Build and push the image to a registry RunPod can pull from (Docker Hub, GHCR):
-   `make image-push VARIANT=cuda IMAGE=docker.io/<you>/tinylm-engine`. A private image needs
+   `make image-push VARIANT=cuda IMAGE=docker.io/<you>/tinylm-engine`; it prints the tag to use,
+   e.g. `docker.io/<you>/tinylm-engine:0.1.0-5a0d901-cuda`. A private image needs
    registry credentials added on runpod.io.
 2. Create an API key on runpod.io (console > [Credentials](https://console.runpod.io/user/credentials)
    > API Keys > **Create API Key**) with **All** permissions: the app creates, starts and stops pods.
 3. In the app, Settings > Engine > **RunPod**: enter the key and the image
-   (`docker.io/<you>/tinylm-engine:cuda`), choose a GPU and click **Create pod**. The app creates
+   (`docker.io/<you>/tinylm-engine:0.1.0-5a0d901-cuda`), choose a GPU and click **Create pod**. The app creates
    the pod through RunPod's REST API (`POST https://api.runpod.io/v2/pods`) with port `8765/http`,
    the volume on `/workspace`, a newly generated `TINYLM_API_KEY` and the `HF_TOKEN` from `.env`,
    waits for it to run and connects.

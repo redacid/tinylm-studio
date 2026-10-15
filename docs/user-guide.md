@@ -433,8 +433,9 @@ settings (proxy, hardware, folders) go into `.env`; see below.
 
 ### Engine
 
-Where the engine runs, shown in the window header (**Engine ready · v0.1.0 · port 42153**, a
-host, or a RunPod pod):
+Where the engine runs, shown in the window header (**Engine ready · v0.1.0 (5a0d901) · port
+42153**: the engine's version, the git commit it was built from, and the port, host or RunPod
+pod):
 
 - **On this computer** (default): the app starts the engine itself on a free port and stops it
   when it closes.
@@ -451,7 +452,8 @@ Each engine has its own models, collections, datasets and training runs: switchi
 other engine's, nothing is copied. The chat settings below stay with the app.
 
 For **RunPod**, enter your RunPod API key (console > Credentials > API Keys, with **All**
-permissions) and the image, e.g. `docker.io/<you>/tinylm-engine:cuda`, then:
+permissions) and the image `make image-push` printed, e.g.
+`docker.io/<you>/tinylm-engine:0.1.0-5a0d901-cuda` (engine version, commit, variant), then:
 
 | Field | Default | Meaning |
 |---|---|---|

@@ -175,18 +175,30 @@ chrome-stop: ## Stop the headless Chrome
 ##@ Container image
 
 # The engine image: VARIANT=cpu or cuda (NVIDIA GPUs, for RunPod). IMAGE names it, e.g.
-# IMAGE=docker.io/<you>/tinylm-engine to push it to Docker Hub.
+# IMAGE=docker.io/<you>/tinylm-engine to push it to Docker Hub. Each build is tagged
+# <engine version>-<commit>-<variant> (e.g. 0.1.0-5a0d901-cuda), which never changes, and
+# <variant>, which moves to the latest build. Uncommitted changes add "-dirty" to the commit.
 IMAGE   ?= tinylm-engine
 VARIANT ?= cpu
+ENGINE_VERSION := $(shell sed -n 's/^version = "\(.*\)"/\1/p' $(ENGINE_DIR)/pyproject.toml)
+GIT_COMMIT     := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)$(if $(shell git status --porcelain 2>/dev/null),-dirty)
+IMAGE_TAG      := $(ENGINE_VERSION)-$(GIT_COMMIT)-$(VARIANT)
 
 .PHONY: image
-image: ## Build the engine image IMAGE:VARIANT [VARIANT=cuda] [IMAGE=docker.io/you/tinylm-engine]
+image: ## Build the engine image IMAGE:<version>-<commit>-VARIANT and IMAGE:VARIANT [VARIANT=cuda]
 	@test -n "$(CONTAINER)" || { echo "Install Docker or Podman first."; exit 1; }
-	$(CONTAINER) build --build-arg VARIANT=$(VARIANT) -t $(IMAGE):$(VARIANT) $(ENGINE_DIR)
+	$(CONTAINER) build --build-arg VARIANT=$(VARIANT) --build-arg ENGINE_VERSION=$(ENGINE_VERSION) \
+		--build-arg GIT_COMMIT=$(GIT_COMMIT) -t $(IMAGE):$(IMAGE_TAG) -t $(IMAGE):$(VARIANT) $(ENGINE_DIR)
+	@echo "Built $(IMAGE):$(IMAGE_TAG)"
 
 .PHONY: image-push
-image-push: image ## Build and push IMAGE:VARIANT (log in to the registry first)
+image-push: ## Build and push both tags (commit first; ALLOW_DIRTY=1 to push uncommitted changes)
+	@case "$(GIT_COMMIT)" in *-dirty|unknown) test -n "$(ALLOW_DIRTY)" || { \
+		echo "Commit your changes first: the image tag names the commit ($(GIT_COMMIT))."; exit 1; };; esac
+	$(MAKE) image
+	$(CONTAINER) push $(IMAGE):$(IMAGE_TAG)
 	$(CONTAINER) push $(IMAGE):$(VARIANT)
+	@echo "Pushed $(IMAGE):$(IMAGE_TAG): use it as the Engine image in Settings > Engine > RunPod"
 
 .PHONY: run-image
 run-image: ## Run IMAGE:VARIANT on 127.0.0.1:PORT with the data in DATA_DIR/container (needs TINYLM_API_KEY)

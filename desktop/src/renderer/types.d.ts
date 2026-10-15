@@ -1,7 +1,7 @@
 export type EngineState =
   | { phase: "setting-up" }
   | { phase: "starting"; where: string; detail?: string }
-  | { phase: "ready"; url: string; apiKey?: string; version: string; where: string; remote: boolean }
+  | { phase: "ready"; url: string; apiKey?: string; version: string; commit: string | null; where: string; remote: boolean }
   | { phase: "error"; message: string }
   | { phase: "stopped"; message?: string };
 

@@ -11,7 +11,16 @@ import { RunPod, RunPodError } from "./runpod";
 export type EngineState =
   | { phase: "setting-up" }
   | { phase: "starting"; where: string; detail?: string }
-  | { phase: "ready"; url: string; apiKey?: string; version: string; where: string; remote: boolean }
+  | {
+      phase: "ready";
+      url: string;
+      apiKey?: string;
+      version: string;
+      /** The git commit the engine was built from, when it knows. */
+      commit: string | null;
+      where: string;
+      remote: boolean;
+    }
   | { phase: "error"; message: string }
   | { phase: "stopped"; message?: string };
 
@@ -50,14 +59,19 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 class Cancelled extends Error {}
 
-/** The engine's version once /health answers. */
-async function waitForHealth(url: string, timeoutMs: number, alive: () => boolean): Promise<string> {
+type Build = { version: string; commit: string | null };
+
+/** The engine's version and commit once /health answers. */
+async function waitForHealth(url: string, timeoutMs: number, alive: () => boolean): Promise<Build> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (!alive()) throw new Cancelled();
     try {
       const response = await fetch(`${url}/health`, { signal: AbortSignal.timeout(10_000) });
-      if (response.ok) return ((await response.json()) as { version: string }).version;
+      if (response.ok) {
+        const health = (await response.json()) as { version: string; commit?: string | null };
+        return { version: health.version, commit: health.commit ?? null };
+      }
     } catch {
       // Not listening yet.
     }
@@ -155,17 +169,17 @@ export class Engine {
         this.set({ phase: "error", message: `Engine exited with code ${code}` });
     });
     const url = `http://127.0.0.1:${port}`;
-    const version = await waitForHealth(url, 30_000, alive);
-    if (alive()) this.set({ phase: "ready", url, version, where: `port ${port}`, remote: false });
+    const build = await waitForHealth(url, 30_000, alive);
+    if (alive()) this.set({ phase: "ready", url, ...build, where: `port ${port}`, remote: false });
   }
 
   private async connectRemote(remote: Connection["remote"], alive: () => boolean) {
     const url = remote.url.trim().replace(/\/+$/, "");
     if (!/^https?:\/\//.test(url)) throw new Error("Enter the engine's address in Settings > Engine");
     this.set({ phase: "starting", where: host(url), detail: "Connecting…" });
-    const version = await waitForHealth(url, 20_000, alive);
+    const build = await waitForHealth(url, 20_000, alive);
     await checkKey(url, remote.apiKey);
-    if (alive()) this.set({ phase: "ready", url, apiKey: remote.apiKey, version, where: host(url), remote: true });
+    if (alive()) this.set({ phase: "ready", url, apiKey: remote.apiKey, ...build, where: host(url), remote: true });
   }
 
   private async connectPod(settings: Connection["runpod"], alive: () => boolean) {
@@ -190,9 +204,9 @@ export class Engine {
       pod = await runpod.pod(pod.id);
     }
     this.set({ phase: "starting", where, detail: "Waiting for the engine in the pod…" });
-    const version = await waitForHealth(pod.url, Math.max(deadline - Date.now(), 60_000), alive);
+    const build = await waitForHealth(pod.url, Math.max(deadline - Date.now(), 60_000), alive);
     await checkKey(pod.url, settings.engineKey);
     if (alive())
-      this.set({ phase: "ready", url: pod.url, apiKey: settings.engineKey, version, where, remote: true });
+      this.set({ phase: "ready", url: pod.url, apiKey: settings.engineKey, ...build, where, remote: true });
   }
 }

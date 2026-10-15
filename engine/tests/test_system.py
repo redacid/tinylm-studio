@@ -27,3 +27,15 @@ def test_only_health_answers_without_the_api_key(tmp_path):
     assert client.get("/api/system").status_code == 401
     assert client.get("/api/system", headers={"authorization": "Bearer wrong"}).status_code == 401
     assert client.get("/api/system", headers={"authorization": "Bearer secret"}).status_code == 200
+
+
+def test_health_reports_the_build_commit(tmp_path, monkeypatch):
+    from engine import commit
+
+    monkeypatch.setenv("TINYLM_BUILD_COMMIT", "abc1234")
+    commit.cache_clear()
+    try:
+        body = TestClient(create_app(Settings(data_dir=tmp_path))).get("/health").json()
+    finally:
+        commit.cache_clear()
+    assert body == {"status": "ok", "version": "0.1.0", "commit": "abc1234"}
