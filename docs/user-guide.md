@@ -462,7 +462,7 @@ prices and what is free now (**Refresh lists** loads them again; a typed new key
 | Name | `tinylm-engine` | The pod's name on runpod.io |
 | Pod type | GPU | **GPU** (the `cuda` image): answers and fine-tuning on the GPU. **CPU only** (the `cpu` image): cheaper, for answers with small GGUF models |
 | Cloud | Secure | **Secure** (RunPod's data centers) or **Community** (cheaper, other people's machines); CPU pods are Secure only. Prices in the lists follow it |
-| GPU | NVIDIA GeForce RTX 4090 | Maker (NVIDIA, AMD), video memory, price per hour and how many are free now (many, some, few, none); free ones first, cheapest first. Only GPUs on hosts with CUDA 12.6 or newer, which the image needs; AMD GPUs are listed but cannot be chosen, as the image runs on NVIDIA (CUDA) only |
+| GPU | NVIDIA GeForce RTX 4090 | A table of RunPod's GPUs; click a row to choose. Each shows its maker (NVIDIA, AMD), video memory, price per hour (green: the cheapest one free now) and how many are free now (many, some, few, none, colored). NVIDIA GPUs come first, then free ones, then cheaper ones. Only GPUs on hosts with CUDA 12.6 or newer, which the image needs; AMD GPUs are shown greyed out, as the image runs on NVIDIA (CUDA) only |
 | CPU, vCPUs | none, 8 | For a CPU pod: the CPU type with its price per vCPU, and the number of vCPUs (memory grows with it) |
 | Network volume | none | One of your network volumes, to keep the data on; it outlives the pod and sets the data center |
 | Data center | Any | Where the chosen GPU or CPU is free now; **Any** lets RunPod choose |

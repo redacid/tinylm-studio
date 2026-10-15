@@ -409,6 +409,9 @@ const RANK: Record<Availability, number> = {
 const money = (dollars: number) =>
   `$${dollars < 1 ? dollars.toFixed(3).replace(/0$/, "") : dollars.toFixed(2)}`;
 
+// The CUDA version the engine image is built for (see runpod.ts).
+const MIN_CUDA = "12.6";
+
 /** "NVIDIA", "AMD"; RunPod says UNKNOWN when it does not know. */
 const maker = (manufacturer: string) =>
   manufacturer === "UNKNOWN" ? "Unknown maker" : manufacturer;
@@ -533,45 +536,33 @@ function PodForm({
         </Field>
 
         {spec.kind === "gpu" ? (
-          <Field
-            label="GPU"
-            hint={
-              gpu
-                ? `${maker(gpu.manufacturer)}, ${gpu.memory} GB of video memory; ${AVAILABILITY[gpu.availability]} now.`
-                : catalog
-                  ? "Not in RunPod's list for this cloud."
-                  : "A RunPod GPU type id; load the lists to choose with prices."
-            }
-          >
-            {catalog ? (
-              <select
-                value={spec.gpu}
-                onChange={(e) => set({ gpu: e.target.value, dataCenter: "" })}
-              >
-                {!gpu && (
-                  <option value={spec.gpu}>{spec.gpu || "Choose"}</option>
-                )}
-                {sortedGpus.map((g) => (
-                  <option
-                    key={g.id}
-                    value={g.id}
-                    disabled={g.manufacturer !== "NVIDIA"}
-                  >
-                    {maker(g.manufacturer)} · {g.name} · {g.memory} GB ·{" "}
-                    {money(g.price)}/h ·{" "}
-                    {g.manufacturer === "NVIDIA"
-                      ? AVAILABILITY[g.availability]
-                      : "the image needs NVIDIA (CUDA)"}
-                  </option>
-                ))}
-              </select>
-            ) : (
+          catalog ? (
+            <div className="settings-field wide">
+              <span>GPU</span>
+              <GpuTable
+                gpus={sortedGpus}
+                chosen={spec.gpu}
+                choose={(id) => set({ gpu: id, dataCenter: "" })}
+              />
+              <small className="muted">
+                {gpu
+                  ? `${maker(gpu.manufacturer)} ${gpu.name}, ${gpu.memory} GB of video memory; ${AVAILABILITY[gpu.availability]} now.`
+                  : `${spec.gpu || "None"} is not in RunPod's list for this cloud: choose one.`}{" "}
+                The green price is the cheapest GPU free now. Only hosts with
+                CUDA {MIN_CUDA}+, which the image needs.
+              </small>
+            </div>
+          ) : (
+            <Field
+              label="GPU"
+              hint="A RunPod GPU type id; load the lists to choose with prices."
+            >
               <input
                 value={spec.gpu}
                 onChange={(e) => set({ gpu: e.target.value })}
               />
-            )}
-          </Field>
+            </Field>
+          )
         ) : (
           <>
             <Field
@@ -750,3 +741,86 @@ function PodForm({
     </>
   );
 }
+
+/** RunPod's GPUs as a table, so memory, price and what is free stand out; a row is chosen by
+ * clicking it. Only NVIDIA GPUs can be chosen: the image needs CUDA. */
+function GpuTable({
+  gpus,
+  chosen,
+  choose,
+}: {
+  gpus: RunPodCatalog["gpus"];
+  chosen: string;
+  choose: (id: string) => void;
+}) {
+  const cheapest = Math.min(
+    ...gpus.filter((g) => usable(g)).map((g) => g.price),
+  );
+  return (
+    <div className="gpu-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Maker</th>
+            <th>GPU</th>
+            <th className="num">Memory</th>
+            <th className="num">Price</th>
+            <th>Free now</th>
+          </tr>
+        </thead>
+        <tbody>
+          {gpus.map((g) => {
+            const ok = g.manufacturer === "NVIDIA";
+            return (
+              <tr
+                key={g.id}
+                className={[
+                  g.id === chosen ? "chosen" : "",
+                  ok ? "" : "unusable",
+                ].join(" ")}
+                aria-selected={g.id === chosen}
+                title={
+                  ok ? g.id : "The engine image runs on NVIDIA (CUDA) only"
+                }
+                onClick={() => ok && choose(g.id)}
+              >
+                <td>
+                  <span
+                    className={`maker maker-${g.manufacturer.toLowerCase()}`}
+                  >
+                    {maker(g.manufacturer)}
+                  </span>
+                </td>
+                <td className="gpu-name">{g.name}</td>
+                <td className="num">
+                  <span className="vram">{g.memory} GB</span>
+                </td>
+                <td className="num">
+                  <span
+                    className={`price ${usable(g) && g.price === cheapest ? "cheapest" : ""}`}
+                  >
+                    {money(g.price)}/h
+                  </span>
+                </td>
+                <td>
+                  {ok ? (
+                    <span
+                      className={`free free-${g.availability.toLowerCase()}`}
+                    >
+                      {AVAILABILITY[g.availability]}
+                    </span>
+                  ) : (
+                    <span className="muted">needs NVIDIA image</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+const usable = (g: RunPodCatalog["gpus"][number]) =>
+  g.manufacturer === "NVIDIA" && g.availability !== "NONE";
