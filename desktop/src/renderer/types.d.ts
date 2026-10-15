@@ -60,6 +60,7 @@ export type RunPodCatalog = {
   gpus: {
     id: string;
     name: string;
+    manufacturer: string;
     memory: number;
     price: number;
     availability: Availability;

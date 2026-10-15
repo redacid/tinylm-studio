@@ -409,6 +409,10 @@ const RANK: Record<Availability, number> = {
 const money = (dollars: number) =>
   `$${dollars < 1 ? dollars.toFixed(3).replace(/0$/, "") : dollars.toFixed(2)}`;
 
+/** "NVIDIA", "AMD"; RunPod says UNKNOWN when it does not know. */
+const maker = (manufacturer: string) =>
+  manufacturer === "UNKNOWN" ? "Unknown maker" : manufacturer;
+
 /** Powers of two from min to max: the vCPU counts RunPod accepts. */
 function vcpuCounts(min: number, max: number): number[] {
   const counts = [];
@@ -450,8 +454,13 @@ function PodForm({
       : cpu
         ? cpu.pricePerVcpu * spec.vcpus
         : undefined;
+  // NVIDIA first (the image needs CUDA), then free ones, then the cheapest.
   const sortedGpus = [...(catalog?.gpus ?? [])].sort(
-    (a, b) => RANK[a.availability] - RANK[b.availability] || a.price - b.price,
+    (a, b) =>
+      Number(a.manufacturer !== "NVIDIA") -
+        Number(b.manufacturer !== "NVIDIA") ||
+      RANK[a.availability] - RANK[b.availability] ||
+      a.price - b.price,
   );
   const sortedCpus = [...(catalog?.cpus ?? [])].sort(
     (a, b) =>
@@ -528,7 +537,7 @@ function PodForm({
             label="GPU"
             hint={
               gpu
-                ? `${gpu.memory} GB of video memory; ${AVAILABILITY[gpu.availability]} now.`
+                ? `${maker(gpu.manufacturer)}, ${gpu.memory} GB of video memory; ${AVAILABILITY[gpu.availability]} now.`
                 : catalog
                   ? "Not in RunPod's list for this cloud."
                   : "A RunPod GPU type id; load the lists to choose with prices."
@@ -543,9 +552,16 @@ function PodForm({
                   <option value={spec.gpu}>{spec.gpu || "Choose"}</option>
                 )}
                 {sortedGpus.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.name} · {g.memory} GB · {money(g.price)}/h ·{" "}
-                    {AVAILABILITY[g.availability]}
+                  <option
+                    key={g.id}
+                    value={g.id}
+                    disabled={g.manufacturer !== "NVIDIA"}
+                  >
+                    {maker(g.manufacturer)} · {g.name} · {g.memory} GB ·{" "}
+                    {money(g.price)}/h ·{" "}
+                    {g.manufacturer === "NVIDIA"
+                      ? AVAILABILITY[g.availability]
+                      : "the image needs NVIDIA (CUDA)"}
                   </option>
                 ))}
               </select>

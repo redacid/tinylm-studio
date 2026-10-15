@@ -55,6 +55,8 @@ export type Catalog = {
   gpus: {
     id: string;
     name: string;
+    /** NVIDIA, AMD or UNKNOWN; the engine image runs on NVIDIA (CUDA) only. */
+    manufacturer: string;
     memory: number;
     /** Dollars per hour for one GPU in the chosen cloud. */
     price: number;
@@ -137,6 +139,7 @@ export class RunPod {
         .map((g) => ({
           id: String(g.id),
           name: String(g.name ?? g.id),
+          manufacturer: String(g.manufacturer ?? "UNKNOWN"),
           memory: Number(g.memory ?? 0),
           price: Number((secure ? g.price?.secure : g.price?.community) ?? 0),
           availability: (g.availability ?? "NONE") as Availability,
