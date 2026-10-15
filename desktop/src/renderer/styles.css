@@ -304,3 +304,12 @@ tbody tr:hover > td { background: var(--row-hover); }
 .message.assistant { border: 1px solid var(--border); }
 /* A first-step delete only hints at danger; the confirming button is filled */
 .data .actions > button.danger:not(:disabled) { background: transparent; color: var(--bad); }
+/* Settings > Engine */
+.engine-modes { grid-template-columns: 1fr 1fr 1fr; }
+.pod { border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: var(--card); box-shadow: var(--shadow); }
+.pod-head { display: flex; gap: 8px; align-items: center; }
+.badge.pod-running { border-color: var(--ok); color: var(--ok); background: var(--ok-soft); }
+.badge.pod-provisioning, .badge.pod-starting { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.badge.pod-error, .badge.pod-terminated { border-color: var(--bad); color: var(--bad); background: var(--bad-soft); }
+.pod-existing summary { cursor: pointer; color: var(--accent); }
+.pod-existing .settings-grid { margin-top: 10px; }

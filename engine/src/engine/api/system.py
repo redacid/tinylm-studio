@@ -1,10 +1,13 @@
-"""Health and system information endpoints."""
+"""Health and system information endpoints. /health answers without the API key, for load
+balancers and the desktop app's startup check; /api/system needs it (it shows paths and
+hardware)."""
 
 import sys
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from engine import __version__, hardware
+from engine.api.deps import require_api_key
 
 router = APIRouter(tags=["system"])
 
@@ -14,7 +17,7 @@ def health() -> dict:
     return {"status": "ok", "version": __version__}
 
 
-@router.get("/api/system")
+@router.get("/api/system", dependencies=[Depends(require_api_key)])
 def system_info() -> dict:
     return {
         "version": __version__,

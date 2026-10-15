@@ -507,7 +507,18 @@ export type ChatTrace = {
 };
 
 export class EngineClient {
-  constructor(private readonly baseUrl: string) {}
+  /** apiKey: the engine's TINYLM_API_KEY, sent with every request when set. */
+  constructor(
+    private readonly baseUrl: string,
+    private readonly apiKey?: string,
+  ) {}
+
+  private withKey(init: RequestInit = {}): RequestInit {
+    if (!this.apiKey) return init;
+    const headers = new Headers(init.headers);
+    headers.set("authorization", `Bearer ${this.apiKey}`);
+    return { ...init, headers };
+  }
 
   async installedModels(): Promise<string[]> {
     const body = await this.json<{ data: { id: string }[] }>("/v1/models");
@@ -929,12 +940,15 @@ export class EngineClient {
     };
     const trace = options.trace ?? { request, chunks: [] };
     trace.request = JSON.parse(JSON.stringify(request)); // without the undefined fields, as sent
-    const response = await fetch(`${this.baseUrl}/v1/chat/completions`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(request),
-      signal: options.signal,
-    });
+    const response = await fetch(
+      `${this.baseUrl}/v1/chat/completions`,
+      this.withKey({
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(request),
+        signal: options.signal,
+      }),
+    );
     trace.status = response.status;
     if (!response.ok || !response.body) {
       const text = await response.clone().text().catch(() => "");
@@ -982,7 +996,7 @@ export class EngineClient {
   }
 
   private async send(path: string, init?: RequestInit): Promise<Response> {
-    const response = await fetch(`${this.baseUrl}${path}`, init);
+    const response = await fetch(`${this.baseUrl}${path}`, this.withKey(init));
     if (!response.ok) throw new Error(await errorText(response));
     return response;
   }

@@ -431,6 +431,58 @@ The **Settings** tab holds the app's own settings, saved as you change them and 
 restart, except the search and crawler settings, which the engine keeps. The engine's other
 settings (proxy, hardware, folders) go into `.env`; see below.
 
+### Engine
+
+Where the engine runs, shown in the window header (**Engine ready · v0.1.0 · port 42153**, a
+host, or a RunPod pod):
+
+- **On this computer** (default): the app starts the engine itself on a free port and stops it
+  when it closes.
+- **Remote engine**: an engine started elsewhere, e.g. the [container image](deployment.md#container-image)
+  on a server or in a cluster. Enter its address (`https://engine.example:8765`) and its
+  `TINYLM_API_KEY`, then **Connect**. A wrong key shows **The engine refused the API key**.
+- **RunPod**: a GPU pod on [runpod.io](https://www.runpod.io/) running the engine's `cuda` image,
+  which the app creates, starts and stops (see [RunPod](deployment.md#runpod) for building and
+  pushing the image).
+
+![A remote engine](images/engine-remote.png)
+
+Each engine has its own models, collections, datasets and training runs: switching shows the
+other engine's, nothing is copied. The chat settings below stay with the app.
+
+For **RunPod**, enter your RunPod API key (console > Credentials > API Keys, with **All**
+permissions) and the image, e.g. `docker.io/<you>/tinylm-engine:cuda`, then:
+
+| Field | Default | Meaning |
+|---|---|---|
+| Name | `tinylm-engine` | The pod's name on runpod.io |
+| GPU | NVIDIA GeForce RTX 4090 | A RunPod GPU type id; the list has common ones, any other works too |
+| Cloud | Secure | **Secure** (RunPod's data centers) or **Community** (cheaper, other people's machines) |
+| Network volume | none | The id of a network volume to keep the data on; it outlives the pod |
+| Pod volume, GB | 50 | Without a network volume: the pod's own volume on `/workspace`, kept while it is stopped, deleted with it |
+| Container disk, GB | 30 | The image and temporary files; emptied when the pod stops |
+
+![Creating a RunPod pod](images/engine-runpod-create.png)
+
+**Create pod** creates it with a new engine API key (and the `HF_TOKEN` from `.env`, for gated
+models), waits until it runs (the first start pulls the image, which takes a few minutes) and
+connects; the header shows **Pod provisioning…** until then. The pod's card shows its state, GPU,
+price per hour, uptime and address:
+
+![The engine in a RunPod pod](images/engine-runpod.png)
+
+- **Stop** stops the pod: it is no longer billed, except for its volume, and the app has no
+  engine until **Start**. The next app start starts a stopped pod again.
+- **Terminate** deletes the pod and its pod volume, after asking; a network volume stays.
+- **Stop the pod when the app closes** (on by default) stops it on quit, also when the app was
+  switched to another engine in the meantime.
+- **Use a pod made on runpod.io**: enter the id of a pod you created yourself from the image
+  (with port 8765 exposed over HTTP) and its `TINYLM_API_KEY`.
+
+Keys are never shown again once saved; typing replaces them. They are kept in
+`~/.config/tinylm-studio-desktop/engine-connection.json`, readable only by you and encrypted with
+the system keyring when there is one.
+
 ### Chat settings
 
 ![Chat settings](images/settings.png)

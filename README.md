@@ -13,7 +13,9 @@ any llama.cpp model. The
 **[user guide](docs/user-guide.md)** walks through every screen and setting.
 
 - **engine/** – Python service: data ingestion, retrieval, training and inference, exposed through OpenAI- and Anthropic-compatible APIs.
-- **desktop/** – Electron app that starts the engine and drives it over HTTP.
+- **desktop/** – Electron app that starts the engine and drives it over HTTP, or connects to an
+  engine running elsewhere: a server, a cluster, or a RunPod GPU pod it starts and stops itself
+  ([deployment.md](docs/deployment.md)).
 - **docs/** – the [user guide](docs/user-guide.md), the [API reference](docs/api.md) and the
   [implementation plan](docs/implementation-plan.md).
 
@@ -129,6 +131,7 @@ make test        # engine tests only
 make lint        # ruff for the engine, TypeScript type check for the desktop app
 make format      # auto-format and fix engine code
 make build       # compile the desktop app into desktop/dist
+make image       # engine container image (VARIANT=cuda for NVIDIA GPUs and RunPod)
 make clean       # remove build outputs and caches
 make distclean   # also remove node_modules and the managed engine environment
 ```

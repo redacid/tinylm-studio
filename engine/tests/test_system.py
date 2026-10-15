@@ -19,3 +19,11 @@ def test_system_info_reports_hardware(client):
 def test_workspace_is_created(tmp_path):
     TestClient(create_app(Settings(data_dir=tmp_path)))
     assert (tmp_path / "workspace").is_dir()
+
+
+def test_only_health_answers_without_the_api_key(tmp_path):
+    client = TestClient(create_app(Settings(data_dir=tmp_path, api_key="secret")))
+    assert client.get("/health").status_code == 200
+    assert client.get("/api/system").status_code == 401
+    assert client.get("/api/system", headers={"authorization": "Bearer wrong"}).status_code == 401
+    assert client.get("/api/system", headers={"authorization": "Bearer secret"}).status_code == 200

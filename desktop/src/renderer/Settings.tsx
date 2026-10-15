@@ -2,11 +2,14 @@ import { ReactNode, useState } from "react";
 import { EngineClient } from "./api";
 import { CHAT_DEFAULTS, ChatSettings } from "./chatSettings";
 import { CrawlerSettingsForm } from "./CrawlerSettings";
+import { EngineSettingsForm } from "./EngineSettings";
 import { SearchSettingsForm } from "./SearchSettings";
+import type { EngineState } from "./types";
 
-type Section = "chat" | "search" | "crawler";
+type Section = "engine" | "chat" | "search" | "crawler";
 
 const SECTIONS: Record<Section, string> = {
+  engine: "Engine",
   chat: "Chat settings",
   search: "Search settings",
   crawler: "Crawler settings",
@@ -15,9 +18,11 @@ const SECTIONS: Record<Section, string> = {
 /** App settings, saved as they are changed. Engine settings stay in .env. */
 export function Settings({
   client,
+  engine,
   chat,
   onChat,
 }: {
+  engine: EngineState;
   /** None while the engine starts; the engine keeps the search and crawler settings. */
   client: EngineClient | null;
   chat: ChatSettings;
@@ -33,11 +38,12 @@ export function Settings({
           </button>
         ))}
         <p className="muted">
-          Chat settings are kept by this app; search and crawler settings by the engine. Other engine settings (proxy,
+          Engine and chat settings are kept by this app; search and crawler settings by the engine. Other engine settings (proxy,
           hardware, models folder) are in <code>.env</code>; see the user guide.
         </p>
       </aside>
       <section className="settings-page">
+        {section === "engine" && <EngineSettingsForm engine={engine} />}
         {section === "chat" && <ChatSettingsForm value={chat} onChange={onChat} />}
         {section === "search" && <SearchSettingsForm client={client} />}
         {section === "crawler" && <CrawlerSettingsForm client={client} />}

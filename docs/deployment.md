@@ -1,4 +1,4 @@
-# Running the engine in Kubernetes
+# Running the engine in a container: Kubernetes and RunPod
 
 **Target (decided 2026-10-13):** the engine runs as a container in a Kubernetes cluster. The
 desktop app, scripts and any OpenAI- or Anthropic-compatible client talk to it over HTTP. Running
@@ -7,7 +7,8 @@ development and single-user use.
 
 Every change to the engine has to keep working in a container: configured only by environment
 variables, with no desktop, no browser and no home folder of a real user around it. This page
-lists what that means for the code today and what is still missing.
+lists what that means for the code today and what is still missing. The same image also runs
+on a [RunPod](#runpod) GPU pod, which the desktop app can create, start and stop itself.
 
 ## What already fits
 
@@ -16,7 +17,7 @@ lists what that means for the code today and what is still missing.
 | Configuration | Only `TINYLM_*` environment variables (see [api.md](api.md#settings)): a ConfigMap for settings, a Secret for `TINYLM_API_KEY`, `HF_TOKEN` and the search providers' `TINYLM_*_API_KEY`. No config files to mount; search and crawler settings changed in the app are saved in the data folder and win over the variables. |
 | Listening outside the pod | `TINYLM_HOST=0.0.0.0` (the default `127.0.0.1` only serves the pod itself); `TINYLM_PORT`, 8765 by default. |
 | Authentication | `TINYLM_API_KEY`: every API call then needs `Authorization: Bearer <key>` or `x-api-key: <key>`. Always set it in a cluster. |
-| Probes | `GET /health` answers without an API key; use it for liveness and readiness. |
+| Probes | `GET /health` answers without an API key; use it for liveness and readiness. Every other path, `/api/system` included, needs the key when one is set. |
 | State | Everything the engine keeps is under `TINYLM_DATA_DIR` (see the table in the [user guide](user-guide.md#where-data-is-stored)): mount a PersistentVolume there. |
 | Logs | The API server logs to stdout. Background jobs also write `worker.log` in their folder under `workspace/`. |
 | Lifecycle | Leave `TINYLM_EXIT_WITH_PARENT` unset: it only makes sense when the desktop app starts the engine. |
@@ -65,13 +66,78 @@ lists what that means for the code today and what is still missing.
     collection if there is none of that name and indexes it in the background, so the first
     answers with sources come once that is done.
 
+## Container image
+
+[engine/Dockerfile](../engine/Dockerfile) builds the engine with llama.cpp and PyTorch in two
+variants:
+
+| Variant | Base | For |
+|---|---|---|
+| `cpu` (default) | `ubuntu:24.04` | Kubernetes nodes and servers without a GPU |
+| `cuda` | `nvidia/cuda:12.6.3-runtime-ubuntu24.04` | NVIDIA GPUs (Volta to Hopper): GGUF answers through llama.cpp on the GPU, fine-tuning with CUDA PyTorch; RunPod |
+
+```bash
+make image                                   # tinylm-engine:cpu
+make image VARIANT=cuda                      # tinylm-engine:cuda
+make image-push VARIANT=cuda IMAGE=docker.io/<you>/tinylm-engine   # after docker login
+TINYLM_API_KEY=<key> make run-image          # try it on 127.0.0.1:8765, data in <data dir>/container
+```
+
+- llama.cpp is compiled in the image without `-march=native`, so it runs on any x86-64 CPU. The CUDA
+  build compiles it for six GPU generations and takes much longer than the CPU one.
+- `TORCH_INDEX` (a build argument) picks where PyTorch comes from; the default is PyTorch's own
+  CPU or CUDA 12.6 index.
+- In the image: `TINYLM_HOST=0.0.0.0`, port 8765, data in `/workspace/tinylm-studio` (the
+  Hugging Face cache too, `HF_HOME`), and a `HEALTHCHECK` on `/health`. Mount a volume on
+  `/workspace`.
+- The image refuses to start without `TINYLM_API_KEY`, since the port is meant to be reached
+  from outside; set `TINYLM_ALLOW_NO_API_KEY=1` to run it without one on a private network.
+- Pass `HF_TOKEN` for gated models. The embedding model and models are downloaded on first use,
+  into the volume.
+
+## RunPod
+
+[RunPod](https://www.runpod.io/) rents GPU pods by the second. The engine runs in a pod from the
+`cuda` image; the desktop app talks to it through RunPod's HTTPS proxy
+(`https://<pod id>-8765.proxy.runpod.net`) with the engine's API key, as to any
+[remote engine](user-guide.md#engine).
+
+1. Build and push the image to a registry RunPod can pull from (Docker Hub, GHCR):
+   `make image-push VARIANT=cuda IMAGE=docker.io/<you>/tinylm-engine`. A private image needs
+   registry credentials added on runpod.io.
+2. Create an API key on runpod.io (console > [Credentials](https://console.runpod.io/user/credentials)
+   > API Keys > **Create API Key**) with **All** permissions: the app creates, starts and stops pods.
+3. In the app, Settings > Engine > **RunPod**: enter the key and the image
+   (`docker.io/<you>/tinylm-engine:cuda`), choose a GPU and click **Create pod**. The app creates
+   the pod through RunPod's REST API (`POST https://api.runpod.io/v2/pods`) with port `8765/http`,
+   the volume on `/workspace`, a newly generated `TINYLM_API_KEY` and the `HF_TOKEN` from `.env`,
+   waits for it to run and connects.
+4. **Stop** stops the pod (billing stops, except for the volume); **Start**, or the next app start,
+   starts it again; **Terminate** deletes it with its pod volume. With **Stop the pod when the app
+   closes** on (the default), quitting the app stops a running pod, also after switching to another
+   engine.
+
+Notes:
+
+- **Data.** Without a network volume the data lives on the pod volume (50 GB by default): it is kept
+  while the pod is stopped and deleted with it. A [network volume](https://docs.runpod.io/storage/network-volumes)
+  (its id in **Network volume**) outlives the pod; it ties the pod to that volume's data center.
+- **A stopped pod can come back without a GPU.** When the machine's GPUs are taken, starting the
+  pod fails or waits; terminate it and create a new one (on a network volume nothing is lost).
+- **A pod made on runpod.io** works too: give it the image, expose `8765` as an HTTP port, set
+  `TINYLM_API_KEY`, and enter its id and that key under **Use a pod made on runpod.io**.
+- **One engine per volume** holds here as well (rule 1 above).
+- RunPod's proxy (Cloudflare) closes a connection after 100 seconds (HTTP 524). Training, export,
+  crawls and generation run in the background and are only polled, so they are not affected; a
+  single chat answer that takes longer is cut off.
+- RunPod Serverless is not used: it scales workers to zero between requests and keeps no state,
+  while the engine holds models in memory, a database and background jobs.
+
 ## Not done yet
 
-- A container image (Dockerfile) with the engine, its CPU-only dependencies and, optionally, the
-  embedding model and the GGUF converter built in.
+- Building the embedding model and the GGUF converter into the image, to start without internet
+  access.
 - Kubernetes manifests or a Helm chart: Deployment, Service, PersistentVolumeClaim, Secret,
   ConfigMap, probes.
-- The desktop app connecting to a remote engine (an engine URL and API key in Settings) instead
-  of starting its own.
 - Reading the container's CPU and memory limits (cgroups) instead of the node's, so
   `TINYLM_THREADS` does not have to be set by hand.

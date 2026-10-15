@@ -1,6 +1,6 @@
 # Implementation Plan: Narrow-Domain Small Language Model Studio
 
-Status: approved direction, in progress · Last updated: 2026-10-11
+Status: approved direction, in progress · Last updated: 2026-10-15
 
 ## 0. Decisions so far
 
@@ -15,6 +15,7 @@ Status: approved direction, in progress · Last updated: 2026-10-11
 | Reference scenario | Video game assistant (section 3.8) |
 | Repository | Local git repository for now; remote added later |
 | Engine deployment | A container in a Kubernetes cluster; the desktop app and API clients connect to it. Running it locally from the desktop app stays supported ([deployment.md](deployment.md)) |
+| GPU in the cloud | **Decided (2026-10-15):** the same engine image (`cuda` variant) on a RunPod GPU pod, which the desktop app creates, starts and stops through RunPod's REST API; not RunPod Serverless, which keeps no state between requests ([deployment.md](deployment.md#runpod)) |
 
 ## 1. Goal
 
@@ -118,7 +119,7 @@ Requirement (confirmed by the user): the engine supports both APIs as first-clas
 ### 3.4 Desktop app
 
 - Electron + React + TypeScript + Vite; packaged with electron-builder.
-- The main process launches the engine as a child process, waits for `/health`, and shuts it down on exit.
+- The main process launches the engine as a child process, waits for `/health`, and shuts it down on exit; or, as Settings > Engine says, connects to a remote engine (address and API key) or a RunPod pod it manages (`desktop/src/main/runpod.ts`).
 - Screens: **Chat** (pick model, see cited sources), **Data** (drag-and-drop files and folders, ingestion status), **Datasets** (preview/edit examples), **Training** (configure, start, live loss chart, stop/resume), **Models** (list, export, delete, copy API endpoint snippet), **Settings** (hardware, API keys, storage path).
 - The renderer only talks HTTP; it never touches Python directly. A TypeScript client is generated from the engine's OpenAPI schema.
 - Look: one stylesheet (`desktop/src/renderer/styles.css`) with color tokens for a light and a dark theme, picked by the system setting. Section titles, table headers, side lists and cards get their own colors so a screen does not read as one block of text; the main action of a form is a filled button, a confirmed delete a red one.
@@ -261,8 +262,9 @@ qwen3-0.6b on ~1,000 examples on the target machine, and a GPU run.
 - **Done (2026-10-12):** merge + GGUF export + quantization (Q8_0, Q4_K_M, F16) of fine-tuned models with llama.cpp's own converter (from the llama-cpp-python source package, so versions match) and quantizer; exported models are served through llama.cpp.
 - Hardware auto-tuning; optional GPU PyTorch download.
 - Installers (AppImage/deb, dmg, exe), code signing, auto-update.
-- Kubernetes: a container image for the engine, manifests or a Helm chart, the desktop app
-  connecting to a remote engine, CPU and memory limits read from cgroups (see
+- **Done (2026-10-15):** a container image for the engine (CPU and CUDA), the desktop app
+  connecting to a remote engine, and RunPod pods managed from Settings > Engine.
+- Kubernetes: manifests or a Helm chart, CPU and memory limits read from cgroups (see
   [deployment.md](deployment.md#not-done-yet)).
 - **Done when:** a non-developer installs the app from a release and completes the full flow.
 

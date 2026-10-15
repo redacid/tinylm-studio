@@ -53,15 +53,20 @@ Models screen:
 - [ ] Export qwen3-0.6b fine-tune to GGUF on the target machine (Q8_0 and Q4_K_M): time of the
       export, tokens/s against the adapter through PyTorch, and Evaluation scores of all three.
 
-## Kubernetes
+## Kubernetes and RunPod
 
-The engine runs in a container in a Kubernetes cluster; see
+The engine runs in a container in a Kubernetes cluster or a RunPod pod; see
 [docs/deployment.md](docs/deployment.md).
 
-- [ ] Container image (Dockerfile): engine with CPU-only dependencies; optional build arguments to
-      include the embedding model and the GGUF converter.
+- [x] Container image (`engine/Dockerfile`, `make image`): CPU and CUDA variants with llama.cpp
+      and PyTorch; refuses to start without `TINYLM_API_KEY`.
+- [ ] Optional build arguments to include the embedding model and the GGUF converter.
+- [ ] Build and push the `cuda` image, and run a GGUF model and a fine-tune on a real RunPod GPU
+      pod (only tested against a fake RunPod API and the CPU image so far).
 - [ ] Manifests or a Helm chart: Deployment (1 replica, `Recreate`), Service, PVC
       (`ReadWriteOnce`) for `TINYLM_DATA_DIR`, Secret, ConfigMap, `/health` probes.
 - [ ] Read CPU and memory limits from cgroups for the default `TINYLM_THREADS` and `/api/system`.
-- [ ] Desktop app: connect to a remote engine (URL and API key in Settings) instead of starting
-      its own.
+- [x] Desktop app: connect to a remote engine (URL and API key in Settings > Engine) instead of
+      starting its own.
+- [x] RunPod in Settings > Engine: create a pod from the image, start, stop, terminate, stop on quit.
+- [ ] RunPod: show the pod's logs in the app; pick the GPU from RunPod's list with prices.

@@ -7,7 +7,10 @@ its own engine on a free port, shown in the window header. For using the app its
 ## Authentication
 
 Off by default. Set `TINYLM_API_KEY` to require a key; clients send it as
-`Authorization: Bearer <key>` (OpenAI style) or `x-api-key: <key>` (Anthropic style).
+`Authorization: Bearer <key>` (OpenAI style) or `x-api-key: <key>` (Anthropic style). With a key
+set, only `GET /health` answers without it. The [container image](deployment.md#container-image)
+does not start without a key. The desktop app sends the key when it uses a remote engine or a
+RunPod pod (Settings > Engine).
 
 ## OpenAI-compatible
 
@@ -135,7 +138,7 @@ Not supported yet: tool use / function calling, images, logprobs, `n > 1`, batch
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/health` | Liveness and version |
-| GET | `/api/system` | Python path and hardware |
+| GET | `/api/system` | Python path and hardware; needs the API key when one is set (unlike `/health`) |
 | GET | `/api/models` | `models`: installed models with `format`, `size` in bytes, `source` (`repo`, `file`), `loaded`, `settings` and `used_by` (fine-tuned models that need it); `downloads` with `state`, `total` and `downloaded` bytes; the catalog with install and download state; `trainable`: installed models that can be fine-tuned |
 | POST | `/api/models/{id}/download` | Starts a background download of a catalog model from Hugging Face |
 | GET | `/api/models/{id}/settings` | The model's settings (only the ones set) |

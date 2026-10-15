@@ -172,6 +172,29 @@ chrome: ## Start a headless Chrome for crawling with Browser (CDP) on 127.0.0.1:
 chrome-stop: ## Stop the headless Chrome
 	$(CONTAINER) rm -f tinylm-chrome
 
+##@ Container image
+
+# The engine image: VARIANT=cpu or cuda (NVIDIA GPUs, for RunPod). IMAGE names it, e.g.
+# IMAGE=docker.io/<you>/tinylm-engine to push it to Docker Hub.
+IMAGE   ?= tinylm-engine
+VARIANT ?= cpu
+
+.PHONY: image
+image: ## Build the engine image IMAGE:VARIANT [VARIANT=cuda] [IMAGE=docker.io/you/tinylm-engine]
+	@test -n "$(CONTAINER)" || { echo "Install Docker or Podman first."; exit 1; }
+	$(CONTAINER) build --build-arg VARIANT=$(VARIANT) -t $(IMAGE):$(VARIANT) $(ENGINE_DIR)
+
+.PHONY: image-push
+image-push: image ## Build and push IMAGE:VARIANT (log in to the registry first)
+	$(CONTAINER) push $(IMAGE):$(VARIANT)
+
+.PHONY: run-image
+run-image: ## Run IMAGE:VARIANT on 127.0.0.1:PORT with the data in DATA_DIR/container (needs TINYLM_API_KEY)
+	@test -n "$(TINYLM_API_KEY)" || { echo "Set TINYLM_API_KEY (in .env or the command line)."; exit 1; }
+	mkdir -p $(DATA_DIR)/container
+	$(CONTAINER) run --rm -it -p 127.0.0.1:$(PORT):8765 -v $(DATA_DIR)/container:/workspace/tinylm-studio \
+		-e TINYLM_API_KEY $(if $(HF_TOKEN),-e HF_TOKEN) $(if $(filter cuda,$(VARIANT)),--gpus all) $(IMAGE):$(VARIANT)
+
 ##@ Cleanup
 
 .PHONY: clean

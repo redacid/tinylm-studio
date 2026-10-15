@@ -35,7 +35,7 @@ const TAB_LABELS: Record<Tab, string> = {
 };
 
 export function App() {
-  const [engine, setEngine] = useState<EngineState>({ phase: "starting", port: 0 });
+  const [engine, setEngine] = useState<EngineState>({ phase: "starting", where: "" });
   const [tab, setTab] = useState<Tab>("chat");
   const [visited, setVisited] = useState<Set<Tab>>(() => new Set([tab]));
   if (!visited.has(tab)) setVisited(new Set(visited).add(tab));
@@ -51,7 +51,7 @@ export function App() {
   }, []);
 
   const client = useMemo(
-    () => (engine.phase === "ready" ? new EngineClient(`http://127.0.0.1:${engine.port}`) : null),
+    () => (engine.phase === "ready" ? new EngineClient(engine.url, engine.apiKey) : null),
     [engine],
   );
 
@@ -68,8 +68,11 @@ export function App() {
         </nav>
         <span className={`status ${engine.phase}`}>
           {PHASE_LABELS[engine.phase]}
-          {engine.phase === "ready" && ` · v${engine.version} · port ${engine.port}`}
+          {engine.phase === "starting" && engine.where && ` · ${engine.where}`}
+          {engine.phase === "starting" && engine.detail && ` · ${engine.detail}`}
+          {engine.phase === "ready" && ` · v${engine.version} · ${engine.where}`}
           {engine.phase === "error" && ` · ${engine.message}`}
+          {engine.phase === "stopped" && engine.message && ` · ${engine.message}`}
         </span>
       </header>
       <main>
@@ -86,9 +89,15 @@ export function App() {
         )}
         {tab === "settings" && (
           // Needs no engine: these settings live in the app.
-          <Settings client={client} chat={chatSettings} onChat={changeChatSettings} />
+          <Settings client={client} engine={engine} chat={chatSettings} onChat={changeChatSettings} />
         )}
-        {!client && tab !== "settings" && tab !== "chat" && <p className="muted">Waiting for the engine…</p>}
+        {!client && tab !== "settings" && tab !== "chat" && (
+          <p className="muted">
+            {engine.phase === "error" || engine.phase === "stopped"
+              ? "No engine: see Settings › Engine."
+              : "Waiting for the engine…"}
+          </p>
+        )}
         {/* The other tabs stay mounted once opened, so a form, a selection or the progress of a
             generation, crawl or training run is still there after switching tabs. */}
         {client &&
