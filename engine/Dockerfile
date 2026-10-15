@@ -34,6 +34,11 @@ RUN CMAKE_ARGS="-DGGML_NATIVE=OFF"; \
     fi; \
     CMAKE_ARGS="$CMAKE_ARGS" /opt/build/bin/pip wheel --no-deps --no-binary llama-cpp-python \
         -w /wheels "$LLAMA_CPP_PYTHON"
+# libcuda.so.1 comes with the NVIDIA driver, which the GPU host mounts into the container at run
+# time; a build has none. The CUDA toolkit's stub stands in for it while the build checks that
+# llama_cpp loads, and is removed after.
+RUN mkdir -p /stubs \
+    && if [ "$VARIANT" = cuda ]; then cp /usr/local/cuda/lib64/stubs/libcuda.so /stubs/libcuda.so.1; fi
 
 FROM runtime-${VARIANT}
 ARG VARIANT
@@ -48,6 +53,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN python3 -m venv /opt/engine
 ENV PATH=/opt/engine/bin:$PATH
 COPY --from=llama /wheels /wheels
+COPY --from=llama /stubs /opt/build-stubs
 COPY pyproject.toml /src/engine/
 COPY src /src/engine/src
 RUN INDEX="$TORCH_INDEX"; \
@@ -58,7 +64,8 @@ RUN INDEX="$TORCH_INDEX"; \
     pip install --quiet --no-cache-dir /wheels/*.whl \
     && pip install --quiet --no-cache-dir --extra-index-url "$INDEX" /src/engine \
     && rm -rf /wheels /src \
-    && python -c "import engine, llama_cpp, torch; print('engine', engine.__version__, 'llama.cpp', llama_cpp.__version__, 'torch', torch.__version__)" \
+    && LD_LIBRARY_PATH=/opt/build-stubs python -c "import engine, llama_cpp, torch; print('engine', engine.__version__, 'llama.cpp', llama_cpp.__version__, 'torch', torch.__version__)" \
+    && rm -rf /opt/build-stubs \
     && if [ -n "$ENGINE_VERSION" ]; then \
         python -c "import engine, sys; v = engine.__version__; sys.exit(None if v == '$ENGINE_VERSION' else f'engine is {v}, not $ENGINE_VERSION')"; \
     fi
