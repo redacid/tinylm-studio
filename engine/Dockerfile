@@ -27,9 +27,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3 python3-venv python3-dev build-essential cmake git ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 RUN python3 -m venv /opt/build && /opt/build/bin/pip install --quiet --upgrade pip wheel
+# No NCCL (multi-GPU only; a pod has one GPU): llama.cpp would link the CUDA image's libnccl, which
+# is older than the one torch ships and, loaded first, breaks `import torch` (undefined ncclCommGrow).
 RUN CMAKE_ARGS="-DGGML_NATIVE=OFF"; \
     if [ "$VARIANT" = cuda ]; then \
-        CMAKE_ARGS="$CMAKE_ARGS -DGGML_CUDA=on -DCMAKE_CUDA_ARCHITECTURES=$CUDA_ARCHITECTURES \
+        CMAKE_ARGS="$CMAKE_ARGS -DGGML_CUDA=on -DGGML_CUDA_NCCL=OFF -DCMAKE_CUDA_ARCHITECTURES=$CUDA_ARCHITECTURES \
             -DCMAKE_EXE_LINKER_FLAGS=-Wl,--allow-shlib-undefined"; \
     fi; \
     CMAKE_ARGS="$CMAKE_ARGS" /opt/build/bin/pip wheel --no-deps --no-binary llama-cpp-python \
