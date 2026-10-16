@@ -4,15 +4,26 @@ controlled over the Chrome DevTools Protocol (CDP), for sites that need JavaScri
 import itertools
 import json
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
+from urllib.parse import urljoin
 
 import httpx
 
 DEFAULT_USER_AGENT = "tinylm-studio/0.1 (local research crawler)"
+MAX_REDIRECTS = 10
 
 
 class FetchError(Exception):
     pass
+
+
+class RedirectRefused(Exception):
+    """A redirect led to an address the caller does not want; nothing was downloaded from it."""
+
+    def __init__(self, url: str):
+        super().__init__(url)
+        self.url = url
 
 
 @dataclass
@@ -42,15 +53,27 @@ class HttpFetcher:
     def __init__(self, proxy: str | None = None, user_agent: str = DEFAULT_USER_AGENT, timeout=30):
         self.client = httpx.Client(
             proxy=proxy,
-            follow_redirects=True,
             timeout=timeout,
             headers={"User-Agent": user_agent, "Accept-Language": "uk,ru;q=0.9,en;q=0.8"},
         )
         self.user_agent = user_agent
 
-    def fetch(self, url: str) -> Page:
+    def fetch(self, url: str, allow: Callable[[str], bool] | None = None) -> Page:
+        """Follows redirects; with allow, each address a redirect leads to is checked first, and
+        one it refuses raises RedirectRefused before anything is downloaded from it."""
         try:
-            response = self.client.get(url)
+            for _ in range(MAX_REDIRECTS + 1):
+                response = self.client.send(self.client.build_request("GET", url), stream=True)
+                location = response.headers.get("location")
+                if not (response.is_redirect and location):
+                    response.read()
+                    break
+                response.close()
+                url = urljoin(str(response.url), location)
+                if allow is not None and not allow(url):
+                    raise RedirectRefused(url)
+            else:
+                raise FetchError(f"More than {MAX_REDIRECTS} redirects")
         except httpx.HTTPError as e:
             raise FetchError(f"{type(e).__name__}: {e}") from None
         return Page(
@@ -93,7 +116,8 @@ class CdpFetcher:
         except (httpx.HTTPError, ValueError) as e:
             raise FetchError(f"Cannot reach the browser at {self.endpoint}: {e}") from None
 
-    def fetch(self, url: str) -> Page:
+    def fetch(self, url: str, allow: Callable[[str], bool] | None = None) -> Page:
+        """The browser follows redirects itself: allow is checked on where the page ended up."""
         from websockets.sync.client import connect
 
         tab = self._new_tab()
@@ -115,6 +139,8 @@ class CdpFetcher:
                 self.http.get(f"{self.endpoint}/json/close/{tab['id']}")
             except httpx.HTTPError:
                 pass
+        if allow is not None and final_url != url and not allow(final_url):
+            raise RedirectRefused(final_url)
         return Page(final_url, 200, "text/html", html.encode())
 
     def close(self) -> None:

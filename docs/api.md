@@ -251,7 +251,8 @@ or the Data tab) adds pages of websites to a collection in the background:
 - Starts from the given addresses and follows links **within the same sites** (the same host,
   `www.` aside; other subdomains are other sites) up to `max_depth` hops, following HTTP and
   `<meta http-equiv="refresh">` redirects (a start address that redirects counts as the site
-  and folder it leads to); with
+  and folder it leads to; where other pages redirect is checked like a link, including
+  `exclude`, before it is downloaded); with
   `only_under_start: true`, only links under the start addresses' folders (from
   `https://example.com/guides/`, only `/guides/…`); links matching `exclude` are skipped (a
   part of the address like `"/tag/"`, or a pattern with `*` for the whole address like

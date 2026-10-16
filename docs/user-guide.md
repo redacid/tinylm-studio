@@ -202,7 +202,10 @@ A **collection** is a set of documents that chat can answer from. Create one on 
   - Redirects are followed, HTTP ones and `<meta http-equiv="refresh">` pages. A start address
     that redirects (`http://` to `https://`, `example.com` to `www.example.com` or a new
     domain, `/` to `/uk/`) is crawled where it leads: that site and folder count as the start.
-    Other pages that redirect to another site are skipped.
+    Where any other page redirects is checked like a link before anything is downloaded from
+    there: another site, a folder outside *Only under these addresses*, a skipped file type
+    or an address matching *Skip links matching* is skipped. So `*.pdf` also skips
+    `/filer/canonical/1785745704/3279/` when it redirects to a `.pdf` file.
   - *Skip links matching* lists links this website never follows, one per line: tags, sorting,
     login pages, a forum. A part of the address (`/tag/`, `?sort=`, `/login`) matches anywhere
     in it; a pattern with `*` covers the whole address (`*/forum/*`, `*.pdf`). Only `*` is

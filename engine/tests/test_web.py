@@ -52,11 +52,13 @@ SITE = {
 
 # Redirects: a path to the address it moved to; "@" stands for the other host name of the site's
 # server (localhost and 127.0.0.1 are different sites).
-REDIRECTS = {"/old": "/guides/", "/moved": "@/", "/a-moved": "@/a"}
+REDIRECTS = {"/old": "/guides/", "/moved": "@/", "/a-moved": "@/a", "/filer/1/": "/media/2025.pdf"}
 SITE["/meta"] = (
     '<html><head><meta http-equiv="Refresh" content="0; URL=\'/guides/\'"></head></html>'
 )
-SITE["/links"] = page("Links", '<a href="/a-moved">A</a> <a href="/b">B</a>')
+SITE["/links"] = page(
+    "Links", '<a href="/a-moved">A</a> <a href="/b">B</a> <a href="/filer/1/">PDF</a>'
+)
 
 
 class Site(BaseHTTPRequestHandler):
@@ -218,10 +220,15 @@ def test_a_start_address_that_redirects(games, site):
     assert games.documents("games")[-1]["source"].startswith("http://localhost:")
 
 
-def test_a_page_that_redirects_to_another_site_is_skipped(games, site):
-    job = crawl(games, [f"{site}/links"], max_depth=1)
+def test_redirects_are_held_to_the_rules_of_links(games, site):
+    """A page that redirects to another site, or to an excluded address, is skipped without
+    downloading what the redirect leads to."""
+    job = crawl(games, [f"{site}/links"], max_depth=1, exclude=["*.pdf"])
     assert titles(games) == ["Article B"]
-    assert any("redirects to another site" in line for line in job.log)
+    assert "/media/2025.pdf" not in Site.requests and "/filer/1/" in Site.requests
+    assert any("/a-moved: it redirects to http://localhost:" in line for line in job.log)
+    assert any("/filer/1/: it redirects to " in line for line in job.log)
+    assert job.skipped >= 2
 
 
 def test_exclude_patterns_skip_links(games, site):

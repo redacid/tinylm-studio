@@ -7,8 +7,10 @@ https://example.com/guides/ the crawl stays under /guides/.
 
 Redirects are followed, HTTP ones and <meta http-equiv="refresh"> pages. A start address that
 redirects (http:// to https://, the bare domain to www. or a new domain, / to /uk/) is crawled
-where it leads: the site and folder it lands in count as the start. Other pages that redirect
-to another site are skipped.
+where it leads: the site and folder it lands in count as the start. A redirect of any other
+page is held to the same rules as a link (the site, the start folders, the exclude patterns
+and skipped file types), and one that breaks them is not downloaded: a link to
+/filer/canonical/1/ that redirects to a .pdf is skipped by the exclude pattern *.pdf.
 
 Pages downloaded by earlier crawls into the same collection are not downloaded again: the crawl
 walks through them using their remembered links and spends its page budget only on new pages,
@@ -31,7 +33,14 @@ from urllib.parse import urldefrag, urljoin, urlsplit
 from engine.rag.convert import UnsupportedFile, convert
 from engine.rag.store import KnowledgeStore
 from engine.web.crawl_settings import CrawlSettings
-from engine.web.fetch import DEFAULT_USER_AGENT, CdpFetcher, FetchError, HttpFetcher, Page
+from engine.web.fetch import (
+    DEFAULT_USER_AGENT,
+    CdpFetcher,
+    FetchError,
+    HttpFetcher,
+    Page,
+    RedirectRefused,
+)
 from engine.web.politeness import RateLimiter, Robots, site
 from engine.web.sites import WebsiteStore
 
@@ -239,17 +248,20 @@ class Crawler:
         seen = {url for url, _ in queue}
         attempts: dict[str, int] = {}
 
+        def wanted(link: str) -> bool:
+            """Whether a link, or the address a redirect leads to, is to be downloaded."""
+            return (
+                site(link) in start_sites
+                and (not options.only_under_start or under(link, folders))
+                and worth_fetching(link)
+                and not excluded(link, options.exclude)
+            )
+
         def follow(found: list[str], depth: int) -> None:
             if depth >= options.max_depth:
                 return
             for link in found:
-                if (
-                    link not in seen
-                    and site(link) in start_sites
-                    and (not options.only_under_start or under(link, folders))
-                    and worth_fetching(link)
-                    and not excluded(link, options.exclude)
-                ):
+                if link not in seen and wanted(link):
                     seen.add(link)
                     queue.append((link, depth + 1))
 
@@ -274,14 +286,23 @@ class Crawler:
                 if job.cancelled.is_set():
                     break
                 job.current = url
+                # A start address may redirect anywhere (its new place becomes the start); the
+                # redirects of other pages are held to the rules of links.
+                allow = None if depth == 0 else (lambda target: wanted(normalize(target)))
                 try:
-                    page = (browser or http).fetch(url)
+                    page = (browser or http).fetch(url, allow)
                     for _ in range(MAX_REDIRECTS):
                         target = refresh_target(page)
                         if target is None or target == normalize(page.url):
                             break
+                        if allow is not None and not allow(target):
+                            raise RedirectRefused(target)
                         limiter.wait(site(target))
-                        page = (browser or http).fetch(target)
+                        page = (browser or http).fetch(target, allow)
+                except RedirectRefused as e:
+                    job.record(url, "skipped")
+                    job.note(f"skipped {url}: it redirects to {e.url}")
+                    continue
                 except FetchError as e:
                     job.record(url, "failed")
                     job.note(f"failed {url}: {e}")
@@ -297,10 +318,6 @@ class Crawler:
                         start_sites.add(site(landed))
                         folders.setdefault(site(landed), set()).add(folder(landed))
                         job.note(f"{url} redirects to {landed}")
-                    elif site(landed) != host:
-                        job.record(url, "skipped")
-                        job.note(f"{url} redirects to another site: {landed}")
-                        continue
                     elif landed in seen:  # another address of a page this crawl has
                         job.record(url, "skipped")
                         continue
