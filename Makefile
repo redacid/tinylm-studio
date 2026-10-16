@@ -141,7 +141,8 @@ searxng: ## Start a local SearXNG for web search on 127.0.0.1:SEARXNG_PORT (Dock
 	mkdir -p "$(DATA_DIR)/searxng"
 	test -f "$(DATA_DIR)/searxng/settings.yml" || cp scripts/searxng/settings.yml "$(DATA_DIR)/searxng/"
 	-$(CONTAINER) rm -f tinylm-searxng >/dev/null 2>&1
-	$(CONTAINER) run -d --name tinylm-searxng --restart unless-stopped \
+	-$(CONTAINER) network create $(NETWORK) >/dev/null 2>&1
+	$(CONTAINER) run -d --name tinylm-searxng --restart unless-stopped --network $(NETWORK) \
 		-p 127.0.0.1:$(SEARXNG_PORT):8080 -v "$(DATA_DIR)/searxng:/etc/searxng:Z" \
 		-e GRANIAN_HOST=0.0.0.0 -e SEARXNG_SECRET=$$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n') \
 		docker.io/searxng/searxng:latest
@@ -158,15 +159,20 @@ search: ## Find pages on the web: make search Q="elden ring review" [VIDEO=1] [A
 ##@ Browser for crawling
 
 CDP_PORT ?= 9222
+# The container network of the helpers and the engine image (make run-image): there they reach
+# each other by name, e.g. http://tinylm-chrome:9222, as 127.0.0.1 in a container is itself.
+NETWORK ?= tinylm
 
 .PHONY: chrome
 chrome: ## Start a headless Chrome for crawling with Browser (CDP) on 127.0.0.1:CDP_PORT [CDP_PROXY=socks5://host:port]
 	@test -n "$(CONTAINER)" || { echo "Install Docker or Podman, or start Chrome yourself (see the user guide)."; exit 1; }
 	-$(CONTAINER) rm -f tinylm-chrome >/dev/null 2>&1
-	$(CONTAINER) run -d --name tinylm-chrome --restart unless-stopped --shm-size=1g \
+	-$(CONTAINER) network create $(NETWORK) >/dev/null 2>&1
+	$(CONTAINER) run -d --name tinylm-chrome --restart unless-stopped --shm-size=1g --network $(NETWORK) \
 		-p 127.0.0.1:$(CDP_PORT):9222 \
 		docker.io/chromedp/headless-shell:stable $(if $(CDP_PROXY),--proxy-server=$(CDP_PROXY))
-	@echo "Chrome's DevTools run on http://127.0.0.1:$(CDP_PORT) (Settings > Crawler > Browser address)"
+	@echo "Chrome's DevTools run on http://127.0.0.1:$(CDP_PORT) (Settings > Crawler > Browser address);"
+	@echo "from the engine image (make run-image): http://tinylm-chrome:9222"
 
 .PHONY: chrome-stop
 chrome-stop: ## Stop the headless Chrome
@@ -205,7 +211,10 @@ image-push: ## Build and push both tags (commit first; ALLOW_DIRTY=1 to push unc
 run-image: ## Run IMAGE:VARIANT on 127.0.0.1:PORT with the data in DATA_DIR/container (needs TINYLM_API_KEY)
 	@test -n "$(TINYLM_API_KEY)" || { echo "Set TINYLM_API_KEY (in .env or the command line)."; exit 1; }
 	mkdir -p $(DATA_DIR)/container
-	$(CONTAINER) run --rm -it -p 127.0.0.1:$(PORT):8765 -v $(DATA_DIR)/container:/workspace/tinylm-studio \
+	-$(CONTAINER) network create $(NETWORK) >/dev/null 2>&1
+	$(CONTAINER) run --rm -it --network $(NETWORK) -p 127.0.0.1:$(PORT):8765 \
+		-v $(DATA_DIR)/container:/workspace/tinylm-studio \
+		-e TINYLM_CDP_URL=http://tinylm-chrome:9222 -e TINYLM_SEARXNG_URL=http://tinylm-searxng:8080 \
 		-e TINYLM_API_KEY $(if $(HF_TOKEN),-e HF_TOKEN) $(if $(filter cuda,$(VARIANT)),--gpus all) $(IMAGE):$(VARIANT)
 
 ##@ Cleanup

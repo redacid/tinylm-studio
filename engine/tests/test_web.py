@@ -367,6 +367,21 @@ def test_browser_renders_javascript_pages(games, site, browser):
     assert titles(games) == ["Rendered"]
 
 
+def test_browser_in_another_container(site, browser, monkeypatch):
+    """A browser addressed by a host name, such as its container's: Chrome answers only an IP
+    address or localhost, so the name is looked up."""
+    from engine.web import fetch
+
+    port = browser.rsplit(":", 1)[1]
+    names = {"tinylm-chrome": "127.0.0.1"}
+    monkeypatch.setattr(fetch.socket, "gethostbyname", lambda host: names[host])
+    page = CdpFetcher(f"http://tinylm-chrome:{port}", settle=0.2).fetch(f"{site}/js")
+    assert "Triss Merigold" in page.body.decode()
+    monkeypatch.undo()
+    with pytest.raises(fetch.FetchError, match="Cannot find the browser's host"):
+        CdpFetcher("http://nowhere.invalid:9222").fetch(f"{site}/js")
+
+
 def test_crawl_api(client, site):
     assert client.post("/api/collections/games/crawl", json={"urls": [site]}).status_code == 404
     client.post("/api/collections", json={"name": "games"})

@@ -50,7 +50,9 @@ on a [RunPod](#runpod) GPU or CPU pod, which the desktop app can create, start a
    their own Deployments or as sidecars, and point the settings at them. For Chrome,
    `chromedp/headless-shell` (what `make chrome` runs) works as a sidecar listening on 9222;
    mount an `emptyDir` with `medium: Memory` on `/dev/shm`, as `make chrome` gives it `--shm-size=1g`. The defaults point to
-   `127.0.0.1`, which in a pod is the pod itself.
+   `127.0.0.1`, which in a pod is the pod itself. A Chrome in another pod or container can be
+   addressed by its service name (`http://chrome:9222`): Chrome answers only an IP address or
+   `localhost`, so the engine looks the name up and connects to the address.
 7. **Paths are the pod's paths.** `python -m engine ingest <folder>` reads folders inside the
    container, and file sources in the chat point into the container too, so they are not links
    on a user's machine. In a cluster, add files through the API (`POST
@@ -82,6 +84,10 @@ make image VARIANT=cuda                      # tinylm-engine:0.1.0-5a0d901-cuda 
 make image-push VARIANT=cuda IMAGE=docker.io/<you>/tinylm-engine   # after docker login
 TINYLM_API_KEY=<key> make run-image          # try it on 127.0.0.1:8765, data in <data dir>/container
 ```
+
+`make run-image` joins the container network `tinylm` that `make chrome` and `make searxng`
+use, and points the engine at them by name (`http://tinylm-chrome:9222`,
+`http://tinylm-searxng:8080`).
 
 - **Version and commit.** Every build is tagged `<engine version>-<commit>-<variant>`, e.g.
   `0.1.0-5a0d901-cuda`, a tag that always means the same code, and `<variant>`, which moves to

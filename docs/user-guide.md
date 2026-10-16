@@ -745,6 +745,15 @@ and `localhost` are the container itself: for a site on your own machine use the
 address (with Docker on Linux usually `172.17.0.1`), and for a proxy on your machine too. The
 browser keeps no logins between restarts.
 
+An engine that runs in a container itself cannot reach the browser at `127.0.0.1`, which is
+its own container there. `make chrome`, `make searxng` and `make run-image` put their
+containers on one network (`tinylm`, `NETWORK=` to change it) where they reach each other by
+name: `make run-image` sets the browser address to `http://tinylm-chrome:9222` and SearXNG to
+`http://tinylm-searxng:8080`. Run `make chrome` again if the browser was started before this
+network existed. Chrome answers only requests addressed to an IP address or `localhost`, so
+the engine looks the name up and uses the address. A **Browser address** saved in
+[Crawler settings](#crawler-settings) wins over the one `make run-image` sets.
+
 To log in to sites first, run your own Chrome or Chromium with a separate profile instead:
 
 ```bash

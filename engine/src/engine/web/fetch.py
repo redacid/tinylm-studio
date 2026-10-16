@@ -1,12 +1,14 @@
 """Page fetchers: plain HTTP (optionally through an HTTP or SOCKS proxy) and a real browser
 controlled over the Chrome DevTools Protocol (CDP), for sites that need JavaScript."""
 
+import ipaddress
 import itertools
 import json
+import socket
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import httpx
 
@@ -96,6 +98,10 @@ class CdpFetcher:
 
     The browser uses its own network settings; to go through a proxy, start it with
     --proxy-server=socks5://host:port.
+
+    The endpoint may name another host, such as the browser's container
+    (http://tinylm-chrome:9222): Chrome answers DevTools requests only for an IP address or
+    localhost, so the name is looked up and the address used instead.
     """
 
     def __init__(self, endpoint: str = "http://127.0.0.1:9222", timeout=30, settle=1.5):
@@ -105,22 +111,45 @@ class CdpFetcher:
         # The DevTools endpoint is local: never route it through a system proxy.
         self.http = httpx.Client(timeout=10, trust_env=False)
 
-    def _new_tab(self) -> dict:
+    def _address(self) -> str:
+        """The endpoint with its host name looked up: Chrome refuses a Host header that is not
+        an IP address or localhost ("Host header is specified and is not an IP address")."""
+        parts = urlsplit(self.endpoint)
+        host = parts.hostname or ""
+        try:
+            ipaddress.ip_address(host)
+            return self.endpoint
+        except ValueError:
+            if host == "localhost":
+                return self.endpoint
+        try:
+            address = socket.gethostbyname(host)
+        except OSError as e:
+            raise FetchError(f"Cannot find the browser's host {host}: {e}") from None
+        return urlunsplit(parts._replace(netloc=f"{address}:{parts.port or 80}"))
+
+    def _new_tab(self, address: str) -> dict:
         try:
             # Chrome 111+ requires PUT; older versions only accept GET.
-            response = self.http.put(f"{self.endpoint}/json/new?about:blank")
+            response = self.http.put(f"{address}/json/new?about:blank")
             if response.status_code == 405:
-                response = self.http.get(f"{self.endpoint}/json/new?about:blank")
+                response = self.http.get(f"{address}/json/new?about:blank")
             response.raise_for_status()
-            return response.json()
+            tab = response.json()
         except (httpx.HTTPError, ValueError) as e:
             raise FetchError(f"Cannot reach the browser at {self.endpoint}: {e}") from None
+        # Chrome names the address it was asked at; with a published port (9333 to the
+        # container's 9222) it can differ from where it is reachable, so use the endpoint's.
+        ws = urlsplit(tab["webSocketDebuggerUrl"])
+        tab["webSocketDebuggerUrl"] = urlunsplit(ws._replace(netloc=urlsplit(address).netloc))
+        return tab
 
     def fetch(self, url: str, allow: Callable[[str], bool] | None = None) -> Page:
         """The browser follows redirects itself: allow is checked on where the page ended up."""
         from websockets.sync.client import connect
 
-        tab = self._new_tab()
+        address = self._address()
+        tab = self._new_tab(address)
         try:
             with connect(tab["webSocketDebuggerUrl"], max_size=None, open_timeout=10) as ws:
                 session = CdpSession(ws, self.timeout)
@@ -136,7 +165,7 @@ class CdpFetcher:
             raise FetchError(f"Browser error: {e}") from None
         finally:
             try:
-                self.http.get(f"{self.endpoint}/json/close/{tab['id']}")
+                self.http.get(f"{address}/json/close/{tab['id']}")
             except httpx.HTTPError:
                 pass
         if allow is not None and final_url != url and not allow(final_url):
