@@ -190,13 +190,36 @@ VARIANT ?= cpu
 ENGINE_VERSION := $(shell sed -n 's/^version = "\(.*\)"/\1/p' $(ENGINE_DIR)/pyproject.toml)
 GIT_COMMIT     := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)$(if $(shell git status --porcelain 2>/dev/null),-dirty)
 IMAGE_TAG      := $(ENGINE_VERSION)-$(GIT_COMMIT)-$(VARIANT)
+# Its base (engine/Dockerfile.base): llama.cpp, PyTorch and the dependencies, built once, then
+# only when they change. Tagged <variant>-<hash of Dockerfile.base and the dependency list>.
+BASE_IMAGE ?= $(IMAGE)-base
+BASE_HASH  := $(shell { cat $(ENGINE_DIR)/Dockerfile.base; sed -n '/^dependencies = \[/,/^\]/p' $(ENGINE_DIR)/pyproject.toml; } | sha256sum | cut -c1-12)
+BASE_TAG   := $(VARIANT)-$(BASE_HASH)
+
+.PHONY: base
+base: ## Build the base image BASE_IMAGE:VARIANT-<hash> (llama.cpp, PyTorch; long, cuda most) [VARIANT=cuda]
+	@test -n "$(CONTAINER)" || { echo "Install Docker or Podman first."; exit 1; }
+	$(CONTAINER) build -f $(ENGINE_DIR)/Dockerfile.base --build-arg VARIANT=$(VARIANT) \
+		-t $(BASE_IMAGE):$(BASE_TAG) -t $(BASE_IMAGE):$(VARIANT) $(ENGINE_DIR)
+	@echo "Built $(BASE_IMAGE):$(BASE_TAG)"
+
+.PHONY: base-push
+base-push: ## Push the base image, so that other computers build the engine image without building it
+	$(CONTAINER) image inspect $(BASE_IMAGE):$(BASE_TAG) >/dev/null 2>&1 || $(MAKE) base
+	$(CONTAINER) push $(BASE_IMAGE):$(BASE_TAG)
+	$(CONTAINER) push $(BASE_IMAGE):$(VARIANT)
 
 .PHONY: image
 image: ## Build the engine image IMAGE:<version>-<commit>-VARIANT and IMAGE:VARIANT [VARIANT=cuda]
 	@test -n "$(CONTAINER)" || { echo "Install Docker or Podman first."; exit 1; }
-	$(CONTAINER) build --build-arg VARIANT=$(VARIANT) --build-arg ENGINE_VERSION=$(ENGINE_VERSION) \
-		--build-arg GIT_COMMIT=$(GIT_COMMIT) -t $(IMAGE):$(IMAGE_TAG) -t $(IMAGE):$(VARIANT) $(ENGINE_DIR)
-	@echo "Built $(IMAGE):$(IMAGE_TAG)"
+	@$(CONTAINER) image inspect $(BASE_IMAGE):$(BASE_TAG) >/dev/null 2>&1 \
+		|| $(CONTAINER) pull $(BASE_IMAGE):$(BASE_TAG) >/dev/null 2>&1 \
+		|| { echo "No base image $(BASE_IMAGE):$(BASE_TAG) (new dependencies?): building it first, which takes long."; \
+			$(MAKE) base; }
+	$(CONTAINER) build --build-arg BASE=$(BASE_IMAGE):$(BASE_TAG) --build-arg VARIANT=$(VARIANT) \
+		--build-arg ENGINE_VERSION=$(ENGINE_VERSION) --build-arg GIT_COMMIT=$(GIT_COMMIT) \
+		-t $(IMAGE):$(IMAGE_TAG) -t $(IMAGE):$(VARIANT) $(ENGINE_DIR)
+	@echo "Built $(IMAGE):$(IMAGE_TAG) on $(BASE_IMAGE):$(BASE_TAG)"
 
 .PHONY: image-push
 image-push: ## Build and push both tags (commit first; ALLOW_DIRTY=1 to push uncommitted changes)

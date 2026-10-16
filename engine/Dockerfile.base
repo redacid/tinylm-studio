@@ -1,0 +1,72 @@
+# The base of the engine image: the system, Python, llama.cpp and PyTorch, and every dependency
+# of the engine, without the engine itself. Building it takes long (llama.cpp is compiled, the
+# CUDA variant for six GPU generations) and it changes only with the dependencies, so it is built
+# once and the engine image (Dockerfile) adds only the engine's code on top: a build of minutes
+# and a few megabytes for a pod to download.
+#
+#   make base                  tinylm-engine-base:cpu-<hash>, and :cpu
+#   make base VARIANT=cuda     tinylm-engine-base:cuda-<hash>, and :cuda
+#
+# The hash is of this file and the dependency list in pyproject.toml: a change to either makes a
+# new base, which make image builds when it is missing.
+ARG VARIANT=cpu
+ARG CUDA_VERSION=12.6.3
+
+FROM ubuntu:24.04 AS build-cpu
+FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu24.04 AS build-cuda
+FROM ubuntu:24.04 AS runtime-cpu
+FROM nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu24.04 AS runtime-cuda
+
+# llama-cpp-python, built once into a wheel. llama.cpp is compiled without -march=native, so the
+# image runs on any x86-64 CPU, and for the common GPU generations (Volta to Hopper).
+FROM build-${VARIANT} AS llama
+ARG VARIANT
+ARG LLAMA_CPP_PYTHON="llama-cpp-python>=0.3.0"
+ARG CUDA_ARCHITECTURES="70;75;80;86;89;90"
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3 python3-venv python3-dev build-essential cmake git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+RUN python3 -m venv /opt/build && /opt/build/bin/pip install --quiet --upgrade pip wheel
+# No NCCL (multi-GPU only; a pod has one GPU): llama.cpp would link the CUDA image's libnccl, which
+# is older than the one torch ships and, loaded first, breaks `import torch` (undefined ncclCommGrow).
+RUN CMAKE_ARGS="-DGGML_NATIVE=OFF"; \
+    if [ "$VARIANT" = cuda ]; then \
+        CMAKE_ARGS="$CMAKE_ARGS -DGGML_CUDA=on -DGGML_CUDA_NCCL=OFF -DCMAKE_CUDA_ARCHITECTURES=$CUDA_ARCHITECTURES \
+            -DCMAKE_EXE_LINKER_FLAGS=-Wl,--allow-shlib-undefined"; \
+    fi; \
+    CMAKE_ARGS="$CMAKE_ARGS" /opt/build/bin/pip wheel --no-deps --no-binary llama-cpp-python \
+        -w /wheels "$LLAMA_CPP_PYTHON"
+# libcuda.so.1 comes with the NVIDIA driver, which the GPU host mounts into the container at run
+# time; a build has none. The CUDA toolkit's stub stands in for it while the build checks that
+# llama_cpp loads, and is removed after.
+RUN mkdir -p /stubs \
+    && if [ "$VARIANT" = cuda ]; then cp /usr/local/cuda/lib64/stubs/libcuda.so /stubs/libcuda.so.1; fi
+
+FROM runtime-${VARIANT}
+ARG VARIANT
+# Where PyTorch comes from: CPU-only wheels, or CUDA ones for the cuda variant.
+ARG TORCH_INDEX=""
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3 python3-venv libgomp1 ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+RUN python3 -m venv /opt/engine
+ENV PATH=/opt/engine/bin:$PATH
+COPY --from=llama /wheels /wheels
+COPY --from=llama /stubs /opt/build-stubs
+# Only the dependency list of pyproject.toml: the engine itself comes in the engine image.
+COPY pyproject.toml /tmp/pyproject.toml
+RUN set -e; \
+    python -c "import tomllib; print('\n'.join(tomllib.load(open('/tmp/pyproject.toml', 'rb'))['project']['dependencies']))" \
+        > /tmp/requirements.txt; \
+    INDEX="$TORCH_INDEX"; \
+    if [ -z "$INDEX" ]; then \
+        if [ "$VARIANT" = cuda ]; then INDEX=https://download.pytorch.org/whl/cu126; \
+        else INDEX=https://download.pytorch.org/whl/cpu; fi; \
+    fi; \
+    pip install --quiet --no-cache-dir /wheels/*.whl \
+    && pip install --quiet --no-cache-dir --extra-index-url "$INDEX" -r /tmp/requirements.txt \
+    && rm -rf /wheels /tmp/pyproject.toml /tmp/requirements.txt \
+    && LD_LIBRARY_PATH=/opt/build-stubs python -c "import llama_cpp, torch; print('llama.cpp', llama_cpp.__version__, 'torch', torch.__version__)" \
+    && rm -rf /opt/build-stubs
+
+LABEL org.opencontainers.image.title="tinylm-studio engine base (${VARIANT})"

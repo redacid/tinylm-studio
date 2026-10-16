@@ -7,67 +7,26 @@
 # reports the commit in /health and its log. A plain docker build leaves the commit unknown.
 #
 # The CUDA variant runs llama.cpp (GGUF answers) and PyTorch (fine-tuning) on an NVIDIA GPU, for
-# RunPod pods and GPU nodes; see docs/deployment.md. llama.cpp is compiled here rather than taken
-# from prebuilt wheels: without -march=native, so the image runs on any x86-64 CPU, and for the
-# common GPU generations (Volta to Hopper).
+# RunPod pods and GPU nodes; see docs/deployment.md. All of that is in the base image
+# (Dockerfile.base); this one adds the engine's code, so a build takes a minute.
+
+# The base: the system, Python, llama.cpp, PyTorch and the engine's dependencies, built by
+# Dockerfile.base (make base). make image passes the base that matches the dependencies.
+ARG BASE=tinylm-engine-base:cpu
+FROM ${BASE}
 ARG VARIANT=cpu
-ARG CUDA_VERSION=12.6.3
-
-FROM ubuntu:24.04 AS build-cpu
-FROM nvidia/cuda:${CUDA_VERSION}-devel-ubuntu24.04 AS build-cuda
-FROM ubuntu:24.04 AS runtime-cpu
-FROM nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu24.04 AS runtime-cuda
-
-# llama-cpp-python, built once into a wheel.
-FROM build-${VARIANT} AS llama
-ARG VARIANT
-ARG LLAMA_CPP_PYTHON="llama-cpp-python>=0.3.0"
-ARG CUDA_ARCHITECTURES="70;75;80;86;89;90"
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        python3 python3-venv python3-dev build-essential cmake git ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-RUN python3 -m venv /opt/build && /opt/build/bin/pip install --quiet --upgrade pip wheel
-# No NCCL (multi-GPU only; a pod has one GPU): llama.cpp would link the CUDA image's libnccl, which
-# is older than the one torch ships and, loaded first, breaks `import torch` (undefined ncclCommGrow).
-RUN CMAKE_ARGS="-DGGML_NATIVE=OFF"; \
-    if [ "$VARIANT" = cuda ]; then \
-        CMAKE_ARGS="$CMAKE_ARGS -DGGML_CUDA=on -DGGML_CUDA_NCCL=OFF -DCMAKE_CUDA_ARCHITECTURES=$CUDA_ARCHITECTURES \
-            -DCMAKE_EXE_LINKER_FLAGS=-Wl,--allow-shlib-undefined"; \
-    fi; \
-    CMAKE_ARGS="$CMAKE_ARGS" /opt/build/bin/pip wheel --no-deps --no-binary llama-cpp-python \
-        -w /wheels "$LLAMA_CPP_PYTHON"
-# libcuda.so.1 comes with the NVIDIA driver, which the GPU host mounts into the container at run
-# time; a build has none. The CUDA toolkit's stub stands in for it while the build checks that
-# llama_cpp loads, and is removed after.
-RUN mkdir -p /stubs \
-    && if [ "$VARIANT" = cuda ]; then cp /usr/local/cuda/lib64/stubs/libcuda.so /stubs/libcuda.so.1; fi
-
-FROM runtime-${VARIANT}
-ARG VARIANT
 # The engine version is the package's own; passing it only checks that it matches.
 ARG ENGINE_VERSION=""
 ARG GIT_COMMIT=""
-# Where PyTorch comes from: CPU-only wheels, or CUDA ones for the cuda variant.
-ARG TORCH_INDEX=""
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        python3 python3-venv libgomp1 ca-certificates curl \
-    && rm -rf /var/lib/apt/lists/*
-RUN python3 -m venv /opt/engine
-ENV PATH=/opt/engine/bin:$PATH
-COPY --from=llama /wheels /wheels
-COPY --from=llama /stubs /opt/build-stubs
 COPY pyproject.toml /src/engine/
 COPY src /src/engine/src
-RUN INDEX="$TORCH_INDEX"; \
-    if [ -z "$INDEX" ]; then \
-        if [ "$VARIANT" = cuda ]; then INDEX=https://download.pytorch.org/whl/cu126; \
-        else INDEX=https://download.pytorch.org/whl/cpu; fi; \
-    fi; \
-    pip install --quiet --no-cache-dir /wheels/*.whl \
-    && pip install --quiet --no-cache-dir --extra-index-url "$INDEX" /src/engine \
-    && rm -rf /wheels /src \
-    && LD_LIBRARY_PATH=/opt/build-stubs python -c "import engine, llama_cpp, torch; print('engine', engine.__version__, 'llama.cpp', llama_cpp.__version__, 'torch', torch.__version__)" \
-    && rm -rf /opt/build-stubs \
+COPY check-dependencies.py /usr/local/bin/check-dependencies.py
+# --no-deps: the dependencies are in the base. The build fails if the base lacks one, e.g. one
+# added to pyproject.toml without a new base.
+RUN pip install --quiet --no-cache-dir --no-deps /src/engine \
+    && rm -rf /src \
+    && python -c "import engine; print('engine', engine.__version__)" \
+    && python /usr/local/bin/check-dependencies.py \
     && if [ -n "$ENGINE_VERSION" ]; then \
         python -c "import engine, sys; v = engine.__version__; sys.exit(None if v == '$ENGINE_VERSION' else f'engine is {v}, not $ENGINE_VERSION')"; \
     fi

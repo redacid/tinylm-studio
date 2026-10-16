@@ -70,8 +70,14 @@ on a [RunPod](#runpod) GPU or CPU pod, which the desktop app can create, start a
 
 ## Container image
 
-[engine/Dockerfile](../engine/Dockerfile) builds the engine with llama.cpp and PyTorch in two
-variants:
+The engine image comes in two variants, each in two layers:
+
+- the **base** ([engine/Dockerfile.base](../engine/Dockerfile.base)): the system, Python,
+  llama.cpp (compiled) and PyTorch, and every dependency of the engine. Building it takes long,
+  the CUDA one most, and it changes only with the dependencies;
+- the **engine** ([engine/Dockerfile](../engine/Dockerfile)): the base plus the engine's code.
+  It builds in about a minute and adds a few megabytes, so a new engine build is quick to push,
+  and a pod whose host already has the base downloads only that.
 
 | Variant | Base | For |
 |---|---|---|
@@ -82,6 +88,8 @@ variants:
 make image                                   # tinylm-engine:0.1.0-5a0d901-cpu and :cpu
 make image VARIANT=cuda                      # tinylm-engine:0.1.0-5a0d901-cuda and :cuda
 make image-push VARIANT=cuda IMAGE=docker.io/<you>/tinylm-engine   # after docker login
+make base VARIANT=cuda                       # tinylm-engine-base:cuda-0f7b45363f9b and :cuda
+make base-push VARIANT=cuda IMAGE=docker.io/<you>/tinylm-engine    # docker.io/<you>/tinylm-engine-base
 TINYLM_API_KEY=<key> make run-image          # try it on 127.0.0.1:8765, data in <data dir>/container
 ```
 
@@ -89,6 +97,15 @@ TINYLM_API_KEY=<key> make run-image          # try it on 127.0.0.1:8765, data in
 use, and points the engine at them by name (`http://tinylm-chrome:9222`,
 `http://tinylm-searxng:8080`).
 
+- **The base's tag** is `<variant>-<hash>`, the hash of `Dockerfile.base` and the dependency
+  list in `engine/pyproject.toml`. `make image` uses the base with the current hash: one built
+  here, else one pulled from the registry (`BASE_IMAGE`, by default `<IMAGE>-base`), else it
+  builds it first, which takes as long as a whole build used to. So after a change to the
+  dependencies the next `make image` is a long one, and later ones are quick again. The engine
+  image is installed without dependencies (`pip install --no-deps`) and its build fails if the
+  base lacks one. `make base-push` pushes the base, so that another computer builds the engine
+  image without building the base; `make image-push` pushes the engine image with the base's
+  layers, which a registry that has them already skips.
 - **Version and commit.** Every build is tagged `<engine version>-<commit>-<variant>`, e.g.
   `0.1.0-5a0d901-cuda`, a tag that always means the same code, and `<variant>`, which moves to
   the latest build. With uncommitted changes the commit gets `-dirty` (`0.1.0-5a0d901-dirty-cpu`),
@@ -103,7 +120,7 @@ use, and points the engine at them by name (`http://tinylm-chrome:9222`,
 
 - llama.cpp is compiled in the image without `-march=native`, so it runs on any x86-64 CPU. The CUDA
   build compiles it for six GPU generations and takes much longer than the CPU one.
-- `TORCH_INDEX` (a build argument) picks where PyTorch comes from; the default is PyTorch's own
+- `TORCH_INDEX` (a build argument of the base) picks where PyTorch comes from; the default is PyTorch's own
   CPU or CUDA 12.6 index.
 - In the image: `TINYLM_HOST=0.0.0.0`, port 8765, data in `/workspace/tinylm-studio` (the
   Hugging Face cache too, `HF_HOME`), and a `HEALTHCHECK` on `/health`. Mount a volume on
