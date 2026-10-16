@@ -77,6 +77,7 @@ def serve(settings: Settings, args: argparse.Namespace) -> None:
     log.info(
         "Data in %s; log in %s; listening on %s:%d", settings.data_dir, path, args.host, args.port
     )
+    log.info("API key: %s", "required (TINYLM_API_KEY)" if settings.api_key else "not required")
     if not settings.api_key and args.host not in ("127.0.0.1", "localhost", "::1"):
         log.warning("No TINYLM_API_KEY: anyone who can reach the port can use the engine")
     threading.Thread(target=log_hardware, daemon=True).start()

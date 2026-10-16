@@ -100,7 +100,8 @@ async function waitForHealth(url: string, timeoutMs: number, alive: () => boolea
 
 /** Throws when the engine refuses the API key. */
 async function checkKey(url: string, apiKey: string): Promise<void> {
-  const response = await fetch(`${url}/api/system`, {
+  // A cheap endpoint that needs the key (/api/system imports torch, which takes a while).
+  const response = await fetch(`${url}/api/collections`, {
     headers: apiKey ? { authorization: `Bearer ${apiKey}` } : {},
     signal: AbortSignal.timeout(15_000),
   });
@@ -181,14 +182,23 @@ export class Engine {
     if (!alive()) return;
     const port = await freePort();
     this.set({ phase: "starting", where: `port ${port}` });
-    const child = spawn(python, ["-m", "engine", "--port", String(port)], {
-      stdio: ["ignore", "pipe", "pipe"],
+    // A TINYLM_API_KEY in the environment (.env, which `make app` exports) is the local engine's
+    // key too, so other tools can use it; the app gives the engine exactly the key it sends.
+    const apiKey = process.env.TINYLM_API_KEY?.trim() || undefined;
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
       // The renderer is loaded from file://; Chromium reports that origin as "null" or "file://".
-      // TINYLM_EXIT_WITH_PARENT: the engine stops by itself if this app crashes or is killed.
-      env: { ...process.env, TINYLM_CORS_ORIGINS: '["null", "file://"]', TINYLM_EXIT_WITH_PARENT: "1" },
-    });
+      TINYLM_CORS_ORIGINS: '["null", "file://"]',
+      // The engine stops by itself if this app crashes or is killed.
+      TINYLM_EXIT_WITH_PARENT: "1",
+    };
+    delete env.TINYLM_API_KEY;
+    if (apiKey) env.TINYLM_API_KEY = apiKey;
+    const child = spawn(python, ["-m", "engine", "--port", String(port)], { stdio: ["ignore", "pipe", "pipe"], env });
     this.child = child;
-    logger.info(`Started ${python} -m engine --port ${port} (process ${child.pid})`);
+    logger.info(
+      `Started ${python} -m engine --port ${port} (process ${child.pid}), ${apiKey ? "with the TINYLM_API_KEY from the environment" : "without an API key"}`,
+    );
     // The engine logs to its own file; its output is passed on to this terminal, and the end of
     // it kept for the app's log in case it exits before it could write its own (a broken install).
     const recent: string[] = [];
@@ -210,7 +220,8 @@ export class Engine {
     });
     const url = `http://127.0.0.1:${port}`;
     const build = await waitForHealth(url, 30_000, alive);
-    if (alive()) this.set({ phase: "ready", url, ...build, where: `port ${port}`, remote: false });
+    await checkKey(url, apiKey ?? "");
+    if (alive()) this.set({ phase: "ready", url, apiKey, ...build, where: `port ${port}`, remote: false });
   }
 
   private async connectRemote(remote: Connection["remote"], alive: () => boolean) {
