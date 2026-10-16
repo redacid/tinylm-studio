@@ -1,6 +1,9 @@
 """Management API for training datasets: import, browse, edit and split examples."""
 
+from urllib.parse import quote
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from engine.api.deps import require_api_key
@@ -110,6 +113,24 @@ def import_files(name: str, files: list[UploadFile], store: DatasetStore = Depen
         except InvalidExample as e:
             results.append({"name": filename, "error": str(e)})
     return {"data": results}
+
+
+@router.get("/{name}/export")
+def export_dataset(
+    name: str, split: Split = "all", store: DatasetStore = Depends(datasets)
+) -> StreamingResponse:
+    """The examples as JSONL in the chat format, for POST /{name}/import here or elsewhere."""
+    try:
+        store.dataset(name)
+    except DatasetNotFound:
+        raise not_found(name) from None
+    filename = name if split == "all" else f"{name}-{split}"
+    return StreamingResponse(
+        store.export_lines(name, split),
+        media_type="application/x-ndjson",
+        # filename* allows names such as "підказки"; headers themselves are latin-1.
+        headers={"content-disposition": f"attachment; filename*=UTF-8''{quote(filename)}.jsonl"},
+    )
 
 
 @router.get("/{name}/examples")

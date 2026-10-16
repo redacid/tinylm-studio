@@ -231,8 +231,8 @@ grounded answers with sources through both APIs, Data screen and cited answers i
 ### Phase 3 – Fine-tuning (in progress)
 
 Done: datasets (JSONL/JSON/CSV import in OpenAI, ShareGPT, Alpaca and prompt/completion shapes,
-validation with line numbers, a stable train/held-out split, search, editing) and the Datasets
-screen; LoRA training with transformers + peft in a separate worker process, only the assistant
+validation with line numbers, a stable train/held-out split, search, editing, JSONL export) and the
+Datasets screen; LoRA training with transformers + peft in a separate worker process, only the assistant
 answers learned, checkpoints, stop and resume, progress as server-sent events; fine-tuned models
 served as base + adapter (merged on load) in chat and through both APIs; Training screen with a
 live loss chart; fine-tuned models listed on the Models screen. The Models screen also lists

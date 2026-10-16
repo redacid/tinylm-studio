@@ -141,3 +141,35 @@ def test_datasets_api(client):
     assert client.delete(path).status_code == 404
     assert client.delete("/api/datasets/hints").status_code == 204
     assert client.get("/api/datasets/hints/examples").status_code == 404
+
+
+def test_dataset_export_and_import(client):
+    client.post("/api/datasets", json={"name": "підказки", "eval_percent": 50})
+    chat = [{"role": "user", "content": "Знак?"}, {"role": "assistant", "content": "Ігні."}]
+    client.post("/api/datasets/підказки/examples", json={"messages": chat})
+    datasets = client.app.state.datasets
+    generated = [{"role": "user", "content": "Хто?"}, {"role": "assistant", "content": "Геральт."}]
+    datasets.add("підказки", generated, "generated", "witcher.md")
+    files = {"files": ("a.jsonl", json.dumps({"prompt": "Де?", "completion": "Тут."}).encode())}
+    client.post("/api/datasets/підказки/import", files=files)
+
+    response = client.get("/api/datasets/підказки/export")
+    assert response.status_code == 200
+    assert "filename*=UTF-8''%D0%BF" in response.headers["content-disposition"]
+    records = [json.loads(line) for line in response.text.splitlines()]
+    assert [r["origin"] for r in records] == ["manual", "generated", "imported"]
+    assert records[1]["source"] == "witcher.md" and "source" not in records[0]
+    held_out = client.get("/api/datasets/підказки/export", params={"split": "eval"}).text
+    assert len(held_out.splitlines()) == client.get("/api/datasets").json()["data"][0]["eval"]
+
+    client.post("/api/datasets", json={"name": "copy"})
+    files = {"files": ("підказки.jsonl", response.content)}
+    report = client.post("/api/datasets/copy/import", files=files).json()["data"][0]
+    assert report["added"] == 3
+    copied = client.get("/api/datasets/copy/examples").json()["data"]
+    assert [(e["origin"], e["source"]) for e in copied] == [
+        ("manual", None),
+        ("generated", "witcher.md"),
+        ("imported", None),
+    ]
+    assert client.get("/api/datasets/missing/export").status_code == 404

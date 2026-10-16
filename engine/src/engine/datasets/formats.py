@@ -24,6 +24,7 @@ SHAREGPT_ROLES |= {"assistant": "assistant", "model": "assistant", "bot": "assis
 # (question field, answer field), tried in order.
 PAIRS = (("prompt", "completion"), ("question", "answer"), ("input", "output"))
 SUPPORTED_SUFFIXES = (".jsonl", ".json", ".csv")
+ORIGINS = ("manual", "imported", "generated")
 
 
 class InvalidExample(ValueError):
@@ -35,6 +36,19 @@ class ParsedRecord:
     line: int  # 1-based line (JSONL) or row (CSV, counting the header) in the file
     messages: Messages | None = None
     error: str | None = None
+    # Kept from a dataset export, so examples moved to another engine keep where they came from.
+    origin: str | None = None
+    source: str | None = None
+
+
+def read(number: int, record: object) -> ParsedRecord:
+    """One record of a file as messages, with its origin and source when an export wrote them."""
+    parsed = ParsedRecord(number, messages=to_messages(record))
+    if isinstance(record, dict) and record.get("origin") in ORIGINS:
+        parsed.origin = record["origin"]
+        source = record.get("source")
+        parsed.source = source if isinstance(source, str) and source else None
+    return parsed
 
 
 def validate(messages: object) -> Messages:
@@ -126,7 +140,7 @@ def parse_jsonl(text: str) -> Iterator[ParsedRecord]:
         if not line.strip():
             continue
         try:
-            yield ParsedRecord(number, messages=to_messages(json.loads(line)))
+            yield read(number, json.loads(line))
         except json.JSONDecodeError as e:
             yield ParsedRecord(number, error=f"not valid JSON: {e.msg}")
         except InvalidExample as e:
@@ -141,7 +155,7 @@ def parse_json_array(text: str) -> Iterator[ParsedRecord]:
         return
     for number, record in enumerate(records, 1):
         try:
-            yield ParsedRecord(number, messages=to_messages(record))
+            yield read(number, record)
         except InvalidExample as e:
             yield ParsedRecord(number, error=str(e))
 
@@ -152,6 +166,6 @@ def parse_csv(text: str) -> Iterator[ParsedRecord]:
         reader.fieldnames = [f.strip().lower() for f in reader.fieldnames]
     for number, row in enumerate(reader, 2):
         try:
-            yield ParsedRecord(number, messages=to_messages(row))
+            yield read(number, row)
         except InvalidExample as e:
             yield ParsedRecord(number, error=str(e))

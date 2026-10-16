@@ -242,6 +242,9 @@ language); facts are better left to collections and chat with data.
   optional `system`. Bad records are skipped and listed with their line numbers.
   [examples/game-hints.jsonl](examples/game-hints.jsonl) is a small sample in Ukrainian, Russian
   and English.
+- **Export** saves the examples to `<name>.jsonl` in the chat format above. **Import file** with
+  it on another engine (a RunPod pod, say) moves the dataset there; examples keep their origin
+  (and the document a generated one was written from), and ones already there are skipped.
 - **Add example**, **Edit** and **Delete** change examples by hand.
 - **Evaluation %** holds examples out of training to measure the model on data it has not
   seen. Each example stays in its part when others are added or removed.

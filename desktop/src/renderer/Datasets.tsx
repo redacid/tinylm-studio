@@ -110,6 +110,7 @@ function DatasetView({
   const [editing, setEditing] = useState<number | "new" | null>(null);
   const [draft, setDraft] = useState<ChatMessage[]>(NEW_EXAMPLE);
   const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [log, setLog] = useState<string[]>([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -164,6 +165,24 @@ function DatasetView({
     onChange();
   }
 
+  // Saves the examples to a file, to import on another engine (a RunPod pod, say).
+  async function exportDataset() {
+    setError(null);
+    setExporting(true);
+    try {
+      const blob = await client.exportDataset(dataset.name);
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `${dataset.name}.jsonl`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 60_000);
+    } catch (e) {
+      report(e);
+    } finally {
+      setExporting(false);
+    }
+  }
+
   async function saveSplit() {
     if (evalPercent === dataset.eval_percent) return;
     await client.updateDataset(dataset.name, evalPercent).catch(report);
@@ -215,6 +234,13 @@ function DatasetView({
           <span className="button">Import file</span>
           <input type="file" multiple accept=".jsonl,.json,.csv" onChange={(e) => importFiles(e.target.files)} disabled={importing} />
         </label>
+        <button
+          onClick={exportDataset}
+          disabled={exporting || dataset.examples === 0}
+          title="Saves the examples to a JSONL file, for Import file on another engine, e.g. a RunPod pod"
+        >
+          Export
+        </button>
         <button onClick={() => edit(null)} disabled={editing !== null}>Add example</button>
         <button onClick={() => setGenerating(!generating)}>Generate</button>
         <label title="Examples held out from training to measure the model on data it has not seen">

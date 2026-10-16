@@ -641,6 +641,11 @@ export class EngineClient {
     return (await this.json<{ data: ImportResult[] }>(path, { method: "POST", body: form })).data[0];
   }
 
+  /** The examples as JSONL, for Import file here or on another engine. */
+  async exportDataset(dataset: string): Promise<Blob> {
+    return (await this.send(`/api/datasets/${encodeURIComponent(dataset)}/export`)).blob();
+  }
+
   async examples(dataset: string, filter: ExampleFilter = {}): Promise<{ data: Example[]; total: number }> {
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(filter)) {

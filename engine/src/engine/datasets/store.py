@@ -8,6 +8,7 @@ and changing the evaluation share only moves the examples near the boundary.
 import hashlib
 import json
 import re
+from collections.abc import Iterator
 from typing import Literal
 
 from engine.datasets.formats import Messages, parse, validate
@@ -249,7 +250,12 @@ class DatasetStore:
                     invalid += 1
                     if len(errors) < MAX_REPORTED_ERRORS:
                         errors.append({"line": record.line, "error": record.error})
-                elif self._insert(dataset, record.messages, "imported") is None:
+                elif (
+                    self._insert(
+                        dataset, record.messages, record.origin or "imported", record.source
+                    )
+                    is None
+                ):
                     duplicates += 1
                 else:
                     added += 1
@@ -261,6 +267,14 @@ class DatasetStore:
             "invalid": invalid,
             "errors": errors,
         }
+
+    def export_lines(self, dataset: str, split: Split = "all") -> Iterator[str]:
+        """The examples as JSON lines that import_file reads back, keeping origin and source."""
+        for example in self.examples(dataset, split=split):
+            record = {"messages": example["messages"], "origin": example["origin"]}
+            if example["source"]:
+                record["source"] = example["source"]
+            yield json.dumps(record, ensure_ascii=False) + "\n"
 
     def split(self, dataset: str) -> tuple[list[Messages], list[Messages]]:
         """All examples as (train, eval) message lists, for a training run."""
