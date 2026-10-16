@@ -76,4 +76,5 @@ The engine runs in a container in a Kubernetes cluster or a RunPod pod; see
 - [x] RunPod: **Show request** shows the pod request before it is sent, with the secrets hidden.
 - [x] Move a collection between engines (this computer and a pod): **Export** and
       **Import collection** on the Data page.
-- [ ] RunPod: show the pod's logs in the app (RunPod's "Stream pod logs" API).
+- [x] Logs: the engine and the app log to files; Settings › Logs shows both, colored and
+      filtered, also the engine's in a RunPod pod.

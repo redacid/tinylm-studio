@@ -6,7 +6,25 @@ import { createServer } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Connection } from "./connection";
+import { log } from "./log";
 import { RunPod, RunPodError } from "./runpod";
+
+const logger = log("engine");
+
+function describe(state: EngineState): string {
+  switch (state.phase) {
+    case "setting-up":
+      return "Setting up the engine's Python environment";
+    case "starting":
+      return `Starting: ${state.where}${state.detail ? ` · ${state.detail}` : ""}`;
+    case "ready":
+      return `Ready: ${state.url}, engine ${state.version}${state.commit ? ` (${state.commit})` : ""}`;
+    case "error":
+      return `Error: ${state.message}`;
+    case "stopped":
+      return `Stopped${state.message ? `: ${state.message}` : ""}`;
+  }
+}
 
 export type EngineState =
   | { phase: "setting-up" }
@@ -110,6 +128,9 @@ export class Engine {
   constructor(private readonly repoRoot: string, private readonly onChange: (s: EngineState) => void) {}
 
   private set(state: EngineState) {
+    const text = describe(state);
+    if (text !== describe(this.state) || state.phase !== this.state.phase)
+      state.phase === "error" ? logger.error(text) : logger.info(text);
     this.state = state;
     this.onChange(state);
   }
@@ -119,6 +140,7 @@ export class Engine {
     const attempt = ++this.attempt;
     const alive = () => attempt === this.attempt;
     this.stopLocal();
+    logger.info(`Connecting to ${{ local: "the engine on this computer", remote: "a remote engine", runpod: "the RunPod pod" }[connection.mode]}`);
     try {
       if (connection.mode === "local") await this.startLocal(alive);
       else if (connection.mode === "remote") await this.connectRemote(connection.remote, alive);
@@ -145,6 +167,7 @@ export class Engine {
   private stopLocal() {
     const child = this.child;
     this.child = undefined;
+    if (child) logger.info(`Stopping the engine process ${child.pid}`);
     child?.kill();
   }
 
@@ -153,20 +176,37 @@ export class Engine {
     if (!existsSync(python)) {
       this.set({ phase: "setting-up" });
       await run("bash", [join(this.repoRoot, "scripts", "setup-engine.sh")]);
+      logger.info(`The engine's Python environment is ready: ${python}`);
     }
     if (!alive()) return;
     const port = await freePort();
     this.set({ phase: "starting", where: `port ${port}` });
     const child = spawn(python, ["-m", "engine", "--port", String(port)], {
-      stdio: "inherit",
+      stdio: ["ignore", "pipe", "pipe"],
       // The renderer is loaded from file://; Chromium reports that origin as "null" or "file://".
       // TINYLM_EXIT_WITH_PARENT: the engine stops by itself if this app crashes or is killed.
       env: { ...process.env, TINYLM_CORS_ORIGINS: '["null", "file://"]', TINYLM_EXIT_WITH_PARENT: "1" },
     });
     this.child = child;
-    child.once("exit", (code) => {
-      if (this.child === child && this.state.phase !== "stopped")
+    logger.info(`Started ${python} -m engine --port ${port} (process ${child.pid})`);
+    // The engine logs to its own file; its output is passed on to this terminal, and the end of
+    // it kept for the app's log in case it exits before it could write its own (a broken install).
+    const recent: string[] = [];
+    for (const [stream, out] of [
+      [child.stdout, process.stdout],
+      [child.stderr, process.stderr],
+    ] as const) {
+      stream?.on("data", (data: Buffer) => {
+        out.write(data);
+        recent.push(...data.toString().split("\n").filter(Boolean));
+        recent.splice(0, recent.length - 30);
+      });
+    }
+    child.once("exit", (code, signal) => {
+      if (this.child === child && this.state.phase !== "stopped") {
+        logger.error(`The engine process exited with ${code ?? signal}; its last output:\n${recent.join("\n")}`);
         this.set({ phase: "error", message: `Engine exited with code ${code}` });
+      }
     });
     const url = `http://127.0.0.1:${port}`;
     const build = await waitForHealth(url, 30_000, alive);

@@ -73,6 +73,8 @@ class Settings(BaseSettings):
     # default the converter of the installed llama-cpp-python is downloaded once from PyPI.
     llama_cpp_dir: Path | None = None
     brave_api_key: str | None = None
+    # DEBUG, INFO, WARNING or ERROR: what goes to the console and <data dir>/logs/engine.log.
+    log_level: str = "INFO"
 
     @property
     def workspace_dir(self) -> Path:

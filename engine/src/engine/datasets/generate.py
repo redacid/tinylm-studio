@@ -99,6 +99,7 @@ class GenerationJob:
     cancelled: threading.Event = field(default_factory=threading.Event, repr=False)
 
     def note(self, line: str) -> None:
+        log.info("Generation %s (%s): %s", self.id, self.dataset, line)
         self.log.append(line)
         del self.log[:-200]
 
@@ -330,6 +331,14 @@ class Generator:
             job.state, job.error = "error", str(e)
         finally:
             job.current = None
+            log.info(
+                "Generation %s %s: %d of %d chunks, %d failed",
+                job.id,
+                job.state,
+                job.chunks_done,
+                job.chunks_total,
+                job.failed_chunks,
+            )
 
     def _wait(self, job: GenerationJob, seconds: float) -> None:
         job.waiting = seconds
@@ -467,6 +476,13 @@ class GenerationManager:
     def start(self, dataset: str, options: GenerationOptions) -> GenerationJob:
         job = GenerationJob(dataset, options)
         self.jobs[job.id] = job
+        log.info(
+            "Generation %s into %s from %s with %s",
+            job.id,
+            dataset,
+            options.collection,
+            options.teacher,
+        )
         threading.Thread(target=self.generator.run, args=(job,), daemon=True).start()
         return job
 

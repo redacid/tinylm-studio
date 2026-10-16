@@ -6,6 +6,7 @@ marked interrupted; their temporary files are removed.
 """
 
 import json
+import logging
 import os
 import shutil
 import subprocess
@@ -22,6 +23,8 @@ from engine.models.manager import model_format
 from engine.rag.store import CollectionNotFound, KnowledgeStore, now
 from engine.training.jobs import MODEL_NAME
 from engine.training.worker import read_jsonl
+
+logger = logging.getLogger(__name__)
 
 State = Literal["running", "done", "error", "interrupted"]
 STEPS = ("tools", "merge", "convert", "quantize", "save")
@@ -147,6 +150,14 @@ class ExportManager:
             if any(e.state == "running" for e in self.exports()):
                 raise ExportError("Another export is running; one runs at a time.")
             export_id = uuid.uuid4().hex[:12]
+            logger.info(
+                "Export %s of %s to GGUF %s as %s%s",
+                export_id,
+                model,
+                quantization,
+                name,
+                f", with collection {collection}" if collection else "",
+            )
             folder = self.folder / export_id
             folder.mkdir()
             if collection:
@@ -196,6 +207,10 @@ class ExportManager:
         export = self._load(export_id)
         shutil.rmtree(self.models_dir / f".{export.name}.partial", ignore_errors=True)
         self._save(export_id, state=state, error=error, finished_at=now())
+        if error:
+            logger.error("Export %s failed: %s", export_id, error)
+        else:
+            logger.info("Export %s %s: model %s", export_id, state, export.name)
 
     def _alive(self, export: Export) -> bool:
         if not export.pid:

@@ -142,6 +142,7 @@ class ModelManager:
             return current
         partial = self.models_dir / f".{model_id}.partial"
         job = self.downloads[model_id] = Download(model_id, repo, folder=partial)
+        log.info("Downloading %s from %s", model_id, repo)
         threading.Thread(target=self._download, args=(job, patterns, source), daemon=True).start()
         return job
 
@@ -170,6 +171,7 @@ class ModelManager:
             (partial / SOURCE_FILE).write_text(json.dumps(source))
             partial.rename(target)
             job.state = "done"
+            log.info("Downloaded %s", job.model_id)
         except Exception as error:  # surfaced to the UI as text
             log.exception("Download of %s failed", job.model_id)
             job.state, job.error = "error", download_error(job.repo, error)

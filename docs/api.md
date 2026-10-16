@@ -138,6 +138,7 @@ Not supported yet: tool use / function calling, images, logprobs, `n > 1`, batch
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/health` | Liveness, `version` and `commit`: the git commit the engine was built from (`TINYLM_BUILD_COMMIT` in the container image, else the checkout it runs from, with `-dirty` for uncommitted changes; `null` when unknown) |
+| GET | `/api/logs` | `?lines=500` (at most 5000): the end of the engine's log, `lines` oldest first (a traceback is part of its entry's line) and the `file`; needs the API key |
 | GET | `/api/system` | Python path and hardware; needs the API key when one is set (unlike `/health`) |
 | GET | `/api/models` | `models`: installed models with `format`, `size` in bytes, `source` (`repo`, `file`), `loaded`, `settings` and `used_by` (fine-tuned models that need it); `downloads` with `state`, `total` and `downloaded` bytes; the catalog with install and download state; `trainable`: installed models that can be fine-tuned |
 | POST | `/api/models/{id}/download` | Starts a background download of a catalog model from Hugging Face |

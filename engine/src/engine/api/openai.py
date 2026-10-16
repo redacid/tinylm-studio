@@ -128,6 +128,7 @@ def chat_completions(
     extra = {"sources": sources, "collection": collection} if collection else {}
     if body.debug:
         extra["prompt"] = asdict(request)
+    timings.label = f"{body.model}" + (f", collection {collection}" if collection else "")
     with timings.measure("load_ms"):
         runtime = models.runtime(body.model)
     completion_id = f"chatcmpl-{uuid.uuid4().hex}"

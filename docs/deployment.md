@@ -19,7 +19,7 @@ on a [RunPod](#runpod) GPU or CPU pod, which the desktop app can create, start a
 | Authentication | `TINYLM_API_KEY`: every API call then needs `Authorization: Bearer <key>` or `x-api-key: <key>`. Always set it in a cluster. |
 | Probes | `GET /health` answers without an API key; use it for liveness and readiness. Every other path, `/api/system` included, needs the key when one is set. |
 | State | Everything the engine keeps is under `TINYLM_DATA_DIR` (see the table in the [user guide](user-guide.md#where-data-is-stored)): mount a PersistentVolume there. |
-| Logs | The API server logs to stdout. Background jobs also write `worker.log` in their folder under `workspace/`. |
+| Logs | The engine logs to stdout and to `<data dir>/logs/engine.log` (4 files of 5 MB; `TINYLM_LOG_LEVEL`), whose end `GET /api/logs` serves to the app. Background jobs also write `worker.log` in their folder under `workspace/`. |
 | Lifecycle | Leave `TINYLM_EXIT_WITH_PARENT` unset: it only makes sense when the desktop app starts the engine. |
 
 ## Rules the deployment must follow
@@ -150,6 +150,8 @@ Notes:
 - **A pod made on runpod.io** works too: give it the image, expose `8765` as an HTTP port, set
   `TINYLM_API_KEY`, and enter its id and that key under **Use a pod made on runpod.io**.
 - **One engine per volume** holds here as well (rule 1 above).
+- **Logs.** The engine logs to the console (RunPod's **Logs** tab) and to
+  `/workspace/tinylm-studio/logs/engine.log`; the app shows that file under Settings › Logs.
 - RunPod's proxy (Cloudflare) closes a connection after 100 seconds (HTTP 524). Training, export,
   crawls and generation run in the background and are only polled, so they are not affected; a
   single chat answer that takes longer is cut off.

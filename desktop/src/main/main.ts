@@ -1,13 +1,16 @@
 // Electron main process: owns the window, the engine connection and the RunPod pod.
 import { app, BrowserWindow, ipcMain, shell } from "electron";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { apply, Connection, ConnectionChanges, load, newKey, save, view } from "./connection";
 import { Engine } from "./engine";
+import { log, logFile, tail } from "./log";
 import { createRequest, PodGone, RunPod } from "./runpod";
 
 const repoRoot = join(__dirname, "..", "..", "..");
+const logger = log("app");
+process.on("unhandledRejection", (error) => logger.error(`Unhandled: ${error instanceof Error ? error.stack : error}`));
 let window: BrowserWindow | undefined;
 let connection: Connection;
 
@@ -35,7 +38,11 @@ function createWindow() {
 }
 
 function update(changes: ConnectionChanges): Connection {
+  const before = connection;
   connection = apply(connection, changes);
+  if (connection.mode !== before.mode) logger.info(`Engine: ${before.mode} → ${connection.mode}`);
+  if (connection.runpod.podId !== before.runpod.podId)
+    logger.info(connection.runpod.podId ? `RunPod pod: ${connection.runpod.podId}` : "RunPod pod forgotten");
   save(connection);
   return connection;
 }
@@ -59,6 +66,7 @@ ipcMain.handle("runpod:catalog", (_event, cloud?: "SECURE" | "COMMUNITY") =>
 // A pod deleted on runpod.io is forgotten here too, as if terminated from the app.
 function forget(error: unknown): null {
   if (!(error instanceof PodGone)) throw error;
+  logger.warn(error.message);
   update({ runpod: { podId: "", engineKey: "" } });
   if (connection.mode === "runpod") engine.disconnect(error.message);
   return null;
@@ -89,16 +97,22 @@ ipcMain.handle("runpod:create", async (_event, name: string) => {
   if (!settings.image) throw new Error("Enter the engine image, e.g. docker.io/you/tinylm-engine:0.1.0-5a0d901-cuda");
   if (settings.kind === "cpu" && !settings.cpu) throw new Error("Choose a CPU type");
   const engineKey = newKey();
+  const hardware = settings.kind === "gpu" ? `${settings.gpu}, ${settings.cloud} cloud` : `${settings.cpu}, ${settings.vcpus} vCPU`;
+  logger.info(`Creating a RunPod pod: ${settings.image} on ${hardware}${settings.dataCenter ? ` in ${settings.dataCenter}` : ""}`);
   const pod = await runpod().create({ ...settings, name: name || "tinylm-engine", env: podEnv(engineKey) });
   update({ mode: "runpod", runpod: { podId: pod.id, engineKey } });
   engine.connect(connection);
   return pod;
 });
+ipcMain.handle("logs:app", (_event, lines: number) => ({ file: logFile(), lines: tail(lines) }));
+ipcMain.handle("logs:open-folder", () => shell.openPath(dirname(logFile())));
 ipcMain.handle("runpod:start", async () => {
+  logger.info(`Starting the RunPod pod ${connection.runpod.podId}`);
   update({ mode: "runpod" });
   engine.connect(connection); // starts the pod if it is stopped, then waits for the engine
 });
 ipcMain.handle("runpod:stop", async () => {
+  logger.info(`Stopping the RunPod pod ${connection.runpod.podId}`);
   try {
     await runpod().action(connection.runpod.podId, "stop");
   } catch (error) {
@@ -107,6 +121,7 @@ ipcMain.handle("runpod:stop", async () => {
   if (connection.mode === "runpod") engine.disconnect("The RunPod pod is stopped");
 });
 ipcMain.handle("runpod:terminate", async () => {
+  logger.info(`Terminating the RunPod pod ${connection.runpod.podId}`);
   await runpod()
     .terminate(connection.runpod.podId)
     .catch((error) => error instanceof PodGone || Promise.reject(error));
@@ -115,6 +130,9 @@ ipcMain.handle("runpod:terminate", async () => {
 });
 
 app.whenReady().then(() => {
+  logger.info(
+    `tinylm-studio ${app.getVersion()} started (Electron ${process.versions.electron}, ${process.platform}); settings in ${app.getPath("userData")}`,
+  );
   connection = load();
   createWindow();
   engine.connect(connection);
@@ -132,11 +150,14 @@ app.on("before-quit", (event) => {
   const runpod = new RunPod(settings.apiKey);
   const stop = async () => {
     const pod = await runpod.pod(settings.podId);
-    if (["PROVISIONING", "STARTING", "RUNNING"].includes(pod.status)) await runpod.action(pod.id, "stop");
+    if (["PROVISIONING", "STARTING", "RUNNING"].includes(pod.status)) {
+      logger.info(`Stopping the RunPod pod ${pod.id} on quit`);
+      await runpod.action(pod.id, "stop");
+    }
   };
   const timeout = new Promise((resolve) => setTimeout(resolve, 10_000));
   Promise.race([stop(), timeout])
-    .catch((error) => console.error("Could not stop the RunPod pod:", error))
+    .catch((error) => logger.error(`Could not stop the RunPod pod: ${error}`))
     .finally(() => app.quit());
 });
 app.on("window-all-closed", () => app.quit());

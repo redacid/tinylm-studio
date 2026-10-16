@@ -1,5 +1,8 @@
 // A small client for RunPod's REST API v2: the one pod that runs the engine image.
 // https://docs.runpod.io/api-reference-v2/overview
+import { log } from "./log";
+
+const logger = log("runpod");
 
 /** The engine's port inside the pod; RunPod's proxy serves it as https://<pod id>-8765.proxy.runpod.net. */
 export const ENGINE_PORT = 8765;
@@ -191,6 +194,20 @@ export class RunPod {
   }
 
   private async call(method: string, path: string, body?: unknown): Promise<Record<string, unknown>> {
+    const started = Date.now();
+    try {
+      const data = await this.request(method, path, body);
+      // Reads are polled (the pod's state every few seconds), so only changes are logged at INFO.
+      const line = `${method} ${path.split("?")[0]} in ${Date.now() - started} ms`;
+      method === "GET" ? logger.debug(line) : logger.info(line);
+      return data;
+    } catch (error) {
+      logger.warn(`${method} ${path.split("?")[0]} failed after ${Date.now() - started} ms: ${(error as Error).message}`);
+      throw error;
+    }
+  }
+
+  private async request(method: string, path: string, body?: unknown): Promise<Record<string, unknown>> {
     let response: Response;
     try {
       response = await fetch(`${API_URL}${path}`, {

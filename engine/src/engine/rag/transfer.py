@@ -75,6 +75,7 @@ class ImportManager:
         job = ImportJob(collection, total=read_header(path).get("documents"))
         self.store.create_collection(collection)  # nothing if it exists
         self.jobs[job.id] = job
+        log.info("Importing %s documents into %s", job.total or "the", collection)
         threading.Thread(target=self._run, args=(job, path), daemon=True).start()
         return job
 
@@ -100,4 +101,11 @@ class ImportManager:
             job.state, job.error = "error", str(e)
         finally:
             job.finished_at = now()
+            log.info(
+                "Import into %s %s: %d documents added, %d already there",
+                job.collection,
+                job.state,
+                job.added,
+                job.duplicates,
+            )
             path.unlink(missing_ok=True)

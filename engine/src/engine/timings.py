@@ -1,11 +1,14 @@
 """Per-request timings, reported to clients as a `timings` field (named like llama.cpp server's)."""
 
+import logging
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 
 from engine.chat import Finish, StreamEvent, TextDelta
+
+log = logging.getLogger("engine.chat")
 
 
 def ms(seconds: float) -> float:
@@ -20,6 +23,7 @@ class Timings:
     prompt_ms: float = 0.0  # reading the prompt, until the first answer token
     predicted_n: int = 0  # answer tokens
     predicted_ms: float = 0.0  # generating the rest of the answer
+    label: str = ""  # what the answer was for, in the log: "chat qwen3-1.7b-gguf, collection games"
 
     @contextmanager
     def measure(self, field: str):
@@ -42,6 +46,20 @@ class Timings:
                 self.predicted_ms = ms(now - (first or now))
                 self.prompt_n = event.usage.input_tokens
                 self.predicted_n = event.usage.output_tokens
+                t = self.to_dict()
+                log.info(
+                    "%s: %d prompt tokens in %.1f s, %d answer tokens at %.1f tok/s "
+                    "(%.1f s in all%s)",
+                    self.label or "answer",
+                    self.prompt_n,
+                    self.prompt_ms / 1000,
+                    self.predicted_n,
+                    t["predicted_per_second"],
+                    t["total_ms"] / 1000,
+                    f", {self.load_ms / 1000:.1f} s loading the model"
+                    if self.load_ms > 100
+                    else "",
+                )
             yield event
 
     def to_dict(self) -> dict:

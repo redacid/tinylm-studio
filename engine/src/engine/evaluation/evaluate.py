@@ -232,6 +232,14 @@ class EvaluationManager:
             self._running = evaluation
             self.cancel.clear()
             self._save(evaluation)
+        log.info(
+            "Evaluation %s of %s on %d examples of %s%s",
+            evaluation.id,
+            ", ".join(options.models),
+            len(examples),
+            options.dataset,
+            f", judged by {options.judge}" if options.judge else "",
+        )
         threading.Thread(target=self._run, args=(evaluation,), daemon=True).start()
         return evaluation
 
@@ -257,6 +265,7 @@ class EvaluationManager:
             evaluation.summary = summarize(evaluation)
             self._save(evaluation)
             self._running = None
+            log.info("Evaluation %s %s", evaluation.id, evaluation.state)
 
     def _answer(self, evaluation: Evaluation) -> None:
         options = evaluation.options

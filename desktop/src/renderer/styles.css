@@ -21,6 +21,9 @@
   --bad-soft: #ffebe9;
   --warn: #9a6700;
   --warn-soft: #fff8c5;
+  --purple: #8250df;
+  --teal: #1b7c83;
+  --log-bg: #fbfcfd;
   --shadow: 0 1px 2px rgba(31, 35, 40, 0.06), 0 1px 3px rgba(31, 35, 40, 0.04);
   color-scheme: light dark;
 }
@@ -47,6 +50,9 @@
     --bad-soft: #2d1214;
     --warn: #d29922;
     --warn-soft: #2b2111;
+    --purple: #a371f7;
+    --teal: #39c5cf;
+    --log-bg: #0b0f14;
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
   }
 }
@@ -344,3 +350,57 @@ tbody tr:hover > td { background: var(--row-hover); }
 .gpu-table .free-none { background: var(--bad-soft); color: var(--bad); }
 .gpu-table th[title] { cursor: help; }
 .gpu-table th[title] { text-decoration: underline dotted; text-underline-offset: 3px; }
+
+/* Settings › Logs */
+.settings-form.logs { max-width: none; gap: 6px; }
+.logs-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
+.logs-toolbar input:not([type="checkbox"]) { flex: 1; min-width: 160px; }
+.segmented { display: inline-flex; }
+.segmented button { border-radius: 0; }
+.segmented button:first-child { border-radius: 6px 0 0 6px; }
+.segmented button:last-child { border-radius: 0 6px 6px 0; margin-left: -1px; }
+.segmented button.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); position: relative; }
+label.check { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.logs-summary { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; margin-bottom: 8px; }
+.log-view {
+  border: 1px solid var(--border); border-radius: 6px; background: var(--log-bg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.5;
+  height: calc(100vh - 290px); min-height: 240px; overflow: auto; padding: 4px 0; user-select: text;
+}
+.log-view > p { padding: 8px 12px; margin: 0; }
+.log-entry { display: grid; grid-template-columns: 92px 52px 150px minmax(0, 1fr); gap: 8px; padding: 1px 12px; align-items: baseline; }
+.log-entry:hover { background: var(--row-hover); }
+.log-entry.warning { background: var(--warn-soft); }
+.log-entry.error, .log-entry.critical { background: var(--bad-soft); }
+.log-time { color: var(--muted); }
+.log-level { font-size: 10px; font-weight: 700; text-align: center; border-radius: 4px; padding: 0 4px; letter-spacing: 0.04em; }
+.log-level.debug { color: var(--muted); border: 1px solid var(--border); }
+.log-level.info { color: var(--accent); background: var(--accent-soft); }
+.log-level.warning { color: var(--warn); background: var(--warn-soft); border: 1px solid var(--warn); }
+.log-level.error, .log-level.critical { color: var(--on-accent); background: var(--bad); }
+.logs-summary .log-level { font-size: 11px; padding: 1px 6px; }
+.log-scope { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.log-scope.purple { color: var(--purple); }
+.log-scope.teal { color: var(--teal); }
+.log-scope.accent { color: var(--accent); }
+.log-scope.warn { color: var(--warn); }
+.log-scope.ok { color: var(--ok); }
+.log-scope.muted { color: var(--muted); }
+.log-message { white-space: pre-wrap; word-break: break-word; }
+.log-entry.error .log-message, .log-entry.critical .log-message { color: var(--bad); }
+.log-more { margin: 2px 0 4px; padding: 4px 8px; border-left: 3px solid var(--bad); color: var(--bad); white-space: pre-wrap; font: inherit; }
+.log-method { font-weight: 700; }
+.log-method.post, .log-method.put, .log-method.patch { color: var(--purple); }
+.log-method.delete { color: var(--bad); }
+.log-method.get { color: var(--teal); }
+.log-path { color: var(--fg); }
+.log-status { font-weight: 700; border-radius: 4px; padding: 0 4px; }
+.log-status.ok { color: var(--ok); background: var(--ok-soft); }
+.log-status.warn { color: var(--warn); background: var(--warn-soft); }
+.log-status.bad { color: var(--bad); background: var(--bad-soft); }
+.log-dim { color: var(--muted); }
+.log-number { color: var(--accent); font-weight: 600; }
+.log-url { color: var(--teal); text-decoration: underline dotted; }
+.log-good { color: var(--ok); font-weight: 600; }
+.log-bad { color: var(--bad); font-weight: 600; }
+.log-entry.warning .log-more { border-color: var(--warn); color: var(--warn); }

@@ -11,6 +11,7 @@ python -m engine search QUERY [--add COLLECTION] find pages or videos (and add t
 """
 
 import argparse
+import logging
 import sys
 import threading
 import time
@@ -33,19 +34,54 @@ def exit_with_parent() -> None:
     threading.Thread(target=watch, daemon=True).start()
 
 
+def log_hardware() -> None:
+    """What the engine runs on; in the background, as importing torch takes a few seconds."""
+    from engine import hardware
+
+    info = hardware.detect()
+    gpu = "none, models run on the CPU"
+    if "cuda" in info.accelerators:
+        import torch
+
+        gpu = ", ".join(torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count()))
+    elif "mps" in info.accelerators:
+        gpu = "Apple (MPS)"
+    logging.getLogger("engine").info(
+        "Hardware: %s, %d cores, %.1f GB memory; GPU: %s",
+        info.cpu,
+        info.cpu_cores,
+        info.memory_gb,
+        gpu,
+    )
+
+
 def serve(settings: Settings, args: argparse.Namespace) -> None:
     import os
 
     import uvicorn
 
-    from engine import __version__, commit
+    from engine import __version__, commit, logs
     from engine.main import create_app
 
     if os.environ.get("TINYLM_EXIT_WITH_PARENT"):
         exit_with_parent()
     settings.host, settings.port = args.host, args.port
-    print(f"tinylm-studio engine {__version__}, commit {commit() or 'unknown'}", flush=True)
-    uvicorn.run(create_app(settings), host=args.host, port=args.port, log_level="info")
+    path = logs.setup(settings.data_dir, settings.log_level)
+    log = logging.getLogger("engine")
+    log.info(
+        "tinylm-studio engine %s, commit %s, Python %s",
+        __version__,
+        commit() or "unknown",
+        sys.version.split()[0],
+    )
+    log.info(
+        "Data in %s; log in %s; listening on %s:%d", settings.data_dir, path, args.host, args.port
+    )
+    if not settings.api_key and args.host not in ("127.0.0.1", "localhost", "::1"):
+        log.warning("No TINYLM_API_KEY: anyone who can reach the port can use the engine")
+    threading.Thread(target=log_hardware, daemon=True).start()
+    # log_config=None: uvicorn logs through the handlers above.
+    uvicorn.run(create_app(settings), host=args.host, port=args.port, log_config=None)
 
 
 def download(settings: Settings, args: argparse.Namespace) -> None:

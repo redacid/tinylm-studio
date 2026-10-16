@@ -7,6 +7,7 @@ its last checkpoint.
 """
 
 import json
+import logging
 import os
 import re
 import shutil
@@ -23,6 +24,8 @@ from engine.datasets.store import DatasetStore
 from engine.models.manager import model_format
 from engine.rag.store import now
 from engine.training.worker import last_checkpoint
+
+logger = logging.getLogger(__name__)
 
 MODEL_NAME = re.compile(r"^[\w.-]{1,64}$")
 State = Literal["running", "stopping", "stopped", "done", "error", "interrupted"]
@@ -188,6 +191,16 @@ class TrainingManager:
                         f.write(json.dumps(messages, ensure_ascii=False) + "\n")
             job = Job(job_id, settings, "running", now())
             (folder / "job.json").write_text(json.dumps(asdict(job), indent=2))
+            logger.info(
+                "Training %s %s from %s on %s: %d examples, %d held out, %s epochs",
+                job_id,
+                settings.name,
+                settings.base,
+                settings.dataset,
+                len(train),
+                len(held_out),
+                settings.epochs,
+            )
             self._launch(job, resume=False)
             return self._load(job_id)
 
@@ -290,6 +303,10 @@ class TrainingManager:
             state = "error"
             error = error or f"The training process ended unexpectedly (exit code {code})."
         self._save(job_id, state=state, error=error, finished_at=now(), pid=None)
+        if error:
+            logger.error("Training %s failed: %s", job_id, error)
+        else:
+            logger.info("Training %s %s", job_id, state)
 
     def _kill_later(self, process: subprocess.Popen) -> None:
         try:

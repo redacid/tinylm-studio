@@ -105,6 +105,7 @@ class CrawlJob:
             self.outcomes[url] = outcome
 
     def note(self, message: str) -> None:
+        log.info("Crawl %s (%s): %s", self.id, self.collection, message)
         self.log = [*self.log[-49:], message]
         self.notes += 1
 
@@ -273,6 +274,16 @@ class Crawler:
             job.state, job.error = "error", str(e)
         finally:
             job.current = None
+            log.info(
+                "Crawl %s %s: %d downloaded, %d indexed, %d duplicates, %d skipped, %d failed",
+                job.id,
+                job.state,
+                job.fetched,
+                job.indexed,
+                job.duplicates,
+                job.skipped,
+                job.failed,
+            )
             if job.website_id is not None:
                 self.pages.mark_crawled(job.website_id)
             job.finished_at = datetime.now(UTC).isoformat(timespec="seconds")
@@ -319,6 +330,14 @@ class CrawlManager:
     ) -> CrawlJob:
         job = CrawlJob(collection, options, website_id=website_id)
         self.jobs[job.id] = job
+        log.info(
+            "Crawl %s into %s: %s, up to %d new pages, depth %d",
+            job.id,
+            collection,
+            " ".join(options.urls),
+            options.max_pages,
+            options.max_depth,
+        )
         threading.Thread(target=self.crawler.run, args=(job,), daemon=True).start()
         return job
 

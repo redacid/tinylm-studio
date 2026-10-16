@@ -3,16 +3,18 @@ import { EngineClient } from "./api";
 import { CHAT_DEFAULTS, ChatSettings } from "./chatSettings";
 import { CrawlerSettingsForm } from "./CrawlerSettings";
 import { EngineSettingsForm } from "./EngineSettings";
+import { Logs } from "./Logs";
 import { SearchSettingsForm } from "./SearchSettings";
 import type { EngineState } from "./types";
 
-type Section = "engine" | "chat" | "search" | "crawler";
+type Section = "engine" | "chat" | "search" | "crawler" | "logs";
 
 const SECTIONS: Record<Section, string> = {
   engine: "Engine",
   chat: "Chat settings",
   search: "Search settings",
   crawler: "Crawler settings",
+  logs: "Logs",
 };
 
 /** App settings, saved as they are changed. Engine settings stay in .env. */
@@ -47,6 +49,7 @@ export function Settings({
         {section === "chat" && <ChatSettingsForm value={chat} onChange={onChat} />}
         {section === "search" && <SearchSettingsForm client={client} />}
         {section === "crawler" && <CrawlerSettingsForm client={client} />}
+        {section === "logs" && <Logs client={client} engine={engine} />}
       </section>
     </div>
   );

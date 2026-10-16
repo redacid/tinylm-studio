@@ -1,6 +1,7 @@
 """Management API for uploaded data: collections, documents and search."""
 
 import json
+import logging
 import shutil
 import uuid
 from pathlib import Path
@@ -20,6 +21,8 @@ from engine.rag.store import (
     KnowledgeStore,
 )
 from engine.rag.transfer import ImportManager, export_lines, read_header
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/api/collections", dependencies=[Depends(require_api_key)], tags=["knowledge"]
@@ -47,7 +50,9 @@ def list_collections(store: KnowledgeStore = Depends(knowledge)) -> dict:
 @router.post("", status_code=201)
 def create_collection(body: NewCollection, store: KnowledgeStore = Depends(knowledge)) -> dict:
     try:
-        return store.create_collection(body.name)
+        collection = store.create_collection(body.name)
+        log.info("Collection %s created", body.name)
+        return collection
     except InvalidName as e:
         raise HTTPException(422, str(e)) from None
 
@@ -56,6 +61,7 @@ def create_collection(body: NewCollection, store: KnowledgeStore = Depends(knowl
 def delete_collection(name: str, store: KnowledgeStore = Depends(knowledge)) -> None:
     try:
         store.delete_collection(name)
+        log.info("Collection %s deleted", name)
     except CollectionNotFound:
         raise not_found(name) from None
 
@@ -101,6 +107,16 @@ def upload_documents(
             results.append({"name": filename, "error": str(e)})
         except Exception as e:  # a broken PDF or DOCX should not fail the whole upload
             results.append({"name": filename, "error": f"Could not read the file: {e}"})
+    for r in results:
+        if r.get("error"):
+            log.warning("Upload to %s: %s: %s", name, r["name"], r["error"])
+        elif r.get("duplicate"):
+            log.info("Upload to %s: %s is already there", name, r["name"])
+        else:
+            chunks = r["chunks"]
+            log.info(
+                "Upload to %s: %s, %d chunk%s", name, r["name"], chunks, "" if chunks == 1 else "s"
+            )
     return {"data": results}
 
 
@@ -108,6 +124,7 @@ def upload_documents(
 def delete_document(name: str, document_id: int, store: KnowledgeStore = Depends(knowledge)):
     if not store.delete_document(name, document_id):
         raise HTTPException(404, f"No document {document_id} in '{name}'")
+    log.info("Document %d deleted from %s", document_id, name)
 
 
 @router.get("/{name}/export")

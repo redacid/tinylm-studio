@@ -90,6 +90,9 @@ declare global {
       onEngineState(callback: (state: EngineState) => void): void;
       getConnection(): Promise<EngineConnection>;
       setConnection(changes: EngineConnectionChanges, reconnect: boolean): Promise<EngineConnection>;
+      /** The end of the app's own log. */
+      appLog(lines: number): Promise<{ file: string; lines: string[] }>;
+      openLogFolder(): Promise<string>;
       runpod(action: "catalog", cloud?: "SECURE" | "COMMUNITY"): Promise<RunPodCatalog>;
       runpod(action: "pod"): Promise<Pod | null>;
       runpod(action: "create", name: string): Promise<Pod>;

@@ -851,6 +851,11 @@ export class EngineClient {
     return this.json(`/api/collections/imports/${encodeURIComponent(id)}`);
   }
 
+  /** The end of the engine's log file, oldest first. */
+  async logs(lines = 1000): Promise<{ file: string; lines: string[] }> {
+    return this.json(`/api/logs?lines=${lines}`);
+  }
+
   async deleteDocument(collection: string, id: number): Promise<void> {
     await this.send(`/api/collections/${encodeURIComponent(collection)}/documents/${id}`, {
       method: "DELETE",

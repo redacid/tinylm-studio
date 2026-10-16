@@ -111,6 +111,7 @@ def create_message(body: MessagesRequest, http: Request, models: ModelManager = 
             )
     except CollectionNotFound as missing:
         return error(404, f"collection: {missing}", "not_found_error")
+    timings.label = f"{body.model}" + (f", collection {collection}" if collection else "")
     with timings.measure("load_ms"):
         runtime = models.runtime(body.model)
     message_id = f"msg_{uuid.uuid4().hex}"

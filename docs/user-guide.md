@@ -20,6 +20,7 @@ For the HTTP API see [api.md](api.md); for the design and roadmap see the
   - [Chat settings](#chat-settings)
   - [Search settings: providers and site filters](#search-settings)
   - [Crawler settings: robots.txt, rate, defaults](#crawler-settings)
+  - [Logs: what the engine and the app did](#logs)
   - [Proxy for crawling and search](#proxy)
   - [Crawling through a real browser (CDP)](#browser-cdp)
   - [Web search: SearXNG setup](#web-search)
@@ -609,6 +610,39 @@ variables in the table only give the defaults. Changes apply to crawls started a
 Pages, depth, requests per minute and fetching are only where a new website starts: each saved website
 keeps its own values, changed in its form on the Data tab.
 
+### Logs
+
+Settings › **Logs** shows what the engine and the app did, newest last, and follows new entries
+as they come (every 2 seconds; untick **Follow** to stop):
+
+![Settings › Logs: the engine's log](images/logs-engine.png)
+
+- **Engine** is the log of the engine the app is connected to, read through its API, so with a
+  RunPod pod or a remote engine it is that engine's log. It has the engine's start (version,
+  commit, data folder, hardware and GPU), models downloaded and loaded, every answer (model,
+  collection, tokens and speed), uploads, collections made and deleted, crawls page by page,
+  generations, training, exports, evaluations and imports, Python warnings and every error with
+  its traceback. Requests that change something, and every failed one, are listed with their
+  status; successful reads are not, as the app checks status every few seconds.
+- **App** is this app's own log: starting the engine (and its last output when it exits),
+  connecting to a remote engine or a pod, RunPod requests and pod actions, and errors.
+
+Levels have colors (INFO blue, WARN yellow, ERROR red, with the row tinted), so do the parts of
+the app (`http`, `chat`, `api.knowledge`, …), request methods and status codes, and numbers with
+units. The list can be cut to warnings and errors, or filtered by text (a collection's name,
+`crawl`, a model). The files:
+
+- the engine's: `logs/engine.log` in the data folder (`/workspace/tinylm-studio/logs/` in the
+  container image), kept to 4 files of 5 MB;
+- the app's: `logs/app.log` in the app's settings folder (`~/.config/tinylm-studio-desktop` on
+  Linux), kept to 2 files of 5 MB; **Open folder** opens it.
+
+`TINYLM_LOG_LEVEL` in `.env` sets how much the engine logs: `DEBUG` (everything, with each
+successful request and the app's RunPod status checks), `INFO` (the default), `WARNING` or
+`ERROR`.
+
+![Settings › Logs: the app's log](images/logs-app.png)
+
 ### Engine settings (.env)
 
 Put these into `.env` (see [.env.example](../.env.example)); the full list is in
@@ -704,6 +738,7 @@ Everything lives in `~/.local/share/tinylm-studio` (`TINYLM_DATA_DIR` to change)
 | `embeddings/` | The embedding model used to search collections |
 | `searxng/` | Settings of the local SearXNG |
 | `venv/` | The engine's Python environment |
+| `logs/engine.log` | The engine's log (see [Logs](#logs)) |
 
 Only one engine can use the data folder at a time. If the app reports that the knowledge base
 is locked, an old engine is still running: `pkill -f 'python -m engine'`.
