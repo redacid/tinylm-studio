@@ -9,12 +9,14 @@ from dataclasses import dataclass
 from engine.rag.store import KnowledgeStore, now
 from engine.teachers.providers import (
     DEFAULT_BASE_URLS,
+    AnswerOptions,
     AnthropicTeacher,
     LocalTeacher,
     OpenAICompatibleTeacher,
     Paced,
     TeacherKind,
     TeacherRuntime,
+    ThinkingMode,
 )
 
 SCHEMA = """
@@ -29,7 +31,13 @@ CREATE TABLE IF NOT EXISTS teachers (
     created_at TEXT NOT NULL
 );
 """
-FIELDS = ("name", "kind", "base_url", "model", "api_key", "per_minute")
+# Added after the first release: older databases get them when the engine starts.
+ADDED_COLUMNS = {
+    "max_tokens": "INTEGER",
+    "temperature": "REAL",
+    "thinking": "TEXT NOT NULL DEFAULT 'default'",
+}
+FIELDS = ("name", "kind", "base_url", "model", "api_key", "per_minute", *ADDED_COLUMNS)
 
 
 class TeacherNotFound(Exception):
@@ -45,6 +53,10 @@ class TeacherConfig:
     api_key: str | None = None
     # Requests per minute; free OpenRouter models allow about 20.
     per_minute: float | None = None
+    # Answer settings for every request (see AnswerOptions): empty leaves it to the request.
+    max_tokens: int | None = None
+    temperature: float | None = None
+    thinking: ThinkingMode = "default"
     id: int | None = None
     created_at: str | None = None
 
@@ -62,14 +74,20 @@ class TeacherConfig:
             "model": self.model,
             "has_key": bool(self.api_key),
             "per_minute": self.per_minute,
+            "max_tokens": self.max_tokens,
+            "temperature": self.temperature,
+            "thinking": self.thinking,
             "created_at": self.created_at,
         }
 
+    @property
+    def options(self) -> AnswerOptions:
+        return AnswerOptions(self.max_tokens, self.temperature, self.thinking)
+
 
 def client(config: TeacherConfig):
-    if config.kind == "anthropic":
-        return AnthropicTeacher(config.base_url, config.api_key, config.model, config.name)
-    return OpenAICompatibleTeacher(config.base_url, config.api_key, config.model, config.name)
+    kind = AnthropicTeacher if config.kind == "anthropic" else OpenAICompatibleTeacher
+    return kind(config.base_url, config.api_key, config.model, config.name, options=config.options)
 
 
 class TeacherStore:
@@ -78,6 +96,12 @@ class TeacherStore:
         self.models = models
         self._lock = store._lock
         self.db.executescript(SCHEMA)
+        columns = {r["name"] for r in self.db.execute("PRAGMA table_info(teachers)")}
+        with self._lock:
+            for name, definition in ADDED_COLUMNS.items():
+                if name not in columns:
+                    self.db.execute(f"ALTER TABLE teachers ADD COLUMN {name} {definition}")
+            self.db.commit()
 
     @property
     def db(self):
@@ -105,6 +129,9 @@ class TeacherStore:
                 "model": model_id,
                 "has_key": False,
                 "per_minute": None,
+                "max_tokens": None,
+                "temperature": None,
+                "thinking": "default",
                 "created_at": None,
             }
             for model_id in self.models.installed()

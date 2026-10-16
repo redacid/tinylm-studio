@@ -430,7 +430,9 @@ POST /api/teachers
   "base_url": "https://openrouter.ai/api/v1",
   "model": "meta-llama/llama-3.3-70b-instruct:free",
   "api_key": "sk-or-...",
-  "per_minute": 20
+  "per_minute": 20,
+  "max_tokens": 4000,
+  "thinking": "off"
 }
 ```
 
@@ -439,9 +441,18 @@ OpenRouter) or `anthropic` (the Messages API; defaults to `https://api.anthropic
 defaults to the model. `per_minute` spaces requests out; HTTP 429 answers are waited out
 (`Retry-After`) and retried up to five times.
 
+Answer settings apply to every request the teacher gets (the chat, generation, judging); left
+out or `null`, each request uses its own:
+- `max_tokens`: tokens per answer. Thinking counts toward them on models that think.
+- `temperature`: 0 to 2. A model that refuses a temperature (newer Claude models) is asked
+  again without one.
+- `thinking`: `default` (the model's own; nothing is sent), `off` or `on`. Anthropic gets
+  `thinking: {"type": "disabled"}` or `{"type": "adaptive"}` (Claude 4.6 and later);
+  OpenAI-compatible APIs get OpenRouter's `reasoning: {"enabled": false | true}`.
+
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/api/teachers` | Saved teachers (`id`, `ref`, `name`, `kind`, `base_url`, `model`, `has_key`, `per_minute`), then installed models with `kind: "local"` and `ref: "local:<model id>"` |
+| GET | `/api/teachers` | Saved teachers (`id`, `ref`, `name`, `kind`, `base_url`, `model`, `has_key`, `per_minute`, `max_tokens`, `temperature`, `thinking`), then installed models with `kind: "local"` and `ref: "local:<model id>"` |
 | POST | `/api/teachers` | Saves a teacher; 201 |
 | PUT | `/api/teachers/{id}` | The same body; an empty `api_key` keeps the saved key |
 | DELETE | `/api/teachers/{id}` | 204 |

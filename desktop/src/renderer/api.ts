@@ -262,8 +262,15 @@ export type Teacher = {
   model: string;
   has_key: boolean;
   per_minute: number | null;
+  /** Answer settings for every request (chat, generation, judging); null: each request's own. */
+  max_tokens: number | null;
+  temperature: number | null;
+  thinking: ThinkingMode;
   created_at: string | null;
 };
+
+/** Thinking of models that have it: the model's default, off or on. */
+export type ThinkingMode = "default" | "off" | "on";
 
 export type TeacherInput = {
   /** A saved teacher's id: its key is used when api_key is left empty. */
@@ -274,6 +281,9 @@ export type TeacherInput = {
   model: string;
   api_key?: string | null;
   per_minute?: number | null;
+  max_tokens?: number | null;
+  temperature?: number | null;
+  thinking?: ThinkingMode;
 };
 
 export type TeacherModel = { id: string; name: string; free: boolean };

@@ -350,6 +350,16 @@ A teacher is the model that writes examples. Teachers are set up at the bottom o
 or the provider's error. **Requests per
 minute** keeps the studio under the provider's limit; leave it empty for no limit.
 
+The answer settings apply to everything the teacher does: the chat, generating examples and
+judging. Left empty, each request uses its own (512 tokens in the chat, more for generating
+and judging).
+- **Max tokens**: the length of an answer. Models that think count their thinking toward it,
+  so a thinking model with a small limit can use it all up before answering; the chat then
+  says so. Give such a model a few thousand, or turn its thinking off.
+- **Temperature**: how varied the answers are.
+- **Thinking**: *The model's default*, *Off* or *On*, for models that think before answering
+  (Claude 4.6 and later, OpenRouter's reasoning models). Some models cannot turn it off.
+
 ![Saved teachers](images/teachers.png)
 
 API keys are stored in `knowledge.db` on this computer, are sent only to the teacher's base URL,

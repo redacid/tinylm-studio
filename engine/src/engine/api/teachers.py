@@ -23,6 +23,10 @@ class TeacherRequest(BaseModel):
     # Left empty when editing: the saved key is kept.
     api_key: str | None = None
     per_minute: float | None = Field(None, gt=0, le=10000)
+    # Answer settings for every request; empty (null, "default") leaves it to the request.
+    max_tokens: int | None = Field(None, ge=1, le=1_000_000)
+    temperature: float | None = Field(None, ge=0, le=2)
+    thinking: Literal["default", "off", "on"] = "default"
     # For listing models or testing a teacher being edited, whose key is not sent again.
     id: int | None = None
 
@@ -45,6 +49,9 @@ def config(body: TeacherRequest, store: TeacherStore) -> TeacherConfig:
         base_url=body.base_url.strip(),
         api_key=api_key or None,
         per_minute=body.per_minute,
+        max_tokens=body.max_tokens,
+        temperature=body.temperature,
+        thinking=body.thinking,
     )
 
 

@@ -12,6 +12,7 @@ import json
 import logging
 import time
 from collections.abc import Iterator
+from dataclasses import dataclass
 from typing import Literal, Protocol
 
 import httpx
@@ -28,6 +29,27 @@ DEFAULT_BASE_URLS = {
 ANTHROPIC_VERSION = "2023-06-01"
 # OpenRouter shows these on its activity page; other providers ignore them.
 APP_HEADERS = {"HTTP-Referer": "https://github.com/tinylm-studio", "X-Title": "tinylm-studio"}
+
+
+ThinkingMode = Literal["default", "off", "on"]
+
+
+@dataclass
+class AnswerOptions:
+    """A saved teacher's own answer settings, for every request it gets: the chat, generation,
+    judging. None and "default" leave it to each request and the model."""
+
+    # Tokens per answer. On models that think, thinking counts toward it.
+    max_tokens: int | None = None
+    temperature: float | None = None
+    # Thinking (reasoning) of models that have it: the model's default, off or on.
+    thinking: ThinkingMode = "default"
+
+    def tokens(self, asked: int | None) -> int | None:
+        return self.max_tokens or asked
+
+    def heat(self, asked: float | None) -> float | None:
+        return asked if self.temperature is None else self.temperature
 
 
 class TeacherError(Exception):
@@ -133,13 +155,28 @@ class LocalTeacher:
         return collect(runtime.stream(request)).text
 
 
+def thought_out(name: str, max_tokens: int | None) -> str:
+    """The chat's answer when the model spent the whole answer thinking."""
+    return (
+        f"[{name} used all {max_tokens or 'its'} tokens before answering, probably thinking: "
+        "raise Max tokens or turn Thinking off in the teacher's settings]"
+    )
+
+
 class OpenAICompatibleTeacher:
     def __init__(
-        self, base_url: str, api_key: str | None, model: str, name: str = "", timeout: float = 300
+        self,
+        base_url: str,
+        api_key: str | None,
+        model: str,
+        name: str = "",
+        timeout: float = 300,
+        options: AnswerOptions | None = None,
     ):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.name = name or model
+        self.options = options or AnswerOptions()
         self.last_served: dict | None = None
         headers = {**APP_HEADERS}
         if api_key:
@@ -155,8 +192,9 @@ class OpenAICompatibleTeacher:
                 {"role": "system", "content": system},
                 {"role": "user", "content": prompt},
             ],
-            "max_tokens": max_tokens,
-            "temperature": temperature,
+            "max_tokens": self.options.tokens(max_tokens),
+            "temperature": self.options.heat(temperature),
+            **self._thinking(),
         }
         self.last_served = {"model": self.model, "provider": None}
         try:
@@ -181,10 +219,11 @@ class OpenAICompatibleTeacher:
         body = {
             "model": self.model,
             "messages": [{"role": m.role, "content": m.content} for m in request.messages],
-            "max_tokens": request.max_tokens,
-            "temperature": request.temperature,
+            "max_tokens": self.options.tokens(request.max_tokens),
+            "temperature": self.options.heat(request.temperature),
             "top_p": request.top_p,
             "stream": True,
+            **self._thinking(),
         }
         if request.stop:
             body["stop"] = request.stop
@@ -212,7 +251,15 @@ class OpenAICompatibleTeacher:
             raise TeacherError(f"{self.base_url} is not reachable ({type(e).__name__})") from None
         # Without a count from the provider, each streamed piece is about one token.
         usage.output_tokens = usage.output_tokens or pieces
+        if reason == "length" and not pieces:
+            yield TextDelta(thought_out(self.name, body["max_tokens"]))
         yield Finish(reason, usage)
+
+    def _thinking(self) -> dict:
+        """OpenRouter's reasoning switch; other APIs get nothing unless it is set."""
+        if self.options.thinking == "default":
+            return {}
+        return {"reasoning": {"enabled": self.options.thinking == "on"}}
 
     def models(self) -> list[dict]:
         try:
@@ -245,11 +292,18 @@ def rejects_sampling(response: httpx.Response) -> bool:
 
 class AnthropicTeacher:
     def __init__(
-        self, base_url: str, api_key: str | None, model: str, name: str = "", timeout: float = 300
+        self,
+        base_url: str,
+        api_key: str | None,
+        model: str,
+        name: str = "",
+        timeout: float = 300,
+        options: AnswerOptions | None = None,
     ):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.name = name or model
+        self.options = options or AnswerOptions()
         self.last_served: dict | None = None
         headers = {"anthropic-version": ANTHROPIC_VERSION}
         if api_key:
@@ -263,12 +317,14 @@ class AnthropicTeacher:
             "model": self.model,
             "system": system,
             "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": max_tokens,
+            "max_tokens": self.options.tokens(max_tokens),
+            **self._thinking(),
         }
         self.last_served = {"model": self.model, "provider": "Anthropic"}
         try:
             response = self.client.post(
-                f"{self.base_url}/v1/messages", json=self._sampled(body, temperature)
+                f"{self.base_url}/v1/messages",
+                json=self._sampled(body, self.options.heat(temperature)),
             )
             if self._refused_sampling(response):
                 response = self.client.post(f"{self.base_url}/v1/messages", json=body)
@@ -287,22 +343,30 @@ class AnthropicTeacher:
         system = "\n\n".join(m.content for m in request.messages if m.role == "system")
         body = {
             "model": self.model,
+            # The API refuses an empty message, such as an answer that was cut off.
             "messages": [
                 {"role": m.role, "content": m.content}
                 for m in request.messages
-                if m.role != "system"
+                if m.role != "system" and m.content
             ],
-            "max_tokens": request.max_tokens or 1024,
+            "max_tokens": self.options.tokens(request.max_tokens) or 1024,
             "stream": True,
+            **self._thinking(),
         }
         if system:
             body["system"] = system
         if request.stop:
             body["stop_sequences"] = request.stop
         try:
-            yield from self._stream(self._sampled(body, request.temperature))
+            yield from self._stream(self._sampled(body, self.options.heat(request.temperature)))
         except SamplingRefused:
             yield from self._stream(body)
+
+    def _thinking(self) -> dict:
+        """Adaptive thinking (Claude 4.6 and later) when on; nothing for the model's default."""
+        if self.options.thinking == "default":
+            return {}
+        return {"thinking": {"type": "adaptive" if self.options.thinking == "on" else "disabled"}}
 
     def _sampled(self, body: dict, temperature: float | None) -> dict:
         if temperature is None or (self.base_url, self.model) in NO_SAMPLING:
@@ -321,7 +385,7 @@ class AnthropicTeacher:
 
     def _stream(self, body: dict) -> Iterator[StreamEvent]:
         reasons = {"max_tokens": "length", "stop_sequence": "stop_sequence"}
-        reason, stop_sequence, usage = "stop", None, Usage()
+        reason, stop_sequence, usage, answered = "stop", None, Usage(), False
         try:
             with self.client.stream("POST", f"{self.base_url}/v1/messages", json=body) as response:
                 if response.status_code == 400:
@@ -336,7 +400,10 @@ class AnthropicTeacher:
                     if kind == "message_start":
                         usage.input_tokens = data["message"].get("usage", {}).get("input_tokens", 0)
                     elif kind == "content_block_delta":
-                        if text := data.get("delta", {}).get("text"):
+                        # Only the answer: thinking comes in thinking_delta events.
+                        delta = data.get("delta", {})
+                        if delta.get("type") == "text_delta" and (text := delta.get("text")):
+                            answered = True
                             yield TextDelta(text)
                     elif kind == "message_delta":
                         delta = data.get("delta", {})
@@ -345,6 +412,8 @@ class AnthropicTeacher:
                         usage.output_tokens = data.get("usage", {}).get("output_tokens", 0)
         except httpx.HTTPError as e:
             raise TeacherError(f"{self.base_url} is not reachable ({type(e).__name__})") from None
+        if reason == "length" and not answered:
+            yield TextDelta(thought_out(self.name, body["max_tokens"]))
         yield Finish(reason, usage, stop_sequence)
 
     def models(self) -> list[dict]:

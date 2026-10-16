@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { EngineClient, Teacher, TeacherInput, TeacherModel } from "./api";
+import { EngineClient, Teacher, TeacherInput, TeacherModel, ThinkingMode } from "./api";
 import { servedBy } from "./Generate";
 import { useTabActive } from "./tabActive";
 
@@ -21,7 +21,12 @@ const EMPTY: TeacherInput = {
   model: "",
   api_key: "",
   per_minute: PROVIDERS[0].per_minute,
+  max_tokens: null,
+  temperature: null,
+  thinking: "default",
 };
+
+const number = (value: string) => (value ? +value : null);
 
 /** Teachers: the larger models that write training examples. */
 export function Teachers({ client }: { client: EngineClient }) {
@@ -184,8 +189,45 @@ export function Teachers({ client }: { client: EngineClient }) {
               step="any"
               placeholder="No limit"
               value={editing.per_minute ?? ""}
-              onChange={(e) => set({ per_minute: e.target.value ? +e.target.value : null })}
+              onChange={(e) => set({ per_minute: number(e.target.value) })}
             />
+          </label>
+          <p className="muted">
+            Answer settings apply to everything this teacher does: the chat, generating examples, judging. Left empty,
+            each request uses its own.
+          </p>
+          <label title="Tokens per answer. Thinking counts toward them: a model that thinks needs a few thousand">
+            <span>Max tokens</span>
+            <input
+              type="number"
+              min={1}
+              placeholder="Each request's own"
+              value={editing.max_tokens ?? ""}
+              onChange={(e) => set({ max_tokens: number(e.target.value) })}
+            />
+          </label>
+          <label title="Some models, such as newer Claude models, take none; the studio then asks without one">
+            <span>Temperature</span>
+            <input
+              type="number"
+              min={0}
+              max={2}
+              step={0.1}
+              placeholder="Each request's own"
+              value={editing.temperature ?? ""}
+              onChange={(e) => set({ temperature: number(e.target.value) })}
+            />
+          </label>
+          <label title="Thinking before answering, for models that have it (Claude 4.6 and later; OpenRouter's reasoning models)">
+            <span>Thinking</span>
+            <select
+              value={editing.thinking ?? "default"}
+              onChange={(e) => set({ thinking: e.target.value as ThinkingMode })}
+            >
+              <option value="default">The model's default</option>
+              <option value="off">Off</option>
+              <option value="on">On</option>
+            </select>
           </label>
           {result && <p className={result.ok ? "muted" : "error"}>{result.text}</p>}
           <div className="buttons">
@@ -200,7 +242,7 @@ export function Teachers({ client }: { client: EngineClient }) {
       {saved.length > 0 && (
         <table>
           <thead>
-            <tr><th>Teacher</th><th>Provider</th><th>Limit</th><th /></tr>
+            <tr><th>Teacher</th><th>Provider</th><th>Limit</th><th>Answers</th><th /></tr>
           </thead>
           <tbody>
             {saved.map((t) => (
@@ -216,6 +258,7 @@ export function Teachers({ client }: { client: EngineClient }) {
                   </div>
                 </td>
                 <td className="nowrap">{t.per_minute ? `${t.per_minute} / min` : "none"}</td>
+                <td className="nowrap">{answerSettings(t)}</td>
                 <td className="nowrap">
                   {confirmDelete === t.id ? (
                     <>
@@ -237,4 +280,13 @@ export function Teachers({ client }: { client: EngineClient }) {
       <p className="muted">API keys are kept in the workspace database on this computer and never shown again.</p>
     </div>
   );
+}
+
+function answerSettings(t: Teacher): string {
+  const parts = [
+    t.max_tokens ? `${t.max_tokens} tokens` : "",
+    t.temperature !== null ? `temperature ${t.temperature}` : "",
+    t.thinking !== "default" ? `thinking ${t.thinking}` : "",
+  ].filter(Boolean);
+  return parts.length ? parts.join(" · ") : "defaults";
 }
