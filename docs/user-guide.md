@@ -497,7 +497,8 @@ data center, price per hour, uptime and address:
 
 - **Stop** stops the pod: it is no longer billed, except for its volume, and the app has no
   engine until **Start**. The next app start starts a stopped pod again.
-- **Terminate** deletes the pod and its pod volume, after asking; a network volume stays.
+- **Terminate** deletes the pod and its pod volume, after asking; a network volume stays. A pod
+  deleted on runpod.io is forgotten by the app too, and the form offers to create a new one.
 - **Stop the pod when the app closes** (on by default) stops it on quit, also when the app was
   switched to another engine in the meantime.
 - **Use a pod made on runpod.io**: enter the id of a pod you created yourself from the image

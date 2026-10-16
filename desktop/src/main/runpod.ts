@@ -84,6 +84,9 @@ const MIN_CUDA = "12.6";
 
 export class RunPodError extends Error {}
 
+/** The pod is not on RunPod (any more): deleted on runpod.io, for example. */
+export class PodGone extends RunPodError {}
+
 export function engineUrl(podId: string): string {
   return PROXY_URL.replace("{id}", podId);
 }
@@ -209,6 +212,8 @@ export class RunPod {
     if (!response.ok) {
       if (response.status === 401 || response.status === 403)
         throw new RunPodError("RunPod refused the API key: check it in Settings > Engine.");
+      if (response.status === 404 && path.startsWith("/pods/"))
+        throw new PodGone(`The pod ${decodeURIComponent(path.split("/")[2])} is not on RunPod any more; create a new one`);
       // RFC 9457 problem details: title and detail, sometimes a list of field errors.
       const errors = Array.isArray(data.errors) ? data.errors.map((e) => JSON.stringify(e)).join("; ") : "";
       const detail = [data.title, data.detail, errors].filter(Boolean).join(": ") || text || response.statusText;

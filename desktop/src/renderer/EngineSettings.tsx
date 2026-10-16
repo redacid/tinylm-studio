@@ -79,7 +79,10 @@ export function EngineSettingsForm({ engine }: { engine: EngineState }) {
       return;
     }
     try {
-      setPod(await window.tinylm.runpod("pod"));
+      const found = await window.tinylm.runpod("pod");
+      setPod(found);
+      // Gone from RunPod (deleted on runpod.io): the app forgot it, so the form offers a new one.
+      if (!found) loaded(await window.tinylm.getConnection());
     } catch (e) {
       setError(message(e));
     }
@@ -154,7 +157,7 @@ export function EngineSettingsForm({ engine }: { engine: EngineState }) {
       loaded(await window.tinylm.setConnection(changes(), false));
       await window.tinylm.runpod(action);
       setConfirmTerminate(false);
-      if (action === "terminate") loaded(await window.tinylm.getConnection());
+      loaded(await window.tinylm.getConnection());
       await refreshPod();
     });
   const create = () =>

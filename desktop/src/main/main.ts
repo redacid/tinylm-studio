@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { apply, Connection, ConnectionChanges, load, newKey, save, view } from "./connection";
 import { Engine } from "./engine";
-import { createRequest, RunPod } from "./runpod";
+import { createRequest, PodGone, RunPod } from "./runpod";
 
 const repoRoot = join(__dirname, "..", "..", "..");
 let window: BrowserWindow | undefined;
@@ -56,7 +56,16 @@ ipcMain.handle("engine:set-connection", (_event, changes: ConnectionChanges, rec
 ipcMain.handle("runpod:catalog", (_event, cloud?: "SECURE" | "COMMUNITY") =>
   runpod().catalog(cloud ?? connection.runpod.cloud),
 );
-ipcMain.handle("runpod:pod", () => (connection.runpod.podId ? runpod().pod(connection.runpod.podId) : null));
+// A pod deleted on runpod.io is forgotten here too, as if terminated from the app.
+function forget(error: unknown): null {
+  if (!(error instanceof PodGone)) throw error;
+  update({ runpod: { podId: "", engineKey: "" } });
+  if (connection.mode === "runpod") engine.disconnect(error.message);
+  return null;
+}
+ipcMain.handle("runpod:pod", () =>
+  connection.runpod.podId ? runpod().pod(connection.runpod.podId).catch(forget) : null,
+);
 // The pod's environment: its engine key and, for gated models (Gemma, Llama) to download in the
 // pod, the same Hugging Face token as here.
 function podEnv(engineKey: string): Record<string, string> {
@@ -90,11 +99,17 @@ ipcMain.handle("runpod:start", async () => {
   engine.connect(connection); // starts the pod if it is stopped, then waits for the engine
 });
 ipcMain.handle("runpod:stop", async () => {
-  await runpod().action(connection.runpod.podId, "stop");
+  try {
+    await runpod().action(connection.runpod.podId, "stop");
+  } catch (error) {
+    return forget(error);
+  }
   if (connection.mode === "runpod") engine.disconnect("The RunPod pod is stopped");
 });
 ipcMain.handle("runpod:terminate", async () => {
-  await runpod().terminate(connection.runpod.podId);
+  await runpod()
+    .terminate(connection.runpod.podId)
+    .catch((error) => error instanceof PodGone || Promise.reject(error));
   update({ runpod: { podId: "", engineKey: "" } });
   if (connection.mode === "runpod") engine.disconnect("The RunPod pod was terminated");
 });
