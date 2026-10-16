@@ -20,6 +20,11 @@ class FetchError(Exception):
     pass
 
 
+class NotAPage(FetchError):
+    """The browser got a file, not a web page: headless Chrome downloads a PDF and aborts the
+    page (net::ERR_ABORTED), a full Chrome shows it in its viewer. Plain HTTP gets the file."""
+
+
 class RedirectRefused(Exception):
     """A redirect led to an address the caller does not want; nothing was downloaded from it."""
 
@@ -160,12 +165,15 @@ class CdpFetcher:
                 session = CdpSession(ws, self.timeout)
                 session.call("Page.enable")
                 navigation = session.call("Page.navigate", url=url)
+                if navigation.get("errorText") == "net::ERR_ABORTED":
+                    raise NotAPage(f"the browser downloaded {url} instead of showing it")
                 if navigation.get("errorText"):
                     raise FetchError(f"{navigation['errorText']} ({url})")
                 session.wait_for("Page.loadEventFired")
                 time.sleep(self.settle)
                 html = session.evaluate("document.documentElement.outerHTML")
                 final_url = session.evaluate("location.href")
+                content_type = session.evaluate("document.contentType") or ""
         except (OSError, TimeoutError) as e:
             raise FetchError(f"Browser error: {e}") from None
         finally:
@@ -175,6 +183,8 @@ class CdpFetcher:
                 pass
         if allow is not None and final_url != url and not allow(final_url):
             raise RedirectRefused(final_url)
+        if "html" not in content_type:
+            raise NotAPage(f"{final_url} is {content_type}, not a web page")
         return Page(final_url, 200, "text/html", html.encode())
 
     def close(self) -> None:

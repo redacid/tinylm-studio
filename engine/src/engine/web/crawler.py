@@ -38,6 +38,7 @@ from engine.web.fetch import (
     CdpFetcher,
     FetchError,
     HttpFetcher,
+    NotAPage,
     Page,
     RedirectRefused,
 )
@@ -248,6 +249,16 @@ class Crawler:
         seen = {url for url, _ in queue}
         attempts: dict[str, int] = {}
 
+        def fetch(target: str, allow: Callable[[str], bool] | None) -> Page:
+            if browser is not None:
+                try:
+                    return browser.fetch(target, allow)
+                except NotAPage:
+                    # A file, such as a PDF or a link that redirects to one: the browser shows
+                    # only web pages, plain HTTP gets the file.
+                    pass
+            return http.fetch(target, allow)
+
         def wanted(link: str) -> bool:
             """Whether a link, or the address a redirect leads to, is to be downloaded."""
             return (
@@ -290,7 +301,7 @@ class Crawler:
                 # redirects of other pages are held to the rules of links.
                 allow = None if depth == 0 else (lambda target: wanted(normalize(target)))
                 try:
-                    page = (browser or http).fetch(url, allow)
+                    page = fetch(url, allow)
                     for _ in range(MAX_REDIRECTS):
                         target = refresh_target(page)
                         if target is None or target == normalize(page.url):
@@ -298,7 +309,7 @@ class Crawler:
                         if allow is not None and not allow(target):
                             raise RedirectRefused(target)
                         limiter.wait(site(target))
-                        page = (browser or http).fetch(target, allow)
+                        page = fetch(target, allow)
                 except RedirectRefused as e:
                     job.record(url, "skipped")
                     job.note(f"skipped {url}: it redirects to {e.url}")

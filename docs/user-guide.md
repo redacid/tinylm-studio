@@ -766,7 +766,10 @@ chromium --remote-debugging-port=9222 --user-data-dir=$HOME/.cache/tinylm-browse
 The separate `--user-data-dir` keeps this browser apart from your everyday profile; you can
 log in to sites in it, and the crawler sees them as you do. If the browser listens elsewhere,
 change **Browser address** in [Crawler settings](#crawler-settings) (or `TINYLM_CDP_URL`;
-default `http://127.0.0.1:9222`). robots.txt, when followed, is still read over plain HTTP.
+default `http://127.0.0.1:9222`). robots.txt, when followed, is still read over plain HTTP, and
+so are files: the browser does not show a PDF (headless Chrome downloads it, a full one opens
+its viewer), so a link to one, or one that redirects to one, is fetched over plain HTTP, with
+the same rules for redirects and *Skip links matching*.
 
 ### Web search
 

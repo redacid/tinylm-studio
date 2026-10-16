@@ -56,6 +56,7 @@ REDIRECTS = {"/old": "/guides/", "/moved": "@/", "/a-moved": "@/a", "/filer/1/":
 SITE["/meta"] = (
     '<html><head><meta http-equiv="Refresh" content="0; URL=\'/guides/\'"></head></html>'
 )
+SITE["/media/2025.pdf"] = "%PDF-1.4\n%%EOF\n"
 SITE["/links"] = page(
     "Links", '<a href="/a-moved">A</a> <a href="/b">B</a> <a href="/filer/1/">PDF</a>'
 )
@@ -87,6 +88,7 @@ class Site(BaseHTTPRequestHandler):
         body = SITE[path].encode()
         self.send_response(200)
         kind = "text/plain" if path.endswith(".txt") else "text/html; charset=utf-8"
+        kind = "application/pdf" if path.endswith(".pdf") else kind
         self.send_header("Content-Type", kind)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
@@ -365,6 +367,16 @@ def test_browser_renders_javascript_pages(games, site, browser):
     job = crawl(games, [f"{site}/js"], cdp_url=browser, use_browser=True, max_depth=0)
     assert job.indexed == 1, job.log
     assert titles(games) == ["Rendered"]
+
+
+def test_files_through_the_browser(games, site, browser):
+    """The browser does not show a file (headless Chrome downloads it, a full one shows it in its
+    viewer): such a link is fetched over plain HTTP, with the same rules for redirects."""
+    job = crawl(
+        games, [f"{site}/links"], cdp_url=browser, use_browser=True, max_depth=1, exclude=["*.pdf"]
+    )
+    assert any("/filer/1/: it redirects to " in line for line in job.log), job.log
+    assert not any("ERR_ABORTED" in line or "failed" in line for line in job.log), job.log
 
 
 def test_browser_in_another_container(site, browser, monkeypatch):
