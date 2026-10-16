@@ -122,11 +122,16 @@ class CdpFetcher:
         except ValueError:
             if host == "localhost":
                 return self.endpoint
+        port = parts.port or 80
         try:
-            address = socket.gethostbyname(host)
+            # Both IPv4 and IPv6, as curl looks it up: a container network may give a name only
+            # an IPv6 address. IPv4 first.
+            found = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
         except OSError as e:
             raise FetchError(f"Cannot find the browser's host {host}: {e}") from None
-        return urlunsplit(parts._replace(netloc=f"{address}:{parts.port or 80}"))
+        family, *_, sockaddr = min(found, key=lambda a: a[0] != socket.AF_INET)
+        address = sockaddr[0] if family == socket.AF_INET else f"[{sockaddr[0]}]"
+        return urlunsplit(parts._replace(netloc=f"{address}:{port}"))
 
     def _new_tab(self, address: str) -> dict:
         try:

@@ -373,13 +373,23 @@ def test_browser_in_another_container(site, browser, monkeypatch):
     from engine.web import fetch
 
     port = browser.rsplit(":", 1)[1]
+    lookup = fetch.socket.getaddrinfo
     names = {"tinylm-chrome": "127.0.0.1"}
-    monkeypatch.setattr(fetch.socket, "gethostbyname", lambda host: names[host])
+    monkeypatch.setattr(
+        fetch.socket,
+        "getaddrinfo",
+        lambda host, *args, **kw: lookup(names.get(host, host), *args, **kw),
+    )
     page = CdpFetcher(f"http://tinylm-chrome:{port}", settle=0.2).fetch(f"{site}/js")
     assert "Triss Merigold" in page.body.decode()
     monkeypatch.undo()
     with pytest.raises(fetch.FetchError, match="Cannot find the browser's host"):
         CdpFetcher("http://nowhere.invalid:9222").fetch(f"{site}/js")
+
+    # A name with only an IPv6 address on the container network.
+    v6 = [(fetch.socket.AF_INET6, fetch.socket.SOCK_STREAM, 6, "", ("fd00::5", 9222, 0, 0))]
+    monkeypatch.setattr(fetch.socket, "getaddrinfo", lambda *args, **kw: v6)
+    assert CdpFetcher("http://tinylm-chrome:9222")._address() == "http://[fd00::5]:9222"
 
 
 def test_crawl_api(client, site):
