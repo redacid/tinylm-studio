@@ -454,8 +454,12 @@ compared with the dataset's own answers.
 
 1. Open **Evaluation** → **New evaluation** and pick a dataset. The fine-tuned models of that
    dataset and their base models are selected already; add others to compare (up to four).
-2. Optionally pick a **judge**: a teacher from the Models screen ([Teachers](#teachers)). Without
-   one, answers are scored by similarity only.
+2. Optionally pick a **judge**: a teacher from the Models screen ([Teachers](#teachers)) or an
+   installed model. Without one, answers are scored by similarity only. An installed judge runs
+   on the same engine after all answers are written, so it costs nothing but time; pick one
+   clearly larger than the models it scores (on a GPU pod, a model of 7B or more), since a
+   small model scores no better than it answers. Reasoning models get room to think before
+   their verdict.
 3. **Examples** limits how many held-out questions are used; **Max answer tokens** caps each
    answer. Press **Start evaluation**.
 

@@ -95,7 +95,7 @@ function EvaluationForm({ client, onStarted }: { client: EngineClient; onStarted
         setDatasets(d);
         setModels(m);
         setTrained(t);
-        setTeachers(j.filter((teacher) => teacher.kind !== "local"));
+        setTeachers(j);
         // Shown again: keep what was chosen while the dataset still exists.
         setOptions((o) => {
           if (d.some((x) => x.name === o.dataset)) return o;
@@ -124,6 +124,8 @@ function EvaluationForm({ client, onStarted }: { client: EngineClient; onStarted
 
   const dataset = datasets.find((d) => d.name === options.dataset);
   const count = Math.min(dataset?.eval ?? 0, options.limit);
+  const saved = teachers.filter((t) => t.kind !== "local");
+  const local = teachers.filter((t) => t.kind === "local");
   return (
     <form className="training-form" onSubmit={start}>
       <strong>Compare models</strong>
@@ -178,15 +180,28 @@ function EvaluationForm({ client, onStarted }: { client: EngineClient; onStarted
         Judge{" "}
         <select value={options.judge ?? ""} onChange={(e) => set({ judge: e.target.value || null })}>
           <option value="">None: similarity only</option>
-          {teachers.map((t) => (
-            <option key={t.ref} value={t.ref}>{t.name}</option>
-          ))}
+          {saved.length > 0 && (
+            <optgroup label="API providers">
+              {saved.map((t) => (
+                <option key={t.ref} value={t.ref}>{t.name}</option>
+              ))}
+            </optgroup>
+          )}
+          {local.length > 0 && (
+            <optgroup label="Installed models">
+              {local.map((t) => (
+                <option key={t.ref} value={t.ref}>{t.name}</option>
+              ))}
+            </optgroup>
+          )}
         </select>
       </label>
       <p className="muted">
         {count} questions × {options.models.length} models = {count * options.models.length} answers
-        {options.judge ? `, plus ${count} judge requests` : ""}. Models answer one after another on this computer; a
-        judge is a teacher from the Models screen.
+        {options.judge ? `, plus ${count} judge requests` : ""}. Models answer one after another on this engine; a
+        judge is a teacher from the Models screen or an installed model.
+        {options.judge?.startsWith("local:") &&
+          " An installed judge runs on this engine after all answers are written; pick one larger than the models it scores, it is only as good as its own answers."}
       </p>
       {error && <p className="error">{error}</p>}
       <div className="buttons">

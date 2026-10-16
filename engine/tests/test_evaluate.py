@@ -134,6 +134,18 @@ def test_similarity_only_and_limit(hints):
     assert report["summary"]["echo"]["judged"] == 0
 
 
+def test_an_installed_model_judges(hints):
+    # The echo model repeats the judge prompt, whose example reply scores answer A with 4.
+    started = hints.post(
+        "/api/evaluations",
+        json={"dataset": "hints", "models": ["echo"], "judge": "local:echo", "limit": 2},
+    )
+    assert started.status_code == 202, started.text
+    report = wait(hints, started.json()["id"])
+    assert report["state"] == "done"
+    assert report["summary"]["echo"]["score"] == 4 and report["summary"]["echo"]["judged"] == 2
+
+
 def test_evaluation_errors(hints):
     client = hints
     cases = [

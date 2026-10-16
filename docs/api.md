@@ -493,7 +493,7 @@ POST /api/evaluations
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/api/evaluations` | Runs, oldest first, without the per-example answers |
-| POST | `/api/evaluations` | Starts a run: `dataset` and `models` (1 to 4 installed models) required; `judge` is a teacher `ref`; 202, 404 for an unknown dataset or judge, 422 for no held-out examples or a model that is not installed, 409 while another run is going |
+| POST | `/api/evaluations` | Starts a run: `dataset` and `models` (1 to 4 installed models) required; `judge` is a teacher `ref`, also `local:<model id>` for an installed model; 202, 404 for an unknown dataset or judge, 422 for no held-out examples or a model that is not installed, 409 while another run is going |
 | GET | `/api/evaluations/{id}` | `state` (`running`, `done`, `cancelled`, `error`, `interrupted`), `phase` (`answering`, `judging`), `current` model, `done` of `total` steps, `summary` per model (`answers`, `similarity`, `judged`, `score`, `seconds`, `chars`) and `examples`: `messages`, `reference` and `answers` per model (`text`, `seconds`, `similarity`, `score`, `reason`) |
 | POST | `/api/evaluations/{id}/stop` | Stops after the answer in progress |
 | DELETE | `/api/evaluations/{id}` | Deletes a report that is not running |

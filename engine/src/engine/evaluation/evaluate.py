@@ -311,7 +311,8 @@ class EvaluationManager:
                 [(label, example["answers"][m]["text"]) for label, m in labels.items()],
             )
             try:
-                reply = judge.complete(JUDGE_SYSTEM, prompt, max_tokens=1024, temperature=0.0)
+                # Room for reasoning models (Qwen3, run locally, say) to think before the JSON.
+                reply = judge.complete(JUDGE_SYSTEM, prompt, max_tokens=4096, temperature=0.0)
                 scores = parse_json(reply).get("scores", {})
                 for label, model in labels.items():
                     item = scores.get(label) or {}
