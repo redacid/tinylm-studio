@@ -73,6 +73,48 @@ export function Data({ client }: { client: EngineClient }) {
     await refresh().catch(report);
   }
 
+  // Saves the collection to a file, to import on another engine (a RunPod pod, say).
+  async function exportCollection() {
+    setError(null);
+    setProgress(`Exporting ${selected}…`);
+    try {
+      const blob = await client.exportCollection(selected);
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `${selected}.tinylm.jsonl`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 60_000);
+    } catch (e) {
+      report(e);
+    } finally {
+      setProgress(null);
+    }
+  }
+
+  // The engine embeds the imported chunks in the background; this follows it until it is done.
+  async function importCollection(files: FileList | null) {
+    const file = files?.[0];
+    if (!file) return;
+    setError(null);
+    try {
+      let job = await client.importCollection(file);
+      while (job.state === "running") {
+        const done = job.added + job.duplicates;
+        setProgress(`Importing ${job.collection}: ${done}${job.total !== null ? ` of ${job.total}` : ""} documents`);
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        job = await client.importJob(job.id);
+      }
+      if (job.state === "error") throw new Error(`Import into ${job.collection} failed: ${job.error}`);
+      setLog([`✓ ${file.name} → ${job.collection}: ${job.added} documents added, ${job.duplicates} already there`]);
+      setSelected(job.collection);
+    } catch (e) {
+      report(e);
+    } finally {
+      setProgress(null);
+      await refresh().catch(report);
+    }
+  }
+
   async function removeCollection() {
     if (!selected) return;
     setConfirmDelete(false);
@@ -99,11 +141,16 @@ export function Data({ client }: { client: EngineClient }) {
           <input placeholder="New collection" value={newName} onChange={(e) => setNewName(e.target.value)} />
           <button type="submit" disabled={!newName.trim()}>Add</button>
         </form>
+        <label title="A file saved with Export on another engine: this computer's, a server's or a RunPod pod's">
+          <span className="button">Import collection</span>
+          <input type="file" accept=".jsonl" onChange={(e) => { importCollection(e.target.files); e.target.value = ""; }} disabled={!!progress} />
+        </label>
       </aside>
       <section>
         {error && <p className="error">{error}</p>}
+        {progress && !selected && <p className="muted">{progress}</p>}
         {!selected ? (
-          <p className="muted">Create a collection, then add files to it. Chat can answer from a collection and cite it.</p>
+          <p className="muted">Create a collection, then add files to it, or import one exported from another engine. Chat can answer from a collection and cite it.</p>
         ) : (
           <>
             <div className="actions">
@@ -116,6 +163,9 @@ export function Data({ client }: { client: EngineClient }) {
                 {/* @ts-expect-error webkitdirectory is supported by Chromium (Electron) */}
                 <input type="file" webkitdirectory="" onChange={(e) => upload(e.target.files)} disabled={!!progress} />
               </label>
+              <button onClick={exportCollection} disabled={!!progress} title="Saves its documents to a file, for Import collection on another engine, e.g. a RunPod pod">
+                Export
+              </button>
               {progress && <span className="muted">{progress}</span>}
               {confirmDelete ? (
                 <span className="danger">

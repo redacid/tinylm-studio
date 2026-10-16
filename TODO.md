@@ -63,8 +63,8 @@ The engine runs in a container in a Kubernetes cluster or a RunPod pod; see
 - [x] Image tags name the engine version and git commit (`0.1.0-5a0d901-cuda`); the commit is in
       the image labels, `/health` and the app's header.
 - [ ] Optional build arguments to include the embedding model and the GGUF converter.
-- [ ] Build and push the `cuda` image, and run a GGUF model and a fine-tune on a real RunPod GPU
-      pod (only tested against a fake RunPod API and the CPU image so far).
+- [x] Build and push the `cuda` image and start it on a real RunPod GPU pod (RTX 2000 Ada).
+- [ ] Run a fine-tune on a real RunPod GPU pod.
 - [ ] Manifests or a Helm chart: Deployment (1 replica, `Recreate`), Service, PVC
       (`ReadWriteOnce`) for `TINYLM_DATA_DIR`, Secret, ConfigMap, `/health` probes.
 - [ ] Read CPU and memory limits from cgroups for the default `TINYLM_THREADS` and `/api/system`.
@@ -74,4 +74,6 @@ The engine runs in a container in a Kubernetes cluster or a RunPod pod; see
 - [x] RunPod: GPU, CPU, data center and network volume chosen from RunPod's catalog, with prices
       and what is free now; CPU-only pods.
 - [x] RunPod: **Show request** shows the pod request before it is sent, with the secrets hidden.
+- [x] Move a collection between engines (this computer and a pod): **Export** and
+      **Import collection** on the Data page.
 - [ ] RunPod: show the pod's logs in the app (RunPod's "Stream pod logs" API).

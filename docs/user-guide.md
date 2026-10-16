@@ -9,6 +9,7 @@ For the HTTP API see [api.md](api.md); for the design and roadmap see the
 - [Models](#models)
   - [Model settings: context, threads, sampling, thinking](#model-settings)
 - [Data: collections, files, web search and websites](#data)
+  - [Moving a collection to another engine](#moving-a-collection-to-another-engine)
 - [Datasets](#datasets)
   - [Generating examples from your documents](#generating-examples)
 - [Teachers: OpenRouter, Anthropic and local models](#teachers)
@@ -209,6 +210,22 @@ A **collection** is a set of documents that chat can answer from. Create one on 
   a filter for uploaded files or web pages, and sorting.
 
   ![Documents of a collection](images/documents.png)
+
+### Moving a collection to another engine
+
+To use a collection on another engine (a [RunPod pod](#engine), a server) without crawling or
+uploading it again:
+
+1. On the engine that has it (usually this computer's), select the collection and click
+   **Export**: it is saved as `<name>.tinylm.jsonl`, its documents already split into chunks.
+2. Switch to the other engine in Settings › Engine, open **Data** and click
+   **Import collection** with that file. The collection of the same name is made if missing; the
+   documents are embedded there with that engine's embedding model (fast on a GPU pod), and
+   documents it already has are skipped, so importing again only adds what is new.
+
+![A collection imported into a remote engine](images/data-import.png)
+
+The saved websites of a collection are not exported, only its documents.
 
 ## Datasets
 

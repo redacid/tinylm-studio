@@ -141,6 +141,18 @@ export type Website = CrawlSettings & {
   last_crawled_at: string | null;
 };
 
+/** Adding an exported collection's documents, in the background. */
+export type ImportJob = {
+  id: string;
+  collection: string;
+  state: "running" | "done" | "error";
+  /** Documents in the file, when its header says. */
+  total: number | null;
+  added: number;
+  duplicates: number;
+  error: string | null;
+};
+
 export type CrawlJob = {
   id: string;
   collection: string;
@@ -821,6 +833,22 @@ export class EngineClient {
     form.append("files", file, file.webkitRelativePath || file.name);
     const path = `/api/collections/${encodeURIComponent(collection)}/documents`;
     return (await this.json<{ data: UploadResult[] }>(path, { method: "POST", body: form })).data[0];
+  }
+
+  /** The collection's documents and chunks as a file, for importCollection on another engine. */
+  async exportCollection(collection: string): Promise<Blob> {
+    return (await this.send(`/api/collections/${encodeURIComponent(collection)}/export`)).blob();
+  }
+
+  /** Starts importing an export into the collection it came from (made if missing). */
+  async importCollection(file: File): Promise<ImportJob> {
+    const form = new FormData();
+    form.append("file", file, file.name);
+    return this.json("/api/collections/import", { method: "POST", body: form });
+  }
+
+  async importJob(id: string): Promise<ImportJob> {
+    return this.json(`/api/collections/imports/${encodeURIComponent(id)}`);
   }
 
   async deleteDocument(collection: string, id: number): Promise<void> {

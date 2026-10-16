@@ -1,7 +1,9 @@
 """Uploaded data: conversion, chunking, collections, search and grounded chat answers."""
 
+import json
 import sqlite3
 import threading
+import time
 
 import anthropic
 import numpy as np
@@ -101,6 +103,52 @@ def test_collection_lifecycle(client):
     assert client.get("/api/collections").json()["data"][0]["documents"] == 1
     assert client.delete("/api/collections/ігри").status_code == 204
     assert client.get("/api/collections/ігри/documents").status_code == 404
+
+
+def wait_for_import(client, job: dict) -> dict:
+    for _ in range(100):
+        job = client.get(f"/api/collections/imports/{job['id']}").json()
+        if job["state"] != "running":
+            return job
+        time.sleep(0.05)
+    raise AssertionError("the import did not finish")
+
+
+def test_collection_export_and_import(games):
+    exported = games.get("/api/collections/games/export")
+    assert exported.status_code == 200
+    assert "games.tinylm.jsonl" in exported.headers["content-disposition"]
+    header, *documents = [json.loads(line) for line in exported.text.splitlines()]
+    assert header["collection"] == "games" and header["documents"] == 2
+    assert [d["name"] for d in documents] == ["witcher.txt", "souls.txt"]
+
+    def send(data: bytes, collection: str = "") -> dict:
+        response = games.post(
+            "/api/collections/import",
+            files={"file": ("games.tinylm.jsonl", data)},
+            data={"collection": collection},
+        )
+        assert response.status_code == 202, response.text
+        return wait_for_import(games, response.json())
+
+    # Into a new collection, by another name: made, indexed and searchable.
+    job = send(exported.content, "copy")
+    assert (job["state"], job["total"], job["added"], job["duplicates"]) == ("done", 2, 2, 0)
+    hits = games.post("/api/collections/copy/search", json={"query": "Dark Souls bosses"})
+    assert hits.json()["data"][0]["document"] == "souls.txt"
+    # Into the collection it came from (the header's name): nothing new.
+    job = send(exported.content)
+    assert (job["collection"], job["added"], job["duplicates"]) == ("games", 0, 2)
+
+    # A model's collection.jsonl has no header: it needs a name.
+    bundle = "\n".join(json.dumps(d) for d in documents).encode()
+    response = games.post("/api/collections/import", files={"file": ("c.jsonl", bundle)})
+    assert response.status_code == 422
+    assert send(bundle, "bundle")["added"] == 2
+    response = games.post("/api/collections/import", files={"file": ("x.txt", b"not json")})
+    assert response.status_code == 422
+    assert games.get("/api/collections/nope/export").status_code == 404
+    assert games.get("/api/collections/imports/nope").status_code == 404
 
 
 @pytest.fixture

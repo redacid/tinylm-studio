@@ -1,8 +1,13 @@
 """Management API for uploaded data: collections, documents and search."""
 
+import json
+import shutil
+import uuid
 from pathlib import Path
+from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, UploadFile
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from engine.api.deps import knowledge, require_api_key
@@ -14,6 +19,7 @@ from engine.rag.store import (
     InvalidName,
     KnowledgeStore,
 )
+from engine.rag.transfer import ImportManager, export_lines, read_header
 
 router = APIRouter(
     prefix="/api/collections", dependencies=[Depends(require_api_key)], tags=["knowledge"]
@@ -102,6 +108,63 @@ def upload_documents(
 def delete_document(name: str, document_id: int, store: KnowledgeStore = Depends(knowledge)):
     if not store.delete_document(name, document_id):
         raise HTTPException(404, f"No document {document_id} in '{name}'")
+
+
+@router.get("/{name}/export")
+def export_collection(name: str, store: KnowledgeStore = Depends(knowledge)) -> StreamingResponse:
+    """The collection's documents and chunks as JSON lines, for POST /api/collections/import."""
+    try:
+        store.count_documents(name)
+    except CollectionNotFound:
+        raise not_found(name) from None
+    return StreamingResponse(
+        export_lines(store, name),
+        media_type="application/x-ndjson",
+        # filename* allows names such as "ігри"; headers themselves are latin-1.
+        headers={"content-disposition": f"attachment; filename*=UTF-8''{quote(name)}.tinylm.jsonl"},
+    )
+
+
+def imports(request: Request) -> ImportManager:
+    return request.app.state.imports
+
+
+@router.post("/import", status_code=202)
+def import_collection(
+    request: Request,
+    file: UploadFile,
+    collection: str = Form(""),
+    store: KnowledgeStore = Depends(knowledge),
+    manager: ImportManager = Depends(imports),
+) -> dict:
+    """Starts adding an export's documents to the collection (by default the one it came from),
+    made if missing; poll GET /api/collections/imports/{id}."""
+    folder = request.app.state.settings.workspace_dir / "imports"
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / f"{uuid.uuid4().hex}.jsonl"
+    with path.open("wb") as f:
+        shutil.copyfileobj(file.file, f)
+    try:
+        name = collection.strip() or read_header(path).get("collection", "")
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        path.unlink()
+        raise HTTPException(422, "Not a collection export: expected JSON lines") from None
+    if not name:
+        path.unlink()
+        raise HTTPException(422, "Name the collection to import into")
+    try:
+        store.create_collection(name)
+    except InvalidName as e:
+        path.unlink()
+        raise HTTPException(422, str(e)) from None
+    return manager.start(name, path).to_dict()
+
+
+@router.get("/imports/{job_id}")
+def import_status(job_id: str, manager: ImportManager = Depends(imports)) -> dict:
+    if job_id not in manager.jobs:
+        raise HTTPException(404, f"No import {job_id}")
+    return manager.jobs[job_id].to_dict()
 
 
 @router.post("/{name}/search")

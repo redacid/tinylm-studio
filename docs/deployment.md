@@ -138,7 +138,9 @@ Notes:
   kept while the pod is stopped, deleted with it. A CPU pod has no pod volume: without a network
   volume its data is on the container disk and is lost when it stops. A
   [network volume](https://docs.runpod.io/storage/network-volumes) outlives the pod; it ties the
-  pod to that volume's data center, so the app sets the data center from it.
+  pod to that volume's data center, so the app sets the data center from it. Collections made on
+  this computer move to the pod with **Export** and **Import collection** on the Data page (see
+  the user guide), without crawling them again.
 - **GPU pods need CUDA 12.6 or newer** on the host, which the `cuda` image is built for: the app
   lists only GPUs offered with it and asks for it when creating the pod (`minCudaVersion`).
 - **CPU pods** run in RunPod's own data centers (Secure cloud) with the `cpu` image. They answer with

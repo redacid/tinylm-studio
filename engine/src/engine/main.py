@@ -29,6 +29,7 @@ from engine.models.bundles import bundled_collection, import_bundles_in_backgrou
 from engine.models.manager import ModelManager
 from engine.rag.embeddings import HashEmbedder, SentenceTransformerEmbedder
 from engine.rag.store import KnowledgeStore
+from engine.rag.transfer import ImportManager
 from engine.teachers.store import TeacherStore
 from engine.training.jobs import TrainingManager
 from engine.web.crawl_settings import CrawlSettingsStore
@@ -77,6 +78,7 @@ def create_app(
     )
 
     app.state.knowledge = knowledge_store or open_knowledge(settings)
+    app.state.imports = ImportManager(app.state.knowledge)
     app.state.crawl_settings = crawl_settings(settings)
     app.state.crawls = CrawlManager(crawler(settings, app.state.knowledge))
     # A new search client per request, so a changed setting or a missing key shows up at once.
