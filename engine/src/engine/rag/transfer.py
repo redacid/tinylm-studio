@@ -1,22 +1,26 @@
 """Moving a collection between engines: from this computer to a RunPod pod, for example.
 
-An export is JSON lines: a header with the collection's name and size, then each document with
-its chunks, as the knowledge store keeps them. An import adds the documents to a collection
-(made if missing) and embeds the chunks with the importing engine's own embedding model, so the
-two engines need not use the same one; documents it already has are skipped. Embedding is the
-slow part, so imports run in the background: an upload through RunPod's proxy must answer
-within 100 seconds.
+An export is JSON lines: a header with the collection's name, size and embedding model, then
+each document with its chunks and their vectors (float32, base64), as the knowledge store keeps
+them. An import adds the documents to a collection (made if missing); documents it already has
+are skipped. When both engines use the same embedding model the vectors are stored as they are,
+so nothing is computed; otherwise the chunks are embedded again with the importing engine's
+model. Imports run in the background: an upload through RunPod's proxy must answer within 100
+seconds.
 """
 
+import base64
 import json
 import logging
 import threading
 import uuid
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
+
+import numpy as np
 
 from engine.rag.store import KnowledgeStore
 
@@ -28,9 +32,10 @@ FORMAT = "tinylm-collection/1"
 BATCH_CHUNKS = 512
 
 
-def batches(lines: Iterator[str]) -> Iterator[list[dict]]:
+def batches(lines: Iterable[str], vectors: bool = False) -> Iterator[list[dict]]:
     """The documents of an export's lines (the header skipped), a batch of about BATCH_CHUNKS
-    chunks at a time."""
+    chunks at a time. With vectors, a document whose chunks all have one keeps them, decoded;
+    otherwise they are dropped and the chunks get embedded."""
     batch: list[dict] = []
     size = 0
     for line in lines:
@@ -39,6 +44,10 @@ def batches(lines: Iterator[str]) -> Iterator[list[dict]]:
         d = json.loads(line)
         if "chunks" not in d:
             continue  # the header
+        encoded = d.pop("vectors", None)
+        if vectors and encoded and len(encoded) == len(d["chunks"]) and all(encoded):
+            rows = [np.frombuffer(base64.b64decode(v), dtype=np.float32) for v in encoded]
+            d["vectors"] = np.stack(rows)
         batch.append(d)
         size += len(d["chunks"])
         if size >= BATCH_CHUNKS:
@@ -54,10 +63,14 @@ def export_lines(store: KnowledgeStore, collection: str) -> Iterator[str]:
         "format": FORMAT,
         "collection": collection,
         "documents": store.count_documents(collection),
+        "embedding_model": store.embedding_model(),
         "exported_at": now(),
     }
     yield json.dumps(header, ensure_ascii=False) + "\n"
-    for document in store.export_documents(collection):
+    for document in store.export_documents(collection, vectors=True):
+        document["vectors"] = [
+            base64.b64encode(v).decode() if v else None for v in document["vectors"]
+        ]
         yield json.dumps(document, ensure_ascii=False) + "\n"
 
 
@@ -95,17 +108,28 @@ class ImportManager:
 
     def start(self, collection: str, path: Path) -> ImportJob:
         """Imports the file at path (deleted when done) into the collection, made if missing."""
-        job = ImportJob(collection, total=read_header(path).get("documents"))
+        header = read_header(path)
+        job = ImportJob(collection, total=header.get("documents"))
         self.store.create_collection(collection)  # nothing if it exists
         self.jobs[job.id] = job
-        log.info("Importing %s documents into %s", job.total or "the", collection)
-        threading.Thread(target=self._run, args=(job, path), daemon=True).start()
+        # Vectors of another model would not match this engine's searches.
+        exported_with = header.get("embedding_model")
+        vectors = exported_with == self.store.embedding_model()
+        log.info(
+            "Importing %s documents into %s, %s",
+            job.total or "the",
+            collection,
+            "with their vectors"
+            if vectors
+            else f"embedding them again (exported with {exported_with or 'no vectors'})",
+        )
+        threading.Thread(target=self._run, args=(job, path, vectors), daemon=True).start()
         return job
 
-    def _run(self, job: ImportJob, path: Path) -> None:
+    def _run(self, job: ImportJob, path: Path, vectors: bool) -> None:
         try:
             with path.open(encoding="utf-8") as f:
-                for batch in batches(f):
+                for batch in batches(f, vectors):
                     for result in self.store.add_chunked(batch, job.collection):
                         if result["duplicate"]:
                             job.duplicates += 1

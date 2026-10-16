@@ -156,8 +156,8 @@ Not supported yet: tool use / function calling, images, logprobs, `n > 1`, batch
 | POST | `/api/collections/{name}/documents` | Multipart upload, field `files` (one or more); returns a result per file |
 | DELETE | `/api/collections/{name}/documents/{id}` | Deletes one document |
 | POST | `/api/collections/{name}/search` | `{"query": "...", "k": 4}`: the best matching chunks |
-| GET | `/api/collections/{name}/export` | The collection as JSON lines: a header (`format`: `tinylm-collection/1`, `collection`, `documents`, `exported_at`), then each document's `name`, `source` and `chunks` |
-| POST | `/api/collections/import` | Multipart: `file` (an export, or a model's `collection.jsonl`) and optional `collection` (by default the header's); makes the collection if missing and adds the documents in the background, embedding them with this engine's model and skipping ones it has; 202 with the job |
+| GET | `/api/collections/{name}/export` | The collection as JSON lines: a header (`format`: `tinylm-collection/1`, `collection`, `documents`, `embedding_model`, `exported_at`), then each document's `name`, `source`, `chunks` and their `vectors` (float32, base64) |
+| POST | `/api/collections/import` | Multipart: `file` (an export, or a model's `collection.jsonl`) and optional `collection` (by default the header's); makes the collection if missing and adds the documents in the background, skipping ones it has: with their vectors when the header's `embedding_model` is this engine's, else embedding them with this engine's model; 202 with the job |
 | GET | `/api/collections/imports/{id}` | The import: `state` (`running`, `done`, `error`), `total` documents (from the header, or null), `added`, `duplicates`, `error` |
 
 Interactive docs: `http://127.0.0.1:8765/docs`.

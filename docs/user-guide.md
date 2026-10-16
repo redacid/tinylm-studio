@@ -218,12 +218,14 @@ To use a collection on another engine (a [RunPod pod](#engine), a server) withou
 uploading it again:
 
 1. On the engine that has it (usually this computer's), select the collection and click
-   **Export**: it is saved as `<name>.tinylm.jsonl`, its documents already split into chunks.
+   **Export**: it is saved as `<name>.tinylm.jsonl`, its documents already split into chunks and
+   indexed.
 2. Switch to the other engine in Settings › Engine, open **Data** and click
-   **Import collection** with that file. The collection of the same name is made if missing; the
-   documents are embedded there with that engine's embedding model (on a pod's GPU, many times
-   faster than on a CPU), and documents it already has are skipped, so importing again only adds
-   what is new.
+   **Import collection** with that file. The collection of the same name is made if missing and
+   the documents are copied in as they are, in seconds; documents it already has are skipped, so
+   importing again only adds what is new. Only if the two engines use different embedding models
+   (`TINYLM_EMBEDDING_MODEL`) are the documents indexed again with the other engine's model,
+   which takes longer.
 
 ![A collection imported into a remote engine](images/data-import.png)
 

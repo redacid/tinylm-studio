@@ -154,8 +154,9 @@ class KnowledgeStore:
         connection.create_function("casefold", 1, str.casefold, deterministic=True)
         return connection
 
-    def _vectors(self) -> None:
-        """Creates the vector table on first use, sized for the embedding model."""
+    def _vectors(self, dim: int | None = None) -> None:
+        """Creates the vector table on first use, sized for the embedding model (or for the
+        given vectors, so imported ones are stored without loading the model)."""
         if self._vectors_ready:
             return
         with self._lock:
@@ -165,12 +166,13 @@ class KnowledgeStore:
                     f"The knowledge base was built with {meta['embedding_model']}, "
                     f"not {self.embedder.name}. Use that model or start a new data folder."
                 )
-            dim = self.embedder.dim
-            self.db.execute(
-                "CREATE VIRTUAL TABLE IF NOT EXISTS chunk_vectors USING vec0("
-                "chunk_id INTEGER PRIMARY KEY, collection TEXT PARTITION KEY, "
-                f"embedding FLOAT[{dim}] distance_metric=cosine)"
-            )
+            if not self._has_vectors():
+                dim = dim or self.embedder.dim
+                self.db.execute(
+                    "CREATE VIRTUAL TABLE IF NOT EXISTS chunk_vectors USING vec0("
+                    "chunk_id INTEGER PRIMARY KEY, collection TEXT PARTITION KEY, "
+                    f"embedding FLOAT[{dim}] distance_metric=cosine)"
+                )
             self.db.execute(
                 "INSERT OR IGNORE INTO meta VALUES ('embedding_model', ?)", (self.embedder.name,)
             )
@@ -275,7 +277,9 @@ class KnowledgeStore:
     def add_chunked(self, documents: list[dict], collection: str) -> list[dict]:
         """Indexes documents already split into chunks ({name, source, chunks}) together: their
         chunks are embedded in one go, which keeps a GPU busy, and written in one transaction.
-        Documents the collection already has are skipped (duplicate=True)."""
+        A document with "vectors" (an array of one row per chunk, made by this embedding
+        model) is stored without embedding. Documents the collection already has are skipped
+        (duplicate=True)."""
         self._require(collection)
         results: list[dict | None] = []
         new = []
@@ -292,32 +296,53 @@ class KnowledgeStore:
             seen.add(digest)
             results.append(None)
             new.append((len(results) - 1, d, digest))
-        texts = [chunk for _, d, _ in new for chunk in d["chunks"]]
+        texts = [chunk for _, d, _ in new if d.get("vectors") is None for chunk in d["chunks"]]
         vectors = self.embedder.embed_documents(texts) if texts else np.zeros((0, 0))
         start = 0
         rows = []
         for _, d, digest in new:
-            end = start + len(d["chunks"])
+            if d.get("vectors") is None:
+                end = start + len(d["chunks"])
+                document_vectors, start = vectors[start:end], end
+            else:
+                document_vectors = d["vectors"]
             chars = sum(map(len, d["chunks"]))
             source = d.get("source") or d["name"]
-            rows.append((d["name"], source, digest, chars, d["chunks"], vectors[start:end]))
-            start = end
+            rows.append((d["name"], source, digest, chars, d["chunks"], document_vectors))
         for (i, _, _), written in zip(new, self._write(collection, rows), strict=True):
             results[i] = written
         return results
 
-    def export_documents(self, collection: str) -> Iterator[dict]:
-        """Every document of the collection with its chunks, for add_chunks elsewhere."""
+    def export_documents(self, collection: str, vectors: bool = False) -> Iterator[dict]:
+        """Every document of the collection with its chunks, for add_chunks elsewhere; with
+        vectors, also each chunk's embedding as float32 bytes (None if it has none)."""
         self._require(collection)
         documents = self.db.execute(
             "SELECT id, name, source FROM documents WHERE collection = ? ORDER BY id",
             (collection,),
         ).fetchall()
+        vectors = vectors and self._has_vectors()
         for d in documents:
-            chunks = self.db.execute(
-                "SELECT text FROM chunks WHERE document_id = ? ORDER BY position", (d["id"],)
-            )
-            yield {"name": d["name"], "source": d["source"], "chunks": [r[0] for r in chunks]}
+            if vectors:
+                chunks = self.db.execute(
+                    "SELECT k.text, v.embedding FROM chunks k "
+                    "LEFT JOIN chunk_vectors v ON v.chunk_id = k.id "
+                    "WHERE k.document_id = ? ORDER BY k.position",
+                    (d["id"],),
+                ).fetchall()
+            else:
+                chunks = self.db.execute(
+                    "SELECT text FROM chunks WHERE document_id = ? ORDER BY position", (d["id"],)
+                ).fetchall()
+            document = {"name": d["name"], "source": d["source"], "chunks": [r[0] for r in chunks]}
+            if vectors:
+                document["vectors"] = [r[1] for r in chunks]
+            yield document
+
+    def embedding_model(self) -> str:
+        """The model the stored vectors were made with: the knowledge base's, else this one."""
+        row = self.db.execute("SELECT value FROM meta WHERE key = 'embedding_model'").fetchone()
+        return row[0] if row else self.embedder.name
 
     def _insert(
         self, collection: str, name: str, source: str, digest: str, chars: int, chunks: list[str]
@@ -330,8 +355,9 @@ class KnowledgeStore:
         """Stores documents given as (name, source, digest, chars, chunks, vectors), committing
         once for all of them."""
         results = []
+        dims = [len(r[5][0]) for r in rows if len(r[5])]
         with self._lock:
-            self._vectors()
+            self._vectors(dims[0] if dims else None)
             for name, source, digest, chars, chunks, vectors in rows:
                 cursor = self.db.execute(
                     "INSERT INTO documents (collection, name, source, sha256, chars, created_at) "

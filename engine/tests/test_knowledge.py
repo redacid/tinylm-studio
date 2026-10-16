@@ -120,7 +120,9 @@ def test_collection_export_and_import(games):
     assert "games.tinylm.jsonl" in exported.headers["content-disposition"]
     header, *documents = [json.loads(line) for line in exported.text.splitlines()]
     assert header["collection"] == "games" and header["documents"] == 2
+    assert header["embedding_model"] == "hash"
     assert [d["name"] for d in documents] == ["witcher.txt", "souls.txt"]
+    assert all(len(d["vectors"]) == len(d["chunks"]) for d in documents)
 
     def send(data: bytes, collection: str = "") -> dict:
         response = games.post(
@@ -131,10 +133,20 @@ def test_collection_export_and_import(games):
         assert response.status_code == 202, response.text
         return wait_for_import(games, response.json())
 
-    # Into a new collection, by another name: made, indexed and searchable.
+    # Into a new collection, by another name: made and searchable, its vectors stored as they
+    # are (the same embedding model), so nothing is embedded.
+    embedder = games.app.state.knowledge.embedder
+    embed, embedder.embed_documents = embedder.embed_documents, None
     job = send(exported.content, "copy")
+    embedder.embed_documents = embed
     assert (job["state"], job["total"], job["added"], job["duplicates"]) == ("done", 2, 2, 0)
     hits = games.post("/api/collections/copy/search", json={"query": "Dark Souls bosses"})
+    assert hits.json()["data"][0]["document"] == "souls.txt"
+    # Exported with another model: embedded again with this one.
+    other = json.dumps({**header, "embedding_model": "other"}).encode() + b"\n"
+    other += b"".join(exported.content.splitlines(keepends=True)[1:])
+    assert send(other, "other")["added"] == 2
+    hits = games.post("/api/collections/other/search", json={"query": "Dark Souls bosses"})
     assert hits.json()["data"][0]["document"] == "souls.txt"
     # Into the collection it came from (the header's name): nothing new.
     job = send(exported.content)
