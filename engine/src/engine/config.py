@@ -37,6 +37,8 @@ class Settings(BaseSettings):
     # Sentence-transformers model used to index and search uploaded data;
     # "hash" is a crude built-in one that needs no download, for tests and UI development.
     embedding_model: str = DEFAULT_EMBEDDING_MODEL
+    # Where it runs: auto (an NVIDIA GPU when there is one), cuda, cpu or mps.
+    embedding_device: str = "auto"
     # How many chunks are added to the prompt when a chat request names a collection.
     rag_top_k: int = 4
     # Website crawling. proxy: http://user:pass@host:port, socks5://host:port or socks5h://...

@@ -23,6 +23,29 @@ from engine.rag.store import KnowledgeStore
 log = logging.getLogger(__name__)
 
 FORMAT = "tinylm-collection/1"
+# Chunks embedded and written together: big enough to keep a GPU busy, small enough that the
+# progress moves and memory stays low.
+BATCH_CHUNKS = 512
+
+
+def batches(lines: Iterator[str]) -> Iterator[list[dict]]:
+    """The documents of an export's lines (the header skipped), a batch of about BATCH_CHUNKS
+    chunks at a time."""
+    batch: list[dict] = []
+    size = 0
+    for line in lines:
+        if not line.strip():
+            continue
+        d = json.loads(line)
+        if "chunks" not in d:
+            continue  # the header
+        batch.append(d)
+        size += len(d["chunks"])
+        if size >= BATCH_CHUNKS:
+            yield batch
+            batch, size = [], 0
+    if batch:
+        yield batch
 
 
 def export_lines(store: KnowledgeStore, collection: str) -> Iterator[str]:
@@ -82,19 +105,12 @@ class ImportManager:
     def _run(self, job: ImportJob, path: Path) -> None:
         try:
             with path.open(encoding="utf-8") as f:
-                for line in f:
-                    if not line.strip():
-                        continue
-                    d = json.loads(line)
-                    if "chunks" not in d:
-                        continue  # the header
-                    result = self.store.add_chunks(
-                        job.collection, d["name"], d.get("source", ""), d["chunks"]
-                    )
-                    if result["duplicate"]:
-                        job.duplicates += 1
-                    else:
-                        job.added += 1
+                for batch in batches(f):
+                    for result in self.store.add_chunked(batch, job.collection):
+                        if result["duplicate"]:
+                            job.duplicates += 1
+                        else:
+                            job.added += 1
             job.state = "done"
         except Exception as e:
             log.exception("Importing into %s failed", job.collection)

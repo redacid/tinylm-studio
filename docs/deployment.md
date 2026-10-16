@@ -106,6 +106,8 @@ TINYLM_API_KEY=<key> make run-image          # try it on 127.0.0.1:8765, data in
   from outside; set `TINYLM_ALLOW_NO_API_KEY=1` to run it without one on a private network.
 - Pass `HF_TOKEN` for gated models. The embedding model and models are downloaded on first use,
   into the volume.
+- With the CUDA image the embedding model runs on the GPU (`TINYLM_EMBEDDING_DEVICE=auto`), so
+  imported collections and uploads are indexed many times faster than on a CPU.
 
 ## RunPod
 

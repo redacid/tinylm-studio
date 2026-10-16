@@ -221,8 +221,9 @@ uploading it again:
    **Export**: it is saved as `<name>.tinylm.jsonl`, its documents already split into chunks.
 2. Switch to the other engine in Settings › Engine, open **Data** and click
    **Import collection** with that file. The collection of the same name is made if missing; the
-   documents are embedded there with that engine's embedding model (fast on a GPU pod), and
-   documents it already has are skipped, so importing again only adds what is new.
+   documents are embedded there with that engine's embedding model (on a pod's GPU, many times
+   faster than on a CPU), and documents it already has are skipped, so importing again only adds
+   what is new.
 
 ![A collection imported into a remote engine](images/data-import.png)
 

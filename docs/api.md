@@ -507,6 +507,7 @@ POST /api/evaluations
 | `TINYLM_THREADS` | physical cores, at most 8 | CPU threads for inference |
 | `TINYLM_REPETITION_PENALTY` | `1.1` | Discourages repeated tokens; small models loop without it |
 | `TINYLM_EMBEDDING_MODEL` | `intfloat/multilingual-e5-small` | Embedding model for uploaded data; `hash` needs no download (tests, UI development) |
+| `TINYLM_EMBEDDING_DEVICE` | `auto` | Where the embedding model runs: `auto` (an NVIDIA GPU when there is one, else the CPU), `cuda`, `cpu` or `mps` |
 | `TINYLM_RAG_TOP_K` | `4` | Chunks added to the prompt per question |
 | `TINYLM_PROXY` | none | HTTP or SOCKS proxy for website crawling |
 | `TINYLM_CDP_URL` | `http://127.0.0.1:9222` | Browser DevTools endpoint for crawling with a browser |

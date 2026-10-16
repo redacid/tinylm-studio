@@ -270,14 +270,41 @@ class KnowledgeStore:
 
     def add_chunks(self, collection: str, name: str, source: str, chunks: list[str]) -> dict:
         """Indexes a document already split into chunks, e.g. one exported with a model."""
+        return self.add_chunked([{"name": name, "source": source, "chunks": chunks}], collection)[0]
+
+    def add_chunked(self, documents: list[dict], collection: str) -> list[dict]:
+        """Indexes documents already split into chunks ({name, source, chunks}) together: their
+        chunks are embedded in one go, which keeps a GPU busy, and written in one transaction.
+        Documents the collection already has are skipped (duplicate=True)."""
         self._require(collection)
-        digest = hashlib.sha256("\n\n".join(chunks).encode()).hexdigest()
-        existing = self.db.execute(
-            "SELECT id FROM documents WHERE collection = ? AND sha256 = ?", (collection, digest)
-        ).fetchone()
-        if existing:
-            return {"id": existing["id"], "name": name, "chunks": 0, "duplicate": True}
-        return self._insert(collection, name, source or name, digest, sum(map(len, chunks)), chunks)
+        results: list[dict | None] = []
+        new = []
+        seen = set()
+        for d in documents:
+            digest = hashlib.sha256("\n\n".join(d["chunks"]).encode()).hexdigest()
+            existing = self.db.execute(
+                "SELECT id FROM documents WHERE collection = ? AND sha256 = ?", (collection, digest)
+            ).fetchone()
+            if existing or digest in seen:
+                found = existing["id"] if existing else None
+                results.append({"id": found, "name": d["name"], "chunks": 0, "duplicate": True})
+                continue
+            seen.add(digest)
+            results.append(None)
+            new.append((len(results) - 1, d, digest))
+        texts = [chunk for _, d, _ in new for chunk in d["chunks"]]
+        vectors = self.embedder.embed_documents(texts) if texts else np.zeros((0, 0))
+        start = 0
+        rows = []
+        for _, d, digest in new:
+            end = start + len(d["chunks"])
+            chars = sum(map(len, d["chunks"]))
+            source = d.get("source") or d["name"]
+            rows.append((d["name"], source, digest, chars, d["chunks"], vectors[start:end]))
+            start = end
+        for (i, _, _), written in zip(new, self._write(collection, rows), strict=True):
+            results[i] = written
+        return results
 
     def export_documents(self, collection: str) -> Iterator[dict]:
         """Every document of the collection with its chunks, for add_chunks elsewhere."""
@@ -297,25 +324,36 @@ class KnowledgeStore:
     ) -> dict:
         # Embedding is the slow part; do it before taking the lock.
         vectors = self.embedder.embed_documents(chunks) if chunks else np.zeros((0, 0))
+        return self._write(collection, [(name, source, digest, chars, chunks, vectors)])[0]
+
+    def _write(self, collection: str, rows: list[tuple]) -> list[dict]:
+        """Stores documents given as (name, source, digest, chars, chunks, vectors), committing
+        once for all of them."""
+        results = []
         with self._lock:
             self._vectors()
-            cursor = self.db.execute(
-                "INSERT INTO documents (collection, name, source, sha256, chars, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (collection, name, source, digest, chars, now()),
-            )
-            document_id = cursor.lastrowid
-            for position, (chunk, vector) in enumerate(zip(chunks, vectors, strict=True)):
-                chunk_id = self.db.execute(
-                    "INSERT INTO chunks (document_id, position, text) VALUES (?, ?, ?)",
-                    (document_id, position, chunk),
-                ).lastrowid
-                self.db.execute(
-                    "INSERT INTO chunk_vectors (chunk_id, collection, embedding) VALUES (?, ?, ?)",
-                    (chunk_id, collection, np.asarray(vector, dtype=np.float32).tobytes()),
+            for name, source, digest, chars, chunks, vectors in rows:
+                cursor = self.db.execute(
+                    "INSERT INTO documents (collection, name, source, sha256, chars, created_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (collection, name, source, digest, chars, now()),
+                )
+                document_id = cursor.lastrowid
+                for position, (chunk, vector) in enumerate(zip(chunks, vectors, strict=True)):
+                    chunk_id = self.db.execute(
+                        "INSERT INTO chunks (document_id, position, text) VALUES (?, ?, ?)",
+                        (document_id, position, chunk),
+                    ).lastrowid
+                    self.db.execute(
+                        "INSERT INTO chunk_vectors (chunk_id, collection, embedding) "
+                        "VALUES (?, ?, ?)",
+                        (chunk_id, collection, np.asarray(vector, dtype=np.float32).tobytes()),
+                    )
+                results.append(
+                    {"id": document_id, "name": name, "chunks": len(chunks), "duplicate": False}
                 )
             self.db.commit()
-        return {"id": document_id, "name": name, "chunks": len(chunks), "duplicate": False}
+        return results
 
     def delete_document(self, collection: str, document_id: int) -> bool:
         with self._lock:

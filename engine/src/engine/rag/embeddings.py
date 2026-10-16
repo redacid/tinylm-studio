@@ -1,6 +1,7 @@
 """Text embeddings: a multilingual sentence-transformers model, plus a tiny one for tests."""
 
 import hashlib
+import logging
 import re
 import threading
 from pathlib import Path
@@ -9,6 +10,21 @@ from typing import Protocol
 import numpy as np
 
 DEFAULT_EMBEDDING_MODEL = "intfloat/multilingual-e5-small"
+
+log = logging.getLogger(__name__)
+
+
+def pick_device(device: str) -> str:
+    """ "auto" is the NVIDIA GPU when there is one (tens of times faster at indexing), else the
+    CPU. Apple's MPS is left out: small batches there are often slower than the CPU."""
+    if device != "auto":
+        return device
+    try:
+        import torch
+
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    except Exception:  # a broken CUDA setup must not stop indexing
+        return "cpu"
 
 
 class Embedder(Protocol):
@@ -30,10 +46,12 @@ class SentenceTransformerEmbedder:
         name: str = DEFAULT_EMBEDDING_MODEL,
         cache_dir: Path | None = None,
         hf_token: str | None = None,
+        device: str = "auto",
     ):
         self.name = name
         self.cache_dir = cache_dir
         self.hf_token = hf_token
+        self.device = device
         self._model = None
         self._lock = threading.Lock()
         # E5 models were trained with these prefixes and lose accuracy without them.
@@ -45,8 +63,9 @@ class SentenceTransformerEmbedder:
             if self._model is None:
                 from sentence_transformers import SentenceTransformer
 
+                device = pick_device(self.device)
                 options = {
-                    "device": "cpu",
+                    "device": device,
                     "cache_folder": str(self.cache_dir) if self.cache_dir else None,
                 }
                 try:
@@ -55,6 +74,7 @@ class SentenceTransformerEmbedder:
                     self._model = SentenceTransformer(self.name, local_files_only=True, **options)
                 except OSError:
                     self._model = SentenceTransformer(self.name, token=self.hf_token, **options)
+                log.info("Embedding model %s loaded on %s", self.name, device)
             return self._model
 
     @property
@@ -62,7 +82,10 @@ class SentenceTransformerEmbedder:
         return self.model.get_sentence_embedding_dimension()
 
     def _encode(self, texts: list[str]) -> np.ndarray:
-        return self.model.encode(texts, batch_size=32, normalize_embeddings=True)
+        model = self.model
+        # A GPU is only fast with big batches; on the CPU they gain little and use more memory.
+        batch_size = 32 if model.device.type == "cpu" else 256
+        return model.encode(texts, batch_size=batch_size, normalize_embeddings=True)
 
     def embed_documents(self, texts: list[str]) -> np.ndarray:
         return self._encode([f"passage: {t}" if self._e5 else t for t in texts])

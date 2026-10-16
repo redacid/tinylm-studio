@@ -41,7 +41,9 @@ def open_knowledge(settings: Settings) -> KnowledgeStore:
     if settings.embedding_model == "hash":
         return KnowledgeStore(settings.knowledge_db, HashEmbedder())
     cache = settings.data_dir / "embeddings"
-    embedder = SentenceTransformerEmbedder(settings.embedding_model, cache, settings.hf_token)
+    embedder = SentenceTransformerEmbedder(
+        settings.embedding_model, cache, settings.hf_token, settings.embedding_device
+    )
     return KnowledgeStore(settings.knowledge_db, embedder)
 
 

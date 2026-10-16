@@ -16,6 +16,7 @@ from pathlib import Path
 from engine.models.manager import ModelManager
 from engine.models.settings import ModelSettings
 from engine.rag.store import KnowledgeStore
+from engine.rag.transfer import batches
 
 log = logging.getLogger(__name__)
 
@@ -50,10 +51,8 @@ def import_bundles(models: ModelManager, knowledge: KnowledgeStore) -> list[str]
             log.info("Importing collection %s bundled with model %s", name, folder.name)
             knowledge.create_collection(name)
             with (folder / BUNDLE_FILE).open(encoding="utf-8") as f:
-                for line in f:
-                    if line.strip():
-                        d = json.loads(line)
-                        knowledge.add_chunks(name, d["name"], d.get("source", ""), d["chunks"])
+                for batch in batches(f):
+                    knowledge.add_chunked(batch, name)
             existing.add(name)
             imported.append(name)
         settings = models.settings.get(folder.name)

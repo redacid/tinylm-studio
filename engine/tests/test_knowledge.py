@@ -367,3 +367,30 @@ def test_collection_bundled_with_a_model(client, settings, store):
     models.settings.set("hints-q8_0", ModelSettings(collection=""))
     assert import_bundles(models, other) == []
     assert models.settings.get("hints-q8_0") == {"collection": ""}
+
+
+def test_chunked_documents_are_embedded_together(tmp_path):
+    class CountingEmbedder(HashEmbedder):
+        calls = 0
+
+        def embed_documents(self, texts):
+            CountingEmbedder.calls += 1
+            return super().embed_documents(texts)
+
+    store = KnowledgeStore(tmp_path / "knowledge.db", CountingEmbedder())
+    store.create_collection("games")
+    store.add_chunks("games", "doom.txt", "", ["Doom is fast.", "Rip and tear."])
+    calls = CountingEmbedder.calls
+    documents = [
+        {"name": "doom.txt", "source": "", "chunks": ["Doom is fast.", "Rip and tear."]},
+        {"name": "witcher.txt", "source": "w.md", "chunks": ["Geralt hunts.", "Igni burns."]},
+        {"name": "copy.txt", "source": "", "chunks": ["Geralt hunts.", "Igni burns."]},
+        {"name": "zelda.txt", "source": "", "chunks": ["Link saves Hyrule."]},
+    ]
+    results = store.add_chunked(documents, "games")
+    assert CountingEmbedder.calls == calls + 1
+    assert [r["duplicate"] for r in results] == [True, False, True, False]
+    assert [r["chunks"] for r in results] == [0, 2, 0, 1]
+    assert store.search("games", "Igni", k=1)[0].document == "witcher.txt"
+    assert store.search("games", "Hyrule", k=1)[0].document == "zelda.txt"
+    assert store.count_documents("games") == 3
