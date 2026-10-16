@@ -8,12 +8,14 @@ Three kinds:
 - anthropic: the Anthropic Messages API (Claude).
 """
 
+import json
 import time
+from collections.abc import Iterator
 from typing import Literal, Protocol
 
 import httpx
 
-from engine.chat import ChatRequest, Message, collect
+from engine.chat import ChatRequest, Finish, Message, StreamEvent, TextDelta, Usage, collect
 
 TeacherKind = Literal["local", "openai", "anthropic"]
 DEFAULT_BASE_URLS = {
@@ -85,6 +87,27 @@ def check(response: httpx.Response, provider: str) -> None:
         raise TeacherError(f"{provider} answered HTTP {response.status_code}: {detail}")
 
 
+def sse_data(response: httpx.Response) -> Iterator[dict]:
+    """The JSON of each "data:" line of a server-sent event stream, until [DONE]."""
+    for line in response.iter_lines():
+        if not line.startswith("data:"):
+            continue
+        data = line.removeprefix("data:").strip()
+        if data == "[DONE]":
+            return
+        try:
+            yield json.loads(data)
+        except ValueError:
+            continue
+
+
+def check_stream(response: httpx.Response, provider: str) -> None:
+    """check() for a streamed response, whose error body has to be read first."""
+    if response.status_code >= 400:
+        response.read()
+        check(response, provider)
+
+
 class LocalTeacher:
     """A model installed in the studio, run in this process."""
 
@@ -146,6 +169,44 @@ class OpenAICompatibleTeacher:
         except (ValueError, KeyError, IndexError, TypeError):
             raise TeacherError(f"{self.name}: unexpected answer {response.text[:300]}") from None
 
+    def stream_chat(self, request: ChatRequest) -> Iterator[StreamEvent]:
+        """Answers a whole conversation as it is written, for the chat."""
+        body = {
+            "model": self.model,
+            "messages": [{"role": m.role, "content": m.content} for m in request.messages],
+            "max_tokens": request.max_tokens,
+            "temperature": request.temperature,
+            "top_p": request.top_p,
+            "stream": True,
+        }
+        if request.stop:
+            body["stop"] = request.stop
+        reason, usage, pieces = "stop", Usage(), 0
+        try:
+            with self.client.stream(
+                "POST", f"{self.base_url}/chat/completions", json=body
+            ) as response:
+                check_stream(response, self.name)
+                for data in sse_data(response):
+                    if data.get("error"):
+                        error = data["error"]
+                        message = error.get("message") if isinstance(error, dict) else error
+                        raise TeacherError(f"{self.name}: {message}")
+                    if counted := data.get("usage"):  # OpenRouter sends it in the last chunk
+                        usage.input_tokens = counted.get("prompt_tokens") or 0
+                        usage.output_tokens = counted.get("completion_tokens") or 0
+                    for choice in data.get("choices") or []:
+                        if text := (choice.get("delta") or {}).get("content"):
+                            pieces += 1
+                            yield TextDelta(text)
+                        if choice.get("finish_reason") == "length":
+                            reason = "length"
+        except httpx.HTTPError as e:
+            raise TeacherError(f"{self.base_url} is not reachable ({type(e).__name__})") from None
+        # Without a count from the provider, each streamed piece is about one token.
+        usage.output_tokens = usage.output_tokens or pieces
+        yield Finish(reason, usage)
+
     def models(self) -> list[dict]:
         try:
             response = self.client.get(f"{self.base_url}/models")
@@ -198,6 +259,47 @@ class AnthropicTeacher:
         except (ValueError, KeyError, TypeError):
             raise TeacherError(f"{self.name}: unexpected answer {response.text[:300]}") from None
 
+    def stream_chat(self, request: ChatRequest) -> Iterator[StreamEvent]:
+        """Answers a whole conversation as it is written, for the chat."""
+        system = "\n\n".join(m.content for m in request.messages if m.role == "system")
+        body = {
+            "model": self.model,
+            "messages": [
+                {"role": m.role, "content": m.content}
+                for m in request.messages
+                if m.role != "system"
+            ],
+            "max_tokens": request.max_tokens or 1024,
+            "temperature": request.temperature,
+            "stream": True,
+        }
+        if system:
+            body["system"] = system
+        if request.stop:
+            body["stop_sequences"] = request.stop
+        reasons = {"max_tokens": "length", "stop_sequence": "stop_sequence"}
+        reason, stop_sequence, usage = "stop", None, Usage()
+        try:
+            with self.client.stream("POST", f"{self.base_url}/v1/messages", json=body) as response:
+                check_stream(response, self.name)
+                for data in sse_data(response):
+                    kind = data.get("type")
+                    if kind == "error":
+                        raise TeacherError(f"{self.name}: {data.get('error', {}).get('message')}")
+                    if kind == "message_start":
+                        usage.input_tokens = data["message"].get("usage", {}).get("input_tokens", 0)
+                    elif kind == "content_block_delta":
+                        if text := data.get("delta", {}).get("text"):
+                            yield TextDelta(text)
+                    elif kind == "message_delta":
+                        delta = data.get("delta", {})
+                        reason = reasons.get(delta.get("stop_reason"), "stop")
+                        stop_sequence = delta.get("stop_sequence")
+                        usage.output_tokens = data.get("usage", {}).get("output_tokens", 0)
+        except httpx.HTTPError as e:
+            raise TeacherError(f"{self.base_url} is not reachable ({type(e).__name__})") from None
+        yield Finish(reason, usage, stop_sequence)
+
     def models(self) -> list[dict]:
         try:
             response = self.client.get(f"{self.base_url}/v1/models", params={"limit": 100})
@@ -208,6 +310,21 @@ class AnthropicTeacher:
             {"id": m["id"], "name": m.get("display_name") or m["id"], "free": False}
             for m in response.json().get("data", [])
         ]
+
+
+class TeacherRuntime:
+    """A saved teacher (an API model) answering in the chat, like an installed model."""
+
+    def __init__(self, teacher):
+        self.teacher = teacher
+
+    def stream(self, request: ChatRequest) -> Iterator[StreamEvent]:
+        try:
+            yield from self.teacher.stream_chat(request)
+        except TeacherError as e:
+            # Shown in the chat as the answer, as the error of a local model would be.
+            yield TextDelta(f"[{e}]")
+            yield Finish("stop", Usage())
 
 
 class Paced:

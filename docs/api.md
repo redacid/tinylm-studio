@@ -19,6 +19,11 @@ RunPod pod (Settings > Engine).
 | GET | `/v1/models` | Installed models |
 | POST | `/v1/chat/completions` | `stream`, `stream_options.include_usage`, `max_tokens` / `max_completion_tokens`, `temperature`, `top_p`, `stop` |
 
+`model` can also be `teacher:<id>`, a saved teacher (`id` from `GET /api/teachers`): the
+conversation goes to its API (OpenAI-compatible or Anthropic) and the answer streams back, with
+a collection's sources added as for any model; the loaded model stays loaded. An error from the
+provider comes back as the answer's text. `/v1/messages` takes it too.
+
 ```python
 from openai import OpenAI
 

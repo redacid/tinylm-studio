@@ -21,6 +21,8 @@ export function Chat({
 }) {
   const [saved] = useState(loadChatSession);
   const [models, setModels] = useState<string[]>([]);
+  // Saved teachers (API models such as OpenRouter or Claude), chatted with as "teacher:<id>".
+  const [teachers, setTeachers] = useState<{ ref: string; name: string }[]>([]);
   const [model, setModel] = useState((settings.rememberChoice && saved.model) || "");
   const [system, setSystem] = useState(
     settings.keepConversation && saved.system !== undefined ? saved.system : settings.systemPrompt,
@@ -67,12 +69,20 @@ export function Chat({
       (info) => setModelData(Object.fromEntries(info.models.map((m) => [m.id, m.settings.collection ?? ""]))),
       () => {},
     );
-    Promise.all([client.installedModels(), client.defaultModel()]).then(([ids, preferred]) => {
-      setModels(ids);
-      setModel((current) =>
-        ids.includes(current) ? current : (ids.includes(preferred) ? preferred : ids[0]) || "",
-      );
-    }, (e) => setError(String(e)));
+    Promise.all([client.installedModels(), client.defaultModel(), client.teachers().catch(() => [])]).then(
+      ([ids, preferred, saved]) => {
+        const remote = saved
+          .filter((t) => t.kind !== "local" && t.id != null)
+          .map((t) => ({ ref: `teacher:${t.id}`, name: t.name }));
+        setModels(ids);
+        setTeachers(remote);
+        const all = [...ids, ...remote.map((t) => t.ref)];
+        setModel((current) =>
+          all.includes(current) ? current : (ids.includes(preferred) ? preferred : all[0]) || "",
+        );
+      },
+      (e) => setError(String(e)),
+    );
     client.collections().then(
       (list) => {
         const names = list.map((c) => c.name);
@@ -135,7 +145,7 @@ export function Chat({
     }
   }
 
-  if (models.length === 0) {
+  if (models.length === 0 && teachers.length === 0) {
     return (
       <div className="empty">
         <p>No models installed yet.</p>
@@ -155,7 +165,22 @@ export function Chat({
             if (modelData[e.target.value]) setCollection(modelData[e.target.value]);
           }}
         >
-          {models.map((id) => <option key={id}>{id}</option>)}
+          {teachers.length === 0 ? (
+            models.map((id) => <option key={id}>{id}</option>)
+          ) : (
+            <>
+              {models.length > 0 && (
+                <optgroup label="Installed models">
+                  {models.map((id) => <option key={id}>{id}</option>)}
+                </optgroup>
+              )}
+              <optgroup label="Teachers (API)">
+                {teachers.map((t) => (
+                  <option key={t.ref} value={t.ref}>{t.name}</option>
+                ))}
+              </optgroup>
+            </>
+          )}
         </select>
         <select value={collection} onChange={(e) => setCollection(e.target.value)} title="Answer from uploaded data">
           <option value="">No data</option>
@@ -183,7 +208,7 @@ export function Chat({
             )}
             {m.content || (busy ? "…" : "")}
             {busy && i === messages.length - 1 && progress && <LiveStatus progress={progress} />}
-            {m.timings && <Stats timings={m.timings} model={m.model} sources={m.sources?.length} />}
+            {m.timings && <Stats timings={m.timings} model={teachers.find((t) => t.ref === m.model)?.name ?? m.model} sources={m.sources?.length} />}
             {m.sources && m.sources.length > 0 && (
               <ol className="sources">
                 {m.sources.map((s) => (

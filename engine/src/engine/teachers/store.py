@@ -14,6 +14,7 @@ from engine.teachers.providers import (
     OpenAICompatibleTeacher,
     Paced,
     TeacherKind,
+    TeacherRuntime,
 )
 
 SCHEMA = """
@@ -138,6 +139,12 @@ class TeacherStore:
             if not self.db.execute("DELETE FROM teachers WHERE id = ?", (teacher_id,)).rowcount:
                 raise TeacherNotFound(str(teacher_id))
             self.db.commit()
+
+    def chat_runtime(self, teacher_id: str) -> TeacherRuntime:
+        """A saved teacher as a runtime the chat answers with ("teacher:<id>" there)."""
+        if not teacher_id.isdigit():
+            raise TeacherNotFound(teacher_id)
+        return TeacherRuntime(client(self.get(int(teacher_id))))
 
     def teacher(self, ref: str) -> Paced:
         """A ready-to-use teacher for "local:<model id>" or a saved teacher's id."""

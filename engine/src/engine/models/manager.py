@@ -27,6 +27,8 @@ from engine.models.settings import (
 log = logging.getLogger(__name__)
 
 ECHO_MODEL = "echo"
+# The chat can also answer with a saved teacher (an API model): "teacher:<id>".
+TEACHER_PREFIX = "teacher:"
 # Written into a downloaded model's folder: the Hugging Face repo (and file) it came from.
 SOURCE_FILE = "tinylm-source.json"
 TRANSFORMERS_OPTIONS = ("threads", "repetition_penalty")
@@ -79,6 +81,8 @@ class ModelManager:
         self.downloads: dict[str, Download] = {}
         self._loaded: tuple[str, Runtime] | None = None
         self._lock = threading.Lock()
+        # The TeacherStore, set by the app: makes "teacher:<id>" models answer in the chat.
+        self.teachers = None
 
     def installed(self) -> list[str]:
         """Models that can answer; a fine-tuned model needs its base model installed too."""
@@ -176,8 +180,24 @@ class ModelManager:
             log.exception("Download of %s failed", job.model_id)
             job.state, job.error = "error", download_error(job.repo, error)
 
+    def can_chat(self, model_id: str) -> bool:
+        """An installed model, or a saved teacher the chat can talk to."""
+        if model_id.startswith(TEACHER_PREFIX) and self.teachers is not None:
+            from engine.teachers.store import TeacherNotFound
+
+            try:
+                self.teachers.get(int(model_id.removeprefix(TEACHER_PREFIX)))
+                return True
+            except (TeacherNotFound, ValueError):
+                return False
+        return model_id in self.installed()
+
     def runtime(self, model_id: str) -> Runtime:
-        """Return a runtime for the model, unloading any other model first."""
+        """Return a runtime for the model, unloading any other model first. A teacher answers
+        through its API and leaves the loaded model alone."""
+        if model_id.startswith(TEACHER_PREFIX) and self.teachers is not None:
+            teacher = self.teachers.chat_runtime(model_id.removeprefix(TEACHER_PREFIX))
+            return ConfiguredRuntime(teacher, lambda: {})
         if model_id == ECHO_MODEL and self.enable_echo:
             from engine.inference.echo import EchoRuntime
 

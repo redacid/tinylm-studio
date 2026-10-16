@@ -88,6 +88,7 @@ def create_app(
     app.state.search_settings = search_settings(settings)
     app.state.datasets = DatasetStore(app.state.knowledge)
     app.state.teachers = TeacherStore(app.state.knowledge, app.state.models)
+    app.state.models.teachers = app.state.teachers
     app.state.generations = GenerationManager(
         Generator(app.state.knowledge, app.state.datasets, app.state.teachers)
     )

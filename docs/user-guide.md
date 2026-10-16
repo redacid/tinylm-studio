@@ -59,6 +59,12 @@ assistant's answers and finished runs; red for errors and for the button that co
 
 - Pick a **model** in the first list. Downloaded models, fine-tuned models and (with
   `TINYLM_ENABLE_ECHO=true`) the test model `echo` are offered.
+- Saved [teachers](#teachers) are offered too, under **Teachers (API)**: talk to the large model
+  on OpenRouter, Claude or another API that writes your examples or judges your models, with or
+  without your data, for example to see how it answers a question before generating examples.
+  It answers through its API, as it is written, and the model loaded on the engine stays
+  loaded. Model settings from the Models screen do not apply to it. An error from the API (a
+  wrong key, a rate limit) is shown as the answer.
 - Pick **Data: \<collection\>** to answer from your uploaded data. The answer lists the sources
   it was given; the model is asked to cite them as [1], [2]. A source from a website opens its
   page in the browser (the site is shown after the name); a file added with `make ingest` is

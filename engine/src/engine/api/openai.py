@@ -109,7 +109,7 @@ def list_models(request: Request, models: ModelManager = Depends(manager)):
 def chat_completions(
     body: ChatCompletionRequest, http: Request, models: ModelManager = Depends(manager)
 ):
-    if body.model not in models.installed():
+    if not models.can_chat(body.model):
         return error(
             404,
             f"The model '{body.model}' does not exist",

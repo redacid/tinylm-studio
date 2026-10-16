@@ -101,7 +101,7 @@ def sse(event: str, data: dict) -> str:
 
 @router.post("/v1/messages")
 def create_message(body: MessagesRequest, http: Request, models: ModelManager = Depends(manager)):
-    if body.model not in models.installed():
+    if not models.can_chat(body.model):
         return error(404, f"model: {body.model}", "not_found_error")
     timings = Timings()
     try:
