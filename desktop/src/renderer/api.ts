@@ -1,5 +1,6 @@
 // Thin client for the engine. Chat goes through the OpenAI-compatible endpoint,
 // exactly like an external client would use it.
+import type { ModelUpload } from "./types";
 
 export type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
@@ -854,6 +855,11 @@ export class EngineClient {
 
   async importJob(id: string): Promise<ImportJob> {
     return this.json(`/api/collections/imports/${encodeURIComponent(id)}`);
+  }
+
+  /** A model file the engine is receiving or installing (see window.tinylm.uploadModel). */
+  async modelUpload(id: string): Promise<ModelUpload> {
+    return this.json(`/api/models/uploads/${encodeURIComponent(id)}`);
   }
 
   /** The end of the engine's log file, oldest first. */

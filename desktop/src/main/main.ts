@@ -1,11 +1,12 @@
 // Electron main process: owns the window, the engine connection and the RunPod pod.
-import { app, BrowserWindow, ipcMain, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { apply, Connection, ConnectionChanges, load, newKey, save, view } from "./connection";
 import { Engine } from "./engine";
 import { log, logFile, tail } from "./log";
+import { Progress, saveModel, uploadModel } from "./modelFiles";
 import { createRequest, PodGone, RunPod } from "./runpod";
 
 const repoRoot = join(__dirname, "..", "..", "..");
@@ -103,6 +104,36 @@ ipcMain.handle("runpod:create", async (_event, name: string) => {
   update({ mode: "runpod", runpod: { podId: pod.id, engineKey } });
   engine.connect(connection);
   return pod;
+});
+function readyEngine() {
+  const state = engine.state;
+  if (state.phase !== "ready") throw new Error("The engine is not running");
+  return state;
+}
+const sendProgress = (progress: Progress) => window?.webContents.send("models:progress", progress);
+// Saves a model of the engine to a file the user picks; null when they cancel.
+ipcMain.handle("models:save", async (_event, model: string) => {
+  const target = readyEngine();
+  const choice = await dialog.showSaveDialog(window!, {
+    title: `Save ${model}`,
+    defaultPath: join(app.getPath("downloads"), `${model}.tar`),
+    filters: [{ name: "Model archive", extensions: ["tar"] }],
+  });
+  if (choice.canceled || !choice.filePath) return null;
+  await saveModel(target, model, choice.filePath, sendProgress);
+  return choice.filePath;
+});
+// Uploads a model file the user picks (a saved model or a .gguf file) to the engine; null when
+// they cancel, else the upload to follow until it is installed.
+ipcMain.handle("models:upload", async () => {
+  const target = readyEngine();
+  const choice = await dialog.showOpenDialog(window!, {
+    title: "Import a model",
+    properties: ["openFile"],
+    filters: [{ name: "Model archive or GGUF file", extensions: ["tar", "gguf"] }],
+  });
+  if (choice.canceled || !choice.filePaths[0]) return null;
+  return uploadModel(target, choice.filePaths[0], sendProgress);
 });
 ipcMain.handle("logs:app", (_event, lines: number) => ({ file: logFile(), lines: tail(lines) }));
 ipcMain.handle("logs:open-folder", () => shell.openPath(dirname(logFile())));

@@ -149,6 +149,11 @@ Not supported yet: tool use / function calling, images, logprobs, `n > 1`, batch
 | POST | `/api/hub/download` | `{"repo": "...", "file": "gemma-3-4b-it-Q4_K_M.gguf"}`: one GGUF file (all parts of a split one), or without `file` the Hugging Face-format weights; saved as `<data dir>/models/<file or repo name>`; 202, 409 when a model of that name is installed |
 | GET | `/api/models/trained` | Fine-tuned models: `base`, `dataset`, `loss`, `eval_loss`, `settings`, `base_installed` |
 | DELETE | `/api/models/{id}` | Deletes an installed model folder and its settings |
+| GET | `/api/models/{id}/archive` | The model's folder (without Hugging Face's `.cache`) and its settings (`tinylm-settings.json`) as an uncompressed tar named `<id>.tar`, with `Content-Length`; any model folder, also a fine-tuned model whose base model is missing |
+| POST | `/api/models/uploads` | `{"name": "<id>.tar" or "<any>.gguf", "size": bytes}`: starts receiving a model file; 201 with the upload (`id`, `state`: `receiving`, `received`) |
+| PUT | `/api/models/uploads/{id}?offset=N` | The next part of the file as the raw body (`application/octet-stream`); `offset` must equal the bytes received so far, else 409. Parts of 16 MB pass RunPod's proxy |
+| POST | `/api/models/uploads/{id}/finish` | Installs the received file in the background (202): a tar becomes the model folder it holds with its settings (a `collection` this engine lacks is dropped), a `.gguf` file a folder named after it. 409 before all bytes arrived |
+| GET | `/api/models/uploads/{id}` | The upload: `state` (`receiving`, `installing`, `done`, `error`), `model`, `missing_base` (a fine-tuned model's base model, when this engine does not have it) and `error`, e.g. a model of that name is already installed |
 | GET | `/api/collections` | Collections with document and chunk counts |
 | POST | `/api/collections` | `{"name": "games"}`: letters, digits, `_`, `-` |
 | DELETE | `/api/collections/{name}` | Deletes the collection and its documents |

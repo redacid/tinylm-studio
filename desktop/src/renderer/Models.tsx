@@ -9,6 +9,7 @@ import {
   TrainedModel,
 } from "./api";
 import { formatSize } from "./format";
+import type { ModelFileProgress } from "./types";
 import { HubSearch } from "./HubSearch";
 import { ModelSettingsForm } from "./ModelSettingsForm";
 import { Teachers } from "./Teachers";
@@ -33,6 +34,12 @@ export function Models({ client }: { client: EngineClient }) {
   const [configuring, setConfiguring] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Saving a model to a file or uploading one, and what came of it.
+  const [transfer, setTransfer] = useState<ModelFileProgress | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+
+  useEffect(() => window.tinylm.onModelProgress(setTransfer), []);
 
   const refresh = useCallback(
     () =>
@@ -62,6 +69,58 @@ export function Models({ client }: { client: EngineClient }) {
     const timer = setInterval(refresh, 2000);
     return () => clearInterval(timer);
   }, [refresh, active]);
+
+  // Saves the model to a file on this computer, e.g. one fine-tuned on a RunPod pod.
+  async function saveToFile(id: string) {
+    setError(null);
+    setNote(null);
+    setBusy(true);
+    setTransfer({ model: id, action: "save", done: 0, total: 0 });
+    try {
+      const path = await window.tinylm.saveModel(id);
+      if (path) setNote(`Saved ${id} to ${path}. Import model with it on another engine.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+      setTransfer(null);
+    }
+  }
+
+  // Uploads a saved model or a .gguf file from this computer; the engine then installs it.
+  async function importModel() {
+    setError(null);
+    setNote(null);
+    setBusy(true);
+    try {
+      let upload = await window.tinylm.uploadModel();
+      setTransfer(null);
+      if (!upload) return;
+      setNote(`Installing ${upload.name}…`);
+      while (upload.state === "installing" || upload.state === "receiving") {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        upload = await client.modelUpload(upload.id);
+      }
+      if (upload.state === "error") {
+        setNote(null);
+        setError(`${upload.name}: ${upload.error}`);
+      } else {
+        setNote(
+          `Installed ${upload.model}.` +
+            (upload.missing_base
+              ? ` It is fine-tuned from ${upload.missing_base}, which this engine does not have: download or import it too.`
+              : ""),
+        );
+      }
+      await refresh();
+    } catch (e) {
+      setNote(null);
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+      setTransfer(null);
+    }
+  }
 
   async function download(id: string) {
     setError(null);
@@ -93,6 +152,16 @@ export function Models({ client }: { client: EngineClient }) {
       <button onClick={() => setConfirmDelete(id)}>Delete</button>
     );
 
+  const saveButton = (id: string) => (
+    <button
+      onClick={() => saveToFile(id)}
+      disabled={busy}
+      title="Saves the model to a file on this computer, for Import model on another engine"
+    >
+      Save to file
+    </button>
+  );
+
   const settingsButton = (id: string) =>
     byId.has(id) && (
       <button onClick={() => setConfiguring(configuring === id ? null : id)}>Settings</button>
@@ -119,7 +188,18 @@ export function Models({ client }: { client: EngineClient }) {
   return (
     <div className="models">
       {error && <p className="error">{error}</p>}
-      <h3>Installed models</h3>
+      <div className="heading-row">
+        <h3>Installed models</h3>
+        <button
+          onClick={importModel}
+          disabled={busy}
+          title="Uploads a model saved with Save to file, or a .gguf file, from this computer to the engine"
+        >
+          Import model
+        </button>
+      </div>
+      {transfer && <TransferProgress progress={transfer} />}
+      {note && <p className="muted">{note}</p>}
       {base.length === 0 ? (
         <p className="muted">No models yet: download one below.</p>
       ) : (
@@ -143,7 +223,12 @@ export function Models({ client }: { client: EngineClient }) {
                 <td className="nowrap">{FORMATS[m.format]}</td>
                 <td className="nowrap">{formatSize(m.size)}</td>
                 <td className="nowrap">
-                  {confirmDelete !== m.id && settingsButton(m.id)} {deleteButtons(m.id, m.used_by)}
+                  {confirmDelete !== m.id && (
+                    <>
+                      {saveButton(m.id)} {settingsButton(m.id)}
+                    </>
+                  )}{" "}
+                  {deleteButtons(m.id, m.used_by)}
                 </td>
               </tr>
             ))}
@@ -209,7 +294,7 @@ export function Models({ client }: { client: EngineClient }) {
                             Export to GGUF
                           </button>
                         )}{" "}
-                        {settingsButton(m.id)}{" "}
+                        {saveButton(m.id)} {settingsButton(m.id)}{" "}
                       </>
                     )}
                     {deleteButtons(m.id)}
@@ -277,6 +362,23 @@ function describe(settings: InstalledModel["settings"]): string {
   return Object.entries(settings)
     .map(([k, v]) => `${k.replace(/_/g, " ")} ${v === true ? "on" : v}`)
     .join(" · ");
+}
+
+function TransferProgress({ progress }: { progress: ModelFileProgress }) {
+  const share = progress.total ? Math.min(1, progress.done / progress.total) : 0;
+  return (
+    <div className="download-progress">
+      <span>
+        {progress.action === "save" ? "Saving" : "Uploading"} {progress.model}
+      </span>
+      <div className="progress">
+        <div style={{ width: `${100 * share}%` }} />
+      </div>
+      <span className="muted">
+        {progress.total ? `${formatSize(progress.done)} of ${formatSize(progress.total)}` : "Starting…"}
+      </span>
+    </div>
+  );
 }
 
 function DownloadStatus({ download }: { download: Download }) {

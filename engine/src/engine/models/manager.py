@@ -211,6 +211,10 @@ class ModelManager:
             self._loaded = (model_id, configured)
             return configured
 
+    def exists(self, model_id: str) -> bool:
+        """Whether a folder of this name holds a model, whether or not it can answer."""
+        return model_format(self.models_dir / model_id) is not None
+
     def loaded(self) -> str | None:
         return self._loaded[0] if self._loaded else None
 

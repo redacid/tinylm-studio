@@ -248,6 +248,8 @@ th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border);
 .download-status { margin-bottom: 10px; }
 .download-progress { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
 .download-progress .progress { flex: 1; max-width: 360px; }
+.heading-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.heading-row h3 { margin-right: auto; }
 .model-settings select { max-width: 160px; }
 
 /* Visual design: colored titles, table headers and cards so sections stand apart */

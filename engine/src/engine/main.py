@@ -27,6 +27,7 @@ from engine.evaluation.evaluate import EvaluationManager
 from engine.export.jobs import ExportManager
 from engine.models.bundles import bundled_collection, import_bundles_in_background
 from engine.models.manager import ModelManager
+from engine.models.transfer import ModelUploads
 from engine.rag.embeddings import HashEmbedder, SentenceTransformerEmbedder
 from engine.rag.store import KnowledgeStore
 from engine.rag.transfer import ImportManager
@@ -104,6 +105,14 @@ def create_app(
         settings.threads,
         knowledge=app.state.knowledge,
         on_done=lambda name: import_bundles_in_background(app.state.models, app.state.knowledge),
+    )
+    app.state.model_uploads = ModelUploads(
+        app.state.models,
+        settings.workspace_dir / "uploads",
+        collections=lambda: {c["name"] for c in app.state.knowledge.collections()},
+        on_installed=lambda name: import_bundles_in_background(
+            app.state.models, app.state.knowledge
+        ),
     )
     # Collections that came with models (an export or a model folder copied in).
     if any(bundled_collection(p) for p in settings.models_dir.glob("*")):

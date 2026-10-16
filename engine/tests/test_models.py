@@ -1,8 +1,15 @@
+import io
 import json
+import tarfile
+import time
 
 import pytest
+from fastapi.testclient import TestClient
 
+from engine.config import Settings
+from engine.main import create_app
 from engine.models.manager import ModelManager
+from engine.models.settings import ModelSettings
 
 
 def test_catalog_lists_default_model(client):
@@ -303,3 +310,89 @@ def test_model_collection_answers_with_sources(client):
     assert "Утопці" in answer["prompt"]["messages"][0]["content"]
     # "" asks for none.
     assert "sources" not in chat(client, collection="")
+
+
+def wait_for_upload(client, upload: dict) -> dict:
+    for _ in range(100):
+        upload = client.get(f"/api/models/uploads/{upload['id']}").json()
+        if upload["state"] not in ("receiving", "installing"):
+            return upload
+        time.sleep(0.05)
+    raise AssertionError("the upload did not finish")
+
+
+def send_model(client, name: str, data: bytes, part: int = 7) -> dict:
+    upload = client.post("/api/models/uploads", json={"name": name, "size": len(data)}).json()
+    for offset in range(0, len(data), part):
+        path = f"/api/models/uploads/{upload['id']}?offset={offset}"
+        assert client.put(path, content=data[offset : offset + part]).status_code == 200
+    finished = client.post(f"/api/models/uploads/{upload['id']}/finish")
+    assert finished.status_code == 202, finished.text
+    return wait_for_upload(client, upload)
+
+
+def test_move_a_model_between_engines(client, settings, tmp_path):
+    adapter = settings.models_dir / "hints-lora"
+    (adapter / "sub").mkdir(parents=True)
+    (adapter / "adapter_config.json").write_text("{}")
+    (adapter / "tinylm.json").write_text(json.dumps({"base": "qwen-base"}))
+    (adapter / "sub" / "adapter_model.safetensors").write_bytes(bytes(range(256)) * 9)
+    (adapter / ".cache").mkdir()
+    (adapter / ".cache" / "lock").write_text("x")
+    # Settings of a model whose base is not installed can only be set in the store.
+    client.app.state.models.settings.set("hints-lora", ModelSettings(temperature=0.3))
+
+    response = client.get("/api/models/hints-lora/archive")
+    assert response.status_code == 200
+    assert int(response.headers["content-length"]) == len(response.content)
+    with tarfile.open(fileobj=io.BytesIO(response.content)) as tar:
+        assert sorted(tar.getnames()) == [
+            "hints-lora/adapter_config.json",
+            "hints-lora/sub/adapter_model.safetensors",
+            "hints-lora/tinylm-settings.json",
+            "hints-lora/tinylm.json",
+        ]
+    assert client.get("/api/models/nope/archive").status_code == 404
+
+    # On another engine: installed with its settings; its base model is missing there.
+    other = TestClient(create_app(Settings(data_dir=tmp_path / "other", enable_echo=True)))
+    upload = send_model(other, "hints-lora.tar", response.content)
+    assert (upload["state"], upload["model"], upload["missing_base"]) == (
+        "done",
+        "hints-lora",
+        "qwen-base",
+    )
+    copied = tmp_path / "other" / "models" / "hints-lora" / "sub" / "adapter_model.safetensors"
+    assert copied.read_bytes() == bytes(range(256)) * 9
+    saved = json.loads((tmp_path / "other" / "models" / ".model-settings.json").read_text())
+    assert saved["hints-lora"]["temperature"] == 0.3
+    trained = other.get("/api/models/trained").json()["data"]
+    assert trained[0]["id"] == "hints-lora"
+    assert other.get("/api/models/hints-lora/archive").status_code == 200
+    # The same model again: refused, nothing changed.
+    again = send_model(other, "hints-lora.tar", response.content)
+    assert again["state"] == "error" and "already installed" in again["error"]
+
+    # A single GGUF file becomes a model folder.
+    upload = send_model(other, "My Model-Q4_K_M.gguf", b"GGUF" + b"\0" * 40)
+    assert (upload["state"], upload["model"]) == ("done", "my-model-q4_k_m")
+    assert "my-model-q4_k_m" in other.get("/api/models").json()["installed"]
+
+    # Parts must come in order and add up to the size.
+    upload = other.post("/api/models/uploads", json={"name": "a.gguf", "size": 4}).json()
+    path = f"/api/models/uploads/{upload['id']}"
+    assert other.put(f"{path}?offset=2", content=b"GG").status_code == 409
+    assert other.put(f"{path}?offset=0", content=b"GGUF!").status_code == 409
+    assert other.post(f"{path}/finish").status_code == 409
+    bad = other.post("/api/models/uploads", json={"name": "a.zip", "size": 4})
+    assert bad.status_code == 422
+
+    # An archive with a path out of its folder is refused.
+    evil = io.BytesIO()
+    with tarfile.open(fileobj=evil, mode="w") as tar:
+        info = tarfile.TarInfo("evil/../../escape.txt")
+        info.size = 1
+        tar.addfile(info, io.BytesIO(b"x"))
+    upload = send_model(other, "evil.tar", evil.getvalue())
+    assert upload["state"] == "error"
+    assert not (tmp_path / "other" / "escape.txt").exists()

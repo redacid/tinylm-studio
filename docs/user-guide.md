@@ -15,6 +15,7 @@ For the HTTP API see [api.md](api.md); for the design and roadmap see the
 - [Teachers: OpenRouter, Anthropic and local models](#teachers)
 - [Training](#training)
   - [Exporting a fine-tuned model to GGUF](#exporting-to-gguf)
+  - [Moving a model between a pod and this computer](#moving-a-model)
 - [Evaluation](#evaluation)
 - [Settings](#settings)
   - [Chat settings](#chat-settings)
@@ -416,6 +417,31 @@ in free memory and disk while it runs.
 - "Export failed: ModuleNotFoundError while ..." means the engine's environment is older than the
   code; see [An export fails with ModuleNotFoundError](#an-export-fails-with-modulenotfounderror).
 
+### Moving a model
+
+Train on a [RunPod pod](#engine) with a GPU, then use the model on this computer, or the other
+way round: take a model you have here to a pod.
+
+![Saving a fine-tuned model from a pod](images/models-transfer.png)
+
+1. Connected to the engine that has the model (the pod), click **Save to file** next to it on
+   the Models screen and pick where to save `<model>.tar`: the model's folder and its settings.
+2. Switch to the other engine in Settings › Engine, open **Models** and click **Import model**
+   with that file. It is uploaded in parts and installed under the same name; a model of that
+   name must not be installed there yet.
+
+**Import model** also takes a `.gguf` file, which becomes a model named after the file.
+
+- A fine-tuned model (a LoRA adapter) is small, tens of MB, but answers only where its base
+  model is installed too: download the base model there from the catalog, or move it the same
+  way. A GGUF export of it does not need the base model and runs much faster on a CPU, so
+  exporting on the pod before saving is usually the better choice.
+- The model's settings come along; a collection it answers from comes along only inside a GGUF
+  export made **With data** (otherwise move the collection with
+  [Export and Import collection](#moving-a-collection-to-another-engine)).
+- Saving and uploading go straight between the engine and the file, so models of many GB do not
+  fill the app's memory; the progress shows on the Models screen.
+
 ## Evaluation
 
 ![Comparing the base model with the fine-tuned one](images/evaluation.png)
@@ -739,6 +765,7 @@ Everything lives in `~/.local/share/tinylm-studio` (`TINYLM_DATA_DIR` to change)
 | `workspace/training/` | Training runs: settings, progress, logs and checkpoints |
 | `workspace/evaluations/` | Evaluation reports, one JSON file each |
 | `workspace/exports/` | GGUF exports: settings, progress and logs |
+| `workspace/uploads/`, `workspace/imports/` | Model files and collection exports being received; removed once installed (an upload left unfinished stays until deleted) |
 | `tools/` | llama.cpp's GGUF converter, downloaded on the first export |
 | `workspace/benchmarks/` | Reports of `make bench` |
 | `embeddings/` | The embedding model used to search collections |

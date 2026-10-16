@@ -9,6 +9,13 @@ contextBridge.exposeInMainWorld("tinylm", {
   setConnection: (changes: unknown, reconnect: boolean) => ipcRenderer.invoke("engine:set-connection", changes, reconnect),
   appLog: (lines: number) => ipcRenderer.invoke("logs:app", lines),
   openLogFolder: () => ipcRenderer.invoke("logs:open-folder"),
+  saveModel: (model: string) => ipcRenderer.invoke("models:save", model),
+  uploadModel: () => ipcRenderer.invoke("models:upload"),
+  onModelProgress: (callback: (progress: unknown) => void) => {
+    const listener = (_event: unknown, progress: unknown) => callback(progress);
+    ipcRenderer.on("models:progress", listener);
+    return () => ipcRenderer.removeListener("models:progress", listener);
+  },
   // create: the new pod's name; catalog: the cloud; request: the settings and the name.
   runpod: (action: "catalog" | "pod" | "create" | "request" | "start" | "stop" | "terminate", ...args: unknown[]) =>
     ipcRenderer.invoke(`runpod:${action}`, ...args),
