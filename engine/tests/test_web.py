@@ -50,6 +50,15 @@ SITE = {
 }
 
 
+# Redirects: a path to the address it moved to; "@" stands for the other host name of the site's
+# server (localhost and 127.0.0.1 are different sites).
+REDIRECTS = {"/old": "/guides/", "/moved": "@/", "/a-moved": "@/a"}
+SITE["/meta"] = (
+    '<html><head><meta http-equiv="Refresh" content="0; URL=\'/guides/\'"></head></html>'
+)
+SITE["/links"] = page("Links", '<a href="/a-moved">A</a> <a href="/b">B</a>')
+
+
 class Site(BaseHTTPRequestHandler):
     requests: list[str] = []
     throttled: set[str] = set()
@@ -60,6 +69,13 @@ class Site(BaseHTTPRequestHandler):
             Site.throttled.add("/slow")
             self.send_response(429)
             self.send_header("Retry-After", "0")
+            self.end_headers()
+            return
+        if self.path in REDIRECTS:
+            host, port = self.server.server_address[:2]
+            other = f"http://localhost:{port}" if host == "127.0.0.1" else ""
+            self.send_response(301 if self.path == "/old" else 302)
+            self.send_header("Location", REDIRECTS[self.path].replace("@", other))
             self.end_headers()
             return
         path = "/a" if self.path == "/slow" else self.path
@@ -188,6 +204,24 @@ def test_only_under_the_start_address(games, site):
     assert job.state == "done"
     assert titles(games) == ["Guide One", "Guide Two"]
     assert "/a" not in Site.requests
+
+
+def test_a_start_address_that_redirects(games, site):
+    """Crawled where it leads: /old to /guides/ (its folder counts as the start), /meta by a
+    <meta http-equiv="refresh">, /moved to another host name."""
+    for start in ("/old", "/meta"):
+        job = crawl(games, [f"{site}{start}"], max_depth=2, only_under_start=True)
+        assert titles(games) == ["Guide One", "Guide Two"], start
+        assert any("redirects to" in line for line in job.log)
+    job = crawl(games, [f"{site}/moved"], max_depth=1)
+    assert "Article A" in titles(games)
+    assert games.documents("games")[-1]["source"].startswith("http://localhost:")
+
+
+def test_a_page_that_redirects_to_another_site_is_skipped(games, site):
+    job = crawl(games, [f"{site}/links"], max_depth=1)
+    assert titles(games) == ["Article B"]
+    assert any("redirects to another site" in line for line in job.log)
 
 
 def test_exclude_patterns_skip_links(games, site):

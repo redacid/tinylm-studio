@@ -199,6 +199,10 @@ A **collection** is a set of documents that chat can answer from. Create one on 
     `https://example.com/guides/` it follows `/guides/…` links but not the rest of the site.
     The folder is the address up to its last `/`, so `https://example.com/guides` (no slash at
     the end) means the whole site.
+  - Redirects are followed, HTTP ones and `<meta http-equiv="refresh">` pages. A start address
+    that redirects (`http://` to `https://`, `example.com` to `www.example.com` or a new
+    domain, `/` to `/uk/`) is crawled where it leads: that site and folder count as the start.
+    Other pages that redirect to another site are skipped.
   - *Skip links matching* lists links this website never follows, one per line: tags, sorting,
     login pages, a forum. A part of the address (`/tag/`, `?sort=`, `/login`) matches anywhere
     in it; a pattern with `*` covers the whole address (`*/forum/*`, `*.pdf`). Only `*` is

@@ -5,6 +5,11 @@ followed, nor links matching the crawl's exclude patterns. With only_under_start
 also kept inside the folders of the start addresses, like wget --no-parent: from
 https://example.com/guides/ the crawl stays under /guides/.
 
+Redirects are followed, HTTP ones and <meta http-equiv="refresh"> pages. A start address that
+redirects (http:// to https://, the bare domain to www. or a new domain, / to /uk/) is crawled
+where it leads: the site and folder it lands in count as the start. Other pages that redirect
+to another site are skipped.
+
 Pages downloaded by earlier crawls into the same collection are not downloaded again: the crawl
 walks through them using their remembered links and spends its page budget only on new pages,
 so repeated crawls of a site gradually cover all of it.
@@ -132,6 +137,32 @@ def links(page: Page) -> list[str]:
     return found
 
 
+MAX_REDIRECTS = 5
+
+
+def refresh_target(page: Page) -> str | None:
+    """Where a <meta http-equiv="refresh" content="0; url=..."> page sends the reader."""
+    import lxml.html
+
+    if not page.is_html:
+        return None
+    try:
+        tree = lxml.html.fromstring(page.body)
+    except (ValueError, lxml.etree.ParserError):
+        return None
+    for content in tree.xpath(
+        "//meta[translate(@http-equiv, 'REFSH', 'refsh')='refresh']/@content"
+    ):
+        # "0; url=/new", "0;URL='/new'" or "5" (a reload: no address)
+        target = re.sub(r"^\s*[\d.]*\s*[;,]?\s*(url\s*=\s*)?", "", content, flags=re.I)
+        target = target.strip("'\" ")
+        if target:
+            url = normalize(urljoin(page.url, target))
+            if urlsplit(url).scheme in ("http", "https"):
+                return url
+    return None
+
+
 def folder(url: str) -> str:
     """The folder a start address is in: its path up to the last slash."""
     path = urlsplit(url).path or "/"
@@ -245,10 +276,36 @@ class Crawler:
                 job.current = url
                 try:
                     page = (browser or http).fetch(url)
+                    for _ in range(MAX_REDIRECTS):
+                        target = refresh_target(page)
+                        if target is None or target == normalize(page.url):
+                            break
+                        limiter.wait(site(target))
+                        page = (browser or http).fetch(target)
                 except FetchError as e:
                     job.record(url, "failed")
                     job.note(f"failed {url}: {e}")
                     continue
+                landed = normalize(page.url)
+                if landed != url:
+                    if depth == 0:
+                        # A start address that moved: crawl the site and folder it leads to,
+                        # instead of its own folder (unless another start address has it).
+                        others = {folder(u) for u in options.urls if u != url and site(u) == host}
+                        if folder(url) not in others:
+                            folders[host].discard(folder(url))
+                        start_sites.add(site(landed))
+                        folders.setdefault(site(landed), set()).add(folder(landed))
+                        job.note(f"{url} redirects to {landed}")
+                    elif site(landed) != host:
+                        job.record(url, "skipped")
+                        job.note(f"{url} redirects to another site: {landed}")
+                        continue
+                    elif landed in seen:  # another address of a page this crawl has
+                        job.record(url, "skipped")
+                        continue
+                    seen.add(landed)
+                    host = site(landed)
                 if page.status in (429, 503) and attempts.get(url, 0) < 2:
                     # The site asks us to slow down: pause it and try this page again later.
                     attempts[url] = attempts.get(url, 0) + 1
