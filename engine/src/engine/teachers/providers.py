@@ -9,6 +9,7 @@ Three kinds:
 """
 
 import json
+import logging
 import time
 from collections.abc import Iterator
 from typing import Literal, Protocol
@@ -16,6 +17,8 @@ from typing import Literal, Protocol
 import httpx
 
 from engine.chat import ChatRequest, Finish, Message, StreamEvent, TextDelta, Usage, collect
+
+log = logging.getLogger(__name__)
 
 TeacherKind = Literal["local", "openai", "anthropic"]
 DEFAULT_BASE_URLS = {
@@ -29,6 +32,10 @@ APP_HEADERS = {"HTTP-Referer": "https://github.com/tinylm-studio", "X-Title": "t
 
 class TeacherError(Exception):
     pass
+
+
+class SamplingRefused(Exception):
+    """The model refused a sampling parameter before answering anything."""
 
 
 class RateLimited(TeacherError):
@@ -223,6 +230,19 @@ class OpenAICompatibleTeacher:
         return sorted(models, key=lambda m: (not m["free"], m["id"]))
 
 
+# Anthropic models that refuse sampling parameters: newer Claude models answer HTTP 400 to
+# temperature (Opus 4.7 and later reject it outright, Haiku 5.5 and Sonnet 5.5 any value but the
+# default). Learned from the first refusal, by base URL and model, so later requests skip it.
+NO_SAMPLING: set[tuple[str, str]] = set()
+
+
+def rejects_sampling(response: httpx.Response) -> bool:
+    if response.status_code != 400:
+        return False
+    text = response.text.lower()
+    return any(p in text for p in ("temperature", "top_p", "top_k"))
+
+
 class AnthropicTeacher:
     def __init__(
         self, base_url: str, api_key: str | None, model: str, name: str = "", timeout: float = 300
@@ -244,11 +264,14 @@ class AnthropicTeacher:
             "system": system,
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": max_tokens,
-            "temperature": temperature,
         }
         self.last_served = {"model": self.model, "provider": "Anthropic"}
         try:
-            response = self.client.post(f"{self.base_url}/v1/messages", json=body)
+            response = self.client.post(
+                f"{self.base_url}/v1/messages", json=self._sampled(body, temperature)
+            )
+            if self._refused_sampling(response):
+                response = self.client.post(f"{self.base_url}/v1/messages", json=body)
         except httpx.HTTPError as e:
             raise TeacherError(f"{self.base_url} is not reachable ({type(e).__name__})") from None
         self.last_served = served_by(response, self.model, "Anthropic")
@@ -270,17 +293,41 @@ class AnthropicTeacher:
                 if m.role != "system"
             ],
             "max_tokens": request.max_tokens or 1024,
-            "temperature": request.temperature,
             "stream": True,
         }
         if system:
             body["system"] = system
         if request.stop:
             body["stop_sequences"] = request.stop
+        try:
+            yield from self._stream(self._sampled(body, request.temperature))
+        except SamplingRefused:
+            yield from self._stream(body)
+
+    def _sampled(self, body: dict, temperature: float | None) -> dict:
+        if temperature is None or (self.base_url, self.model) in NO_SAMPLING:
+            return body
+        return {**body, "temperature": temperature}
+
+    def _refused_sampling(self, response: httpx.Response) -> bool:
+        """True when the model refused the temperature sent: the request is to be sent without."""
+        if "temperature" not in json.loads(response.request.content) or not rejects_sampling(
+            response
+        ):
+            return False
+        log.info("%s does not take a temperature; asking without", self.model)
+        NO_SAMPLING.add((self.base_url, self.model))
+        return True
+
+    def _stream(self, body: dict) -> Iterator[StreamEvent]:
         reasons = {"max_tokens": "length", "stop_sequence": "stop_sequence"}
         reason, stop_sequence, usage = "stop", None, Usage()
         try:
             with self.client.stream("POST", f"{self.base_url}/v1/messages", json=body) as response:
+                if response.status_code == 400:
+                    response.read()
+                    if self._refused_sampling(response):
+                        raise SamplingRefused
                 check_stream(response, self.name)
                 for data in sse_data(response):
                     kind = data.get("type")

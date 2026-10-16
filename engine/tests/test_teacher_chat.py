@@ -5,6 +5,7 @@ import json
 import httpx
 import pytest
 
+from engine.teachers import providers
 from engine.teachers import store as teacher_store
 from engine.teachers.providers import AnthropicTeacher, OpenAICompatibleTeacher
 
@@ -21,6 +22,13 @@ def provider(request: httpx.Request) -> httpx.Response:
     seen.append({"url": str(request.url), **body})
     if body["model"] == "broken":
         return httpx.Response(401, json={"error": {"message": "bad key"}})
+    if body["model"] == "claude-new" and "temperature" in body:
+        message = "`temperature` is deprecated for this model."
+        return httpx.Response(
+            400, json={"error": {"type": "invalid_request_error", "message": message}}
+        )
+    if request.url.path.endswith("/v1/messages") and not body.get("stream"):
+        return httpx.Response(200, json={"content": [{"type": "text", "text": "Квен."}]})
     if request.url.path.endswith("/v1/messages"):
         events = [
             {"type": "message_start", "message": {"usage": {"input_tokens": 12}}},
@@ -44,6 +52,7 @@ def provider(request: httpx.Request) -> httpx.Response:
 @pytest.fixture
 def teachers(client, monkeypatch):
     seen.clear()
+    monkeypatch.setattr(providers, "NO_SAMPLING", set())
 
     def fake_client(config):
         kind = AnthropicTeacher if config.kind == "anthropic" else OpenAICompatibleTeacher
@@ -56,6 +65,7 @@ def teachers(client, monkeypatch):
     for kind, model in [
         ("openai", "big/model:free"),
         ("anthropic", "claude"),
+        ("anthropic", "claude-new"),
         ("openai", "broken"),
     ]:
         body = {"kind": kind, "base_url": f"https://{kind}.test", "model": model, "api_key": "k"}
@@ -110,3 +120,21 @@ def test_teacher_errors_in_the_chat(client, teachers):
     assert "rejected the API key" in answer["choices"][0]["message"]["content"]
     assert ask(client, "teacher:999").status_code == 404
     assert ask(client, "teacher:x").status_code == 404
+
+
+def test_claude_models_that_refuse_a_temperature(client, teachers):
+    """Newer Claude models answer HTTP 400 to temperature: asked again without, and remembered."""
+    response = ask(client, f"teacher:{teachers['claude-new']}")
+    assert response.json()["choices"][0]["message"]["content"] == "Знак Ігні."
+    assert "temperature" in seen[-2] and "temperature" not in seen[-1]
+    seen.clear()
+    ask(client, f"teacher:{teachers['claude-new']}", stream=True)
+    assert len(seen) == 1 and "temperature" not in seen[0]
+
+    teacher = AnthropicTeacher("https://anthropic.test", "k", "claude-new")
+    teacher.client = httpx.Client(transport=httpx.MockTransport(provider))
+    assert teacher.complete("system", "prompt") == "Квен."
+    old = AnthropicTeacher("https://anthropic.test", "k", "claude")
+    old.client = httpx.Client(transport=httpx.MockTransport(provider))
+    old.complete("system", "prompt", temperature=0.3)
+    assert seen[-1]["temperature"] == 0.3

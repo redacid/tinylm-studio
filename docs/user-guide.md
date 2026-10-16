@@ -337,7 +337,8 @@ A teacher is the model that writes examples. Teachers are set up at the bottom o
   (`http://localhost:11434/v1`) or LM Studio (`http://localhost:1234/v1`). Choose a preset or
   **Other** and enter the base URL; servers on your computer need no key.
 - **Anthropic** (Claude): choose the Anthropic provider and paste a key from
-  [console.anthropic.com](https://console.anthropic.com).
+  [console.anthropic.com](https://console.anthropic.com). Newer Claude models (Haiku 5.5,
+  Sonnet 5.5, Opus 4.7 and later) refuse a temperature; the studio then asks them without one.
 - **Installed models** are offered as teachers without any setup. They are free and private,
   but a 4B model on a CPU takes minutes per chunk; use them for small runs.
 
