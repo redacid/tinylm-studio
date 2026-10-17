@@ -4,6 +4,7 @@
   "description": "Desktop UI for tinylm-studio.",
   "private": true,
   "main": "dist/main/main.js",
+  "desktopName": "tinylm-studio.desktop",
   "scripts": {
     "build": "tsc -p tsconfig.json && vite build",
     "start": "npm run build && electron .",

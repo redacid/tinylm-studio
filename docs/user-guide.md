@@ -38,6 +38,12 @@ make setup   # once: the engine's Python environment and the desktop app's depen
 make run     # start the app; it starts the engine and shows "Engine ready" in the top right
 ```
 
+The window and the taskbar show the app's icon (`desktop/assets/icon.svg`; on macOS in the
+Dock). On Linux, `make desktop-entry` adds tinylm-studio to the system's application menu: it
+writes `~/.local/share/applications/tinylm-studio.desktop`, which starts the app with `make run`
+from this folder and groups its window under the icon in the taskbar. Delete that file to remove
+the entry; run the target again after moving the repository.
+
 After pulling changes that add Python packages (see `engine/pyproject.toml`), run
 `make setup-engine` again: the app installs the engine only on its very first start.
 

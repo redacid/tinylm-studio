@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- tinylm-studio: a chat bubble holding a small neural network, on a blue to purple tile. -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1f6feb"/>
+      <stop offset="1" stop-color="#8250df"/>
+    </linearGradient>
+    <linearGradient id="net" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0969da"/>
+      <stop offset="1" stop-color="#8250df"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="480" height="480" rx="108" fill="url(#tile)"/>
+  <path d="M136 112h240a56 56 0 0 1 56 56v144a56 56 0 0 1-56 56H236l-76 60v-60h-24a56 56 0 0 1-56-56V168a56 56 0 0 1 56-56z" fill="#ffffff"/>
+  <g stroke="url(#net)" stroke-width="14" stroke-linecap="round" fill="none">
+    <line x1="176" y1="190" x2="256" y2="240"/>
+    <line x1="176" y1="290" x2="256" y2="240"/>
+    <line x1="256" y1="240" x2="336" y2="190"/>
+    <line x1="256" y1="240" x2="336" y2="290"/>
+  </g>
+  <g fill="url(#net)">
+    <circle cx="176" cy="190" r="26"/>
+    <circle cx="176" cy="290" r="26"/>
+    <circle cx="336" cy="190" r="26"/>
+    <circle cx="336" cy="290" r="26"/>
+  </g>
+  <circle cx="256" cy="240" r="34" fill="#1a7f37"/>
+  <circle cx="256" cy="240" r="14" fill="#ffffff"/>
+</svg>

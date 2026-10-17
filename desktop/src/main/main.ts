@@ -10,6 +10,7 @@ import { Progress, saveModel, uploadModel } from "./modelFiles";
 import { createRequest, PodGone, RunPod } from "./runpod";
 
 const repoRoot = join(__dirname, "..", "..", "..");
+const appIcon = join(__dirname, "..", "..", "assets", "icon.png");
 const logger = log("app");
 process.on("unhandledRejection", (error) => logger.error(`Unhandled: ${error instanceof Error ? error.stack : error}`));
 let window: BrowserWindow | undefined;
@@ -30,6 +31,8 @@ function createWindow() {
     width: 1100,
     height: 750,
     title: "tinylm-studio",
+    // Taskbar and window icon on Linux and Windows; on macOS the Dock shows it (see app.whenReady).
+    icon: appIcon,
     webPreferences: { preload: join(__dirname, "..", "preload", "preload.js") },
   });
   // Links such as a model's Hugging Face page or a chat source open in the system browser; a
@@ -183,6 +186,7 @@ app.whenReady().then(() => {
   );
   connection = load();
   setMenu();
+  app.dock?.setIcon(appIcon);
   createWindow();
   engine.connect(connection);
 });

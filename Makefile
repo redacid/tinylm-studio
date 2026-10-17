@@ -88,6 +88,20 @@ check: lint test ## Run linters and tests (use before committing)
 run: build-desktop ## Start the desktop app (it sets up and starts the engine itself)
 	cd $(DESKTOP_DIR) && npx electron .
 
+# A menu entry so the app can be started from the system menu and its windows are grouped under
+# its icon in the taskbar (StartupWMClass is the window class Electron gives the app).
+APPLICATIONS_DIR ?= $(or $(XDG_DATA_HOME),$(HOME)/.local/share)/applications
+
+.PHONY: desktop-entry
+desktop-entry: ## Add tinylm-studio to the Linux application menu, with its icon
+	mkdir -p $(APPLICATIONS_DIR)
+	printf '%s\n' '[Desktop Entry]' 'Type=Application' 'Name=tinylm-studio' \
+		'Comment=Chat with, fine-tune and evaluate small language models' \
+		'Exec=make -C "$(CURDIR)" run' 'Icon=$(CURDIR)/$(DESKTOP_DIR)/assets/icon.png' \
+		'Terminal=false' 'Categories=Development;' 'StartupWMClass=tinylm-studio-desktop' \
+		> $(APPLICATIONS_DIR)/tinylm-studio.desktop
+	@echo "Added $(APPLICATIONS_DIR)/tinylm-studio.desktop; delete it to remove the entry."
+
 .PHONY: run-engine
 run-engine: ## Start only the engine on HOST:PORT (ECHO=1 adds the test "echo" model)
 	$(if $(ECHO),TINYLM_ENABLE_ECHO=true) $(PYTHON) -m engine serve --host $(HOST) --port $(PORT)
