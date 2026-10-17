@@ -62,6 +62,9 @@ spinning icon, a finished one a check, a failed one an exclamation mark. The ico
 [Tabler Icons](https://tabler.io/icons) font, which is bundled with the app, so they also show
 without a network.
 
+The window has no menu bar: everything is on the tabs. F12 or Ctrl+Shift+I opens the developer
+tools, for a look at what the app does.
+
 ## Chat
 
 ![Chat with answers from a collection](images/chat.png)

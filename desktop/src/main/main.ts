@@ -1,5 +1,5 @@
 // Electron main process: owns the window, the engine connection and the RunPod pod.
-import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from "electron";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,6 +16,14 @@ let window: BrowserWindow | undefined;
 let connection: Connection;
 
 const engine = new Engine(repoRoot, (state) => window?.webContents.send("engine:state", state));
+
+// No File / Edit / View menu: the app has its own tabs. macOS keeps the app menu and an Edit menu,
+// as copy and paste go through it there. F12 or Ctrl+Shift+I still opens the developer tools.
+function setMenu() {
+  Menu.setApplicationMenu(
+    process.platform === "darwin" ? Menu.buildFromTemplate([{ role: "appMenu" }, { role: "editMenu" }]) : null,
+  );
+}
 
 function createWindow() {
   window = new BrowserWindow({
@@ -34,6 +42,15 @@ function createWindow() {
       if (existsSync(path)) shell.showItemInFolder(path);
     }
     return { action: "deny" };
+  });
+  window.webContents.on("before-input-event", (event, input) => {
+    const devTools =
+      input.type === "keyDown" &&
+      (input.key === "F12" || ((input.control || input.meta) && input.shift && input.key.toLowerCase() === "i"));
+    if (devTools) {
+      window?.webContents.toggleDevTools();
+      event.preventDefault();
+    }
   });
   window.loadFile(join(__dirname, "..", "renderer", "index.html"));
 }
@@ -165,6 +182,7 @@ app.whenReady().then(() => {
     `tinylm-studio ${app.getVersion()} started (Electron ${process.versions.electron}, ${process.platform}); settings in ${app.getPath("userData")}`,
   );
   connection = load();
+  setMenu();
   createWindow();
   engine.connect(connection);
 });
