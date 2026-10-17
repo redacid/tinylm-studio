@@ -1,10 +1,11 @@
 // The engine the app talks to: a Python child process on this computer, an engine running
 // somewhere else (its address and API key), or one in a RunPod pod that the app starts and stops.
 import { ChildProcess, spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { app } from "electron";
 import { Connection } from "./connection";
 import { log } from "./log";
 import { RunPod, RunPodError } from "./runpod";
@@ -47,10 +48,33 @@ const dataDir = join(process.env.XDG_DATA_HOME ?? join(homedir(), ".local", "sha
 // How long a pod may take to start and pull the image, and the engine in it to answer.
 const POD_TIMEOUT_MS = 20 * 60_000;
 
-// TINYLM_PYTHON selects a user-owned environment; otherwise the managed venv is used.
+// TINYLM_PYTHON selects a user-owned environment; otherwise the managed venv is used. An
+// installed app (a deb, rpm or AppImage) keeps its own, so it never replaces the editable engine
+// of a checkout that `make run` uses.
+function managedVenv(): string {
+  return process.env.TINYLM_VENV ?? join(dataDir, app.isPackaged ? "app-venv" : "venv");
+}
+
 export function enginePython(): string {
-  const venv = process.env.TINYLM_VENV ?? join(dataDir, "venv");
-  return process.env.TINYLM_PYTHON ?? join(venv, "bin", "python");
+  return process.env.TINYLM_PYTHON ?? join(managedVenv(), "bin", "python");
+}
+
+// An installed app carries the engine's source in its resources and installs a copy of it into
+// its environment; the stamp names the app build that did, so an updated app installs again.
+function installedBuild(): string {
+  const commit = process.env.TINYLM_BUILD_COMMIT;
+  return `${app.getVersion()}${commit ? ` ${commit}` : ""}`;
+}
+const stampFile = () => join(managedVenv(), "tinylm-app-build");
+
+function needsSetup(python: string): boolean {
+  if (!existsSync(python)) return true;
+  if (!app.isPackaged || process.env.TINYLM_PYTHON) return false;
+  try {
+    return readFileSync(stampFile(), "utf8").trim() !== installedBuild();
+  } catch {
+    return true;
+  }
 }
 
 function freePort(): Promise<number> {
@@ -65,9 +89,9 @@ function freePort(): Promise<number> {
   });
 }
 
-function run(command: string, args: string[]): Promise<void> {
+function run(command: string, args: string[], env: NodeJS.ProcessEnv = process.env): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: "inherit" });
+    const child = spawn(command, args, { stdio: "inherit", env });
     child.once("error", reject);
     child.once("exit", (code) => (code === 0 ? resolve() : reject(new Error(`${command} exited with ${code}`))));
   });
@@ -174,9 +198,15 @@ export class Engine {
 
   private async startLocal(alive: () => boolean) {
     const python = enginePython();
-    if (!existsSync(python)) {
+    if (needsSetup(python)) {
       this.set({ phase: "setting-up" });
-      await run("bash", [join(this.repoRoot, "scripts", "setup-engine.sh")]);
+      const script = join(this.repoRoot, "scripts", "setup-engine.sh");
+      if (app.isPackaged) {
+        await run("bash", [script, "--copy"], { ...process.env, TINYLM_VENV: managedVenv() });
+        if (!process.env.TINYLM_PYTHON) writeFileSync(stampFile(), `${installedBuild()}\n`);
+      } else {
+        await run("bash", [script]);
+      }
       logger.info(`The engine's Python environment is ready: ${python}`);
     }
     if (!alive()) return;

@@ -263,7 +263,11 @@ qwen3-0.6b on ~1,000 examples on the target machine, and a GPU run.
 ### Phase 5 – Performance and distribution
 - **Done (2026-10-12):** merge + GGUF export + quantization (Q8_0, Q4_K_M, F16) of fine-tuned models with llama.cpp's own converter (from the llama-cpp-python source package, so versions match) and quantizer; exported models are served through llama.cpp.
 - Hardware auto-tuning; optional GPU PyTorch download.
-- Installers (AppImage/deb, dmg, exe), code signing, auto-update.
+- **Done (2026-10-17):** Linux packages of the app (deb, rpm, AppImage, tar.gz) built with
+  electron-builder by `make package`. A package carries the engine's source and setup script as
+  resources and, on the first start, installs a copy of the engine into its own environment
+  (`~/.local/share/tinylm-studio/app-venv`), again after an update (a stamp names the build).
+- Installers for macOS and Windows (dmg, exe), code signing, auto-update.
 - **Done (2026-10-15):** a container image for the engine (CPU and CUDA), the desktop app
   connecting to a remote engine, and RunPod pods managed from Settings > Engine.
 - Kubernetes: manifests or a Helm chart, CPU and memory limits read from cgroups (see

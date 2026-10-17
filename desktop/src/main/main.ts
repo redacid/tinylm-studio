@@ -1,6 +1,6 @@
 // Electron main process: owns the window, the engine connection and the RunPod pod.
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from "electron";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { apply, Connection, ConnectionChanges, load, newKey, save, view } from "./connection";
@@ -9,7 +9,13 @@ import { log, logFile, tail } from "./log";
 import { Progress, saveModel, uploadModel } from "./modelFiles";
 import { createRequest, PodGone, RunPod } from "./runpod";
 
-const repoRoot = join(__dirname, "..", "..", "..");
+// The engine's source and setup script: the checkout, or the resources of an installed app.
+const repoRoot = app.isPackaged ? process.resourcesPath : join(__dirname, "..", "..", "..");
+// The commit an installed app was built from, which the engine reports; a checkout's engine
+// finds its own with git.
+const buildCommit = join(repoRoot, "build-commit");
+if (app.isPackaged && !process.env.TINYLM_BUILD_COMMIT && existsSync(buildCommit))
+  process.env.TINYLM_BUILD_COMMIT = readFileSync(buildCommit, "utf8").trim();
 const appIcon = join(__dirname, "..", "..", "assets", "icon.png");
 const logger = log("app");
 process.on("unhandledRejection", (error) => logger.error(`Unhandled: ${error instanceof Error ? error.stack : error}`));

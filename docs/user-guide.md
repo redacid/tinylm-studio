@@ -44,6 +44,34 @@ writes `~/.local/share/applications/tinylm-studio.desktop`, which starts the app
 from this folder and groups its window under the icon in the taskbar. Delete that file to remove
 the entry; run the target again after moving the repository.
 
+### Installing the app
+
+Instead of running it from the repository, the app can be built into a package and installed:
+
+```bash
+make deb        # Debian, Ubuntu, Mint: desktop/out/tinylm-studio-<version>-amd64.deb
+make rpm        # Fedora, RHEL, openSUSE (needs rpmbuild: apt install rpm)
+make appimage   # one file that runs on most distributions without installing
+make tarball    # a .tar.gz to unpack anywhere
+make package    # all of them; PACKAGES="deb AppImage" picks some
+```
+
+```bash
+sudo apt install ./desktop/out/tinylm-studio-0.1.0-amd64.deb   # or: sudo dnf install ./…rpm
+```
+
+The installed app is in the system menu with its icon and starts from there (or as
+`tinylm-studio`). It needs Python 3.11+ on the computer (the deb and rpm depend on it); on its
+first start it installs the engine into its own environment,
+`~/.local/share/tinylm-studio/app-venv`, which takes a few minutes and downloads PyTorch and the
+other packages, and again after an update. `uv` makes that faster if it is installed. The app
+keeps its settings where `make run` keeps them, so both see the same engine settings, RunPod pod
+and chat settings, and the models and collections in the engine's data folder.
+
+An installed app does not read the repository's `.env`: settings such as `HF_TOKEN`,
+`TINYLM_PYTHON` or `TINYLM_TORCH` (the PyTorch build to install, see `scripts/setup-engine.sh`)
+come from the environment it is started in, e.g. `~/.profile`.
+
 After pulling changes that add Python packages (see `engine/pyproject.toml`), run
 `make setup-engine` again: the app installs the engine only on its very first start.
 

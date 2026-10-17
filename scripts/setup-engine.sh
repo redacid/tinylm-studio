@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Create (or update) the engine's Python environment and install the engine into it.
-# Usage: scripts/setup-engine.sh [--dev]
+# Usage: scripts/setup-engine.sh [--dev] [--copy]
+#   --dev   also the development tools (pytest, ruff)
+#   --copy  install a copy of the engine instead of linking this checkout (editable), as an
+#           installed app does: its source is read-only and is replaced by an update
 #
 # TINYLM_TORCH selects the PyTorch build:
 #   cpu (default)  CPU-only wheels from download.pytorch.org (small download)
@@ -16,8 +19,19 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 EXTRAS=""
-[[ "${1:-}" == "--dev" ]] && EXTRAS="[dev]"
+COPY=""
+for arg in "$@"; do
+    case "$arg" in
+        --dev) EXTRAS="[dev]" ;;
+        --copy) COPY=1 ;;
+        *) echo "Unknown option: $arg" >&2; exit 2 ;;
+    esac
+done
 TARGET="$REPO_ROOT/engine$EXTRAS"
+# The same version number is installed again when the app is updated, so a copy always replaces
+# the installed engine (its dependencies stay).
+UV_ENGINE=(-e "$TARGET")
+[[ -n "$COPY" ]] && UV_ENGINE=(--reinstall-package tinylm-engine "$TARGET")
 
 if [[ -n "${TINYLM_PYTHON:-}" ]]; then
     echo "Using user-provided environment: $TINYLM_PYTHON"
@@ -56,7 +70,7 @@ if command -v uv >/dev/null 2>&1; then
     # uv reuses a previously built wheel; drop it so CMAKE_ARGS take effect.
     [[ "$LLAMA" == "source" ]] && uv cache clean --quiet llama-cpp-python
     uv pip install --quiet --python "$PYTHON" \
-        "${TORCH_ARGS[@]}" "${LLAMA_ARGS[@]}" "${LLAMA_REBUILD[@]}" -e "$TARGET"
+        "${TORCH_ARGS[@]}" "${LLAMA_ARGS[@]}" "${LLAMA_REBUILD[@]}" "${UV_ENGINE[@]}"
 else
     TORCH_ARGS=()
     case "$TORCH" in
@@ -64,7 +78,12 @@ else
         *) TORCH_ARGS=(--extra-index-url "https://download.pytorch.org/whl/$TORCH") ;;
     esac
     "$PYTHON" -m pip install --quiet --upgrade pip
-    "$PYTHON" -m pip install --quiet "${TORCH_ARGS[@]}" "${LLAMA_ARGS[@]}" -e "$TARGET"
+    if [[ -n "$COPY" ]]; then
+        "$PYTHON" -m pip install --quiet "${TORCH_ARGS[@]}" "${LLAMA_ARGS[@]}" "$TARGET"
+        "$PYTHON" -m pip install --quiet --force-reinstall --no-deps "$TARGET"
+    else
+        "$PYTHON" -m pip install --quiet "${TORCH_ARGS[@]}" "${LLAMA_ARGS[@]}" -e "$TARGET"
+    fi
     [[ ${#LLAMA_PIP_REBUILD[@]} -gt 0 ]] && "$PYTHON" -m pip install --quiet "${LLAMA_PIP_REBUILD[@]}"
 fi
 

@@ -58,6 +58,27 @@ build: build-desktop ## Build all components
 build-desktop: $(DESKTOP_DEPS) ## Compile the desktop app TypeScript into desktop/dist
 	cd $(DESKTOP_DIR) && npm run build
 
+# Installable packages of the app, written to desktop/out. A package carries the engine's source
+# and installs it into its own Python environment on the first start (python3 is a dependency).
+# An .rpm needs rpmbuild on this computer (apt install rpm).
+PACKAGES ?= deb rpm AppImage tar.gz
+
+.PHONY: package
+package: build-desktop ## Build installable packages of the app (PACKAGES="deb rpm AppImage tar.gz")
+	echo "$(GIT_COMMIT)" > $(DESKTOP_DIR)/dist/build-commit
+	cd $(DESKTOP_DIR) && npx electron-builder --linux $(PACKAGES)
+	@ls -1 $(DESKTOP_DIR)/out/tinylm-studio-*
+
+.PHONY: deb rpm appimage tarball
+deb: ## Build a .deb package (Debian, Ubuntu, Mint)
+	$(MAKE) package PACKAGES=deb
+rpm: ## Build an .rpm package (Fedora, RHEL, openSUSE); needs rpmbuild
+	$(MAKE) package PACKAGES=rpm
+appimage: ## Build an AppImage, which runs on most distributions without installing
+	$(MAKE) package PACKAGES=AppImage
+tarball: ## Build a .tar.gz of the app, to unpack anywhere
+	$(MAKE) package PACKAGES=tar.gz
+
 ##@ Quality
 
 .PHONY: lint
@@ -261,7 +282,7 @@ run-image: ## Run IMAGE:VARIANT on 127.0.0.1:PORT with the data in DATA_DIR/cont
 
 .PHONY: clean
 clean: ## Remove build outputs and caches
-	rm -rf $(DESKTOP_DIR)/dist
+	rm -rf $(DESKTOP_DIR)/dist $(DESKTOP_DIR)/out
 	find $(ENGINE_DIR) -type d \( -name __pycache__ -o -name .pytest_cache -o -name .ruff_cache -o -name '*.egg-info' \) -prune -exec rm -rf {} +
 
 .PHONY: distclean

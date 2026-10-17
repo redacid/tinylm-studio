@@ -33,6 +33,14 @@ make run     # start the desktop app (it starts the engine)
 make desktop-entry   # optional, Linux: add the app with its icon to the system menu
 ```
 
+Or build an installable package and install it like any other app
+([Installing the app](docs/user-guide.md#installing-the-app)):
+
+```bash
+make deb       # or: make rpm, make appimage, make tarball, make package (all of them)
+sudo apt install ./desktop/out/tinylm-studio-0.1.0-amd64.deb
+```
+
 Download a model (Models tab in the app, which also searches all GGUF and PyTorch models on
 Hugging Face, or):
 
