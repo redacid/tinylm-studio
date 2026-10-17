@@ -175,7 +175,7 @@ search: ## Find pages on the web: make search Q="elden ring review" [VIDEO=1] [A
 CDP_PORT ?= 9222
 # The languages the browser asks sites for (Accept-Language, navigator.languages); headless
 # Chrome sends none by default. The same as the crawler's plain HTTP requests.
-CDP_LANG ?= uk,ru,en
+CDP_LANG ?= uk,en
 # The container network of the helpers and the engine image (make run-image): there they reach
 # each other by name, e.g. http://tinylm-chrome:9222, as 127.0.0.1 in a container is itself.
 NETWORK ?= tinylm
