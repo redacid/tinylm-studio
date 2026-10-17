@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Dataset, EngineClient, LossPoint, TrainingJob, TrainingSettings } from "./api";
 import { useTabActive } from "./tabActive";
+import { Icon } from "./Icon";
 
 const DEFAULTS: Omit<TrainingSettings, "name" | "base" | "dataset"> = {
   epochs: 3,
@@ -77,7 +78,7 @@ export function Training({ client, onNeedModel }: { client: EngineClient; onNeed
         {bases.length === 0 ? (
           <p className="muted">
             Fine-tuning needs a model with PyTorch weights, such as qwen3-0.6b.{" "}
-            <button type="button" onClick={onNeedModel}>Download one</button>
+            <button type="button" onClick={onNeedModel}><Icon name="download" />Download one</button>
           </p>
         ) : datasets.length === 0 ? (
           <p className="muted">Create a dataset of examples on the Datasets page first.</p>
@@ -129,7 +130,7 @@ export function Training({ client, onNeedModel }: { client: EngineClient; onNeed
           <span className="buttons">
             {steps > 0 && <span className="muted">{steps} steps</span>}
             <button type="submit" disabled={busy || !settings.name.trim() || !settings.base || !dataset?.train}>
-              Start training
+              <Icon name="player-play" />Start training
             </button>
           </span>
         </div>
@@ -208,16 +209,16 @@ function JobCard({ client, job, onChange }: { client: EngineClient; job: Trainin
           </div>
         </div>
         <div className="buttons">
-          {job.state === "running" && <button onClick={() => client.stopTraining(job.id).then(onChange)}>Stop</button>}
-          {job.resumable && <button onClick={() => client.resumeTraining(job.id).then(onChange, (e) => setLog(String(e)))}>Resume</button>}
+          {job.state === "running" && <button onClick={() => client.stopTraining(job.id).then(onChange)}><Icon name="player-stop" />Stop</button>}
+          {job.resumable && <button onClick={() => client.resumeTraining(job.id).then(onChange, (e) => setLog(String(e)))}><Icon name="player-play" />Resume</button>}
           {!going &&
             (confirmDelete ? (
               <>
-                <button className="danger" onClick={() => client.deleteTrainingJob(job.id).then(onChange)}>Delete</button>
-                <button onClick={() => setConfirmDelete(false)}>Cancel</button>
+                <button className="danger" onClick={() => client.deleteTrainingJob(job.id).then(onChange)}><Icon name="trash" />Delete</button>
+                <button onClick={() => setConfirmDelete(false)}><Icon name="x" />Cancel</button>
               </>
             ) : (
-              <button onClick={() => setConfirmDelete(true)}>Delete</button>
+              <button onClick={() => setConfirmDelete(true)}><Icon name="trash" />Delete</button>
             ))}
         </div>
       </div>

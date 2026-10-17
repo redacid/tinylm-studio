@@ -53,6 +53,15 @@ The app follows the system's light or dark theme. Colors carry meaning across th
 section titles, table headers, the selected item and the main button of a form; green for the
 assistant's answers and finished runs; red for errors and for the button that confirms a delete.
 
+Tabs, buttons, run states, the engine status and log levels have icons, colored by what they do:
+green adds or starts (Add, Crawl, Start), red deletes or stops (Delete, Stop, Terminate), blue
+saves or looks up (Save, Search, Refresh), teal moves data in or out (Import, Export, Download),
+purple edits or makes something new (Edit, Generate, Create pod) and amber undoes (Discard
+changes, Reset to defaults). A filled button shows its icon in white. A running job's badge has a
+spinning icon, a finished one a check, a failed one an exclamation mark. The icons come from the
+[Tabler Icons](https://tabler.io/icons) font, which is bundled with the app, so they also show
+without a network.
+
 ## Chat
 
 ![Chat with answers from a collection](images/chat.png)
@@ -687,7 +696,7 @@ as they come (every 2 seconds; untick **Follow** to stop):
 - **App** is this app's own log: starting the engine (and its last output when it exits),
   connecting to a remote engine or a pod, RunPod requests and pod actions, and errors.
 
-Levels have colors (INFO blue, WARN yellow, ERROR red, with the row tinted), so do the parts of
+Levels have colors and icons (INFO blue, WARN yellow, ERROR red, with the row tinted), so do the parts of
 the app (`http`, `chat`, `api.knowledge`, …), request methods and status codes, and numbers with
 units. The list can be cut to warnings and errors, or filtered by text (a collection's name,
 `crawl`, a model). The files:

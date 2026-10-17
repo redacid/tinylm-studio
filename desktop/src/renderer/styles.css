@@ -370,7 +370,7 @@ label.check { display: inline-flex; align-items: center; gap: 4px; cursor: point
   height: calc(100vh - 290px); min-height: 240px; overflow: auto; padding: 4px 0; user-select: text;
 }
 .log-view > p { padding: 8px 12px; margin: 0; }
-.log-entry { display: grid; grid-template-columns: 92px 52px 150px minmax(0, 1fr); gap: 8px; padding: 1px 12px; align-items: baseline; }
+.log-entry { display: grid; grid-template-columns: 92px 64px 150px minmax(0, 1fr); gap: 8px; padding: 1px 12px; align-items: baseline; }
 .log-entry:hover { background: var(--row-hover); }
 .log-entry.warning { background: var(--warn-soft); }
 .log-entry.error, .log-entry.critical { background: var(--bad-soft); }

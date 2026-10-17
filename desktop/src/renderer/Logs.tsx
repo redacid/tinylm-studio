@@ -8,8 +8,17 @@ import {
 } from "react";
 import { EngineClient } from "./api";
 import type { EngineState } from "./types";
+import { Icon, type IconName } from "./Icon";
 
 type Source = "engine" | "app";
+const LEVEL_ICONS: Record<Level, IconName> = {
+  DEBUG: "bug",
+  INFO: "info-circle",
+  WARNING: "alert-triangle",
+  ERROR: "alert-circle",
+  CRITICAL: "flame",
+};
+
 type Level = "DEBUG" | "INFO" | "WARNING" | "ERROR" | "CRITICAL";
 type Entry = {
   date: string;
@@ -191,12 +200,14 @@ export function Logs({
             className={source === "engine" ? "active" : ""}
             onClick={() => setSource("engine")}
           >
+            <Icon name="server" />
             Engine{where ? ` · ${where}` : ""}
           </button>
           <button
             className={source === "app" ? "active" : ""}
             onClick={() => setSource("app")}
           >
+            <Icon name="device-desktop" />
             App
           </button>
         </div>
@@ -226,10 +237,10 @@ export function Logs({
           />{" "}
           Follow
         </label>
-        <button onClick={load}>Refresh</button>
+        <button onClick={load}><Icon name="refresh" />Refresh</button>
         {source === "app" && (
           <button onClick={() => window.tinylm.openLogFolder()}>
-            Open folder
+            <Icon name="folder-open" />Open folder
           </button>
         )}
       </div>
@@ -237,11 +248,13 @@ export function Logs({
         <span>{plural(entries.length, "entry", "entries")}</span>
         {counts.warnings > 0 && (
           <span className="log-level warning">
+            <Icon name="alert-triangle" />
             {plural(counts.warnings, "warning")}
           </span>
         )}
         {counts.errors > 0 && (
           <span className="log-level error">
+            <Icon name="alert-circle" />
             {plural(counts.errors, "error")}
           </span>
         )}
@@ -260,6 +273,7 @@ export function Logs({
               {e.time}
             </span>
             <span className={`log-level ${e.level.toLowerCase()}`}>
+              <Icon name={LEVEL_ICONS[e.level]} />
               {e.level === "WARNING" ? "WARN" : e.level}
             </span>
             <span className={`log-scope ${scopeColor(e.scope)}`}>

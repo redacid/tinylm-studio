@@ -2,6 +2,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { EngineClient, Teacher, TeacherInput, TeacherModel, ThinkingMode } from "./api";
 import { servedBy } from "./Generate";
 import { useTabActive } from "./tabActive";
+import { Icon } from "./Icon";
 
 /** Ready-made settings for common providers; every field stays editable. */
 const PROVIDERS = [
@@ -113,7 +114,7 @@ export function Teachers({ client }: { client: EngineClient }) {
     <div className="teachers">
       <div className="websites-head">
         <h3>Teachers</h3>
-        <button onClick={() => edit(null)} disabled={editing !== null}>Add teacher</button>
+        <button onClick={() => edit(null)} disabled={editing !== null}><Icon name="plus" />Add teacher</button>
       </div>
       <p className="muted">
         Teachers are larger models that write training examples from your documents (Datasets → Generate). Use any
@@ -166,7 +167,7 @@ export function Teachers({ client }: { client: EngineClient }) {
                 <option key={m.id} value={m.id}>{m.free ? `${m.name} (free)` : m.name}</option>
               ))}
             </datalist>
-            <button type="button" onClick={listModels} disabled={checking}>List models</button>
+            <button type="button" onClick={listModels} disabled={checking}><Icon name="list" />List models</button>
           </label>
           {models.length > 0 && (
             <label>
@@ -232,10 +233,11 @@ export function Teachers({ client }: { client: EngineClient }) {
           {result && <p className={result.ok ? "muted" : "error"}>{result.text}</p>}
           <div className="buttons">
             <button type="button" onClick={test} disabled={checking || !editing.model.trim()}>
+              <Icon name={checking ? "loader-2" : "flask"} spin={checking} />
               {checking ? "Checking…" : "Test"}
             </button>
-            <button type="button" onClick={() => setEditing(null)}>Cancel</button>
-            <button type="submit" disabled={!editing.model.trim()}>Save</button>
+            <button type="button" onClick={() => setEditing(null)}><Icon name="x" />Cancel</button>
+            <button type="submit" disabled={!editing.model.trim()}><Icon name="device-floppy" />Save</button>
           </div>
         </form>
       )}
@@ -262,13 +264,13 @@ export function Teachers({ client }: { client: EngineClient }) {
                 <td className="nowrap">
                   {confirmDelete === t.id ? (
                     <>
-                      <button className="danger" onClick={() => remove(t.id!)}>Delete</button>{" "}
-                      <button onClick={() => setConfirmDelete(null)}>Cancel</button>
+                      <button className="danger" onClick={() => remove(t.id!)}><Icon name="trash" />Delete</button>{" "}
+                      <button onClick={() => setConfirmDelete(null)}><Icon name="x" />Cancel</button>
                     </>
                   ) : (
                     <>
-                      <button onClick={() => edit(t)} disabled={editing !== null}>Edit</button>{" "}
-                      <button onClick={() => setConfirmDelete(t.id)}>Delete</button>
+                      <button onClick={() => edit(t)} disabled={editing !== null}><Icon name="pencil" />Edit</button>{" "}
+                      <button onClick={() => setConfirmDelete(t.id)}><Icon name="trash" />Delete</button>
                     </>
                   )}
                 </td>

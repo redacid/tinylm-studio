@@ -1,0 +1,63 @@
+/* Icons: the Tabler Icons font (MIT), bundled with the app, so they show without a network. */
+@font-face {
+  font-family: "tabler-icons";
+  src: url("@tabler/icons-webfont/dist/fonts/tabler-icons.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+}
+.icon {
+  font-family: "tabler-icons";
+  font-style: normal;
+  font-weight: 400;
+  font-size: 1.15em;
+  line-height: 1;
+  display: inline-block;
+  vertical-align: -0.15em;
+  margin-right: 0.3em;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+.icon.tone-accent { color: var(--accent); }
+.icon.tone-ok { color: var(--ok); }
+.icon.tone-bad { color: var(--bad); }
+.icon.tone-warn { color: var(--warn); }
+.icon.tone-purple { color: var(--purple); }
+.icon.tone-teal { color: var(--teal); }
+.icon.tone-muted { color: var(--muted); }
+.icon.spin { animation: icon-spin 1s linear infinite; }
+@keyframes icon-spin { to { transform: rotate(360deg); } }
+
+/* In a button the icon sits before the label with a fixed gap. */
+button:has(> .icon), .button:has(> .icon) { display: inline-flex; align-items: center; gap: 0.4em; }
+button > .icon, .button > .icon { margin-right: 0; vertical-align: 0; }
+/* A filled button shows its icon in its own text color; a disabled one dims it with the rest. */
+button[type="submit"]:not(:disabled) > .icon,
+button.primary:not(:disabled) > .icon,
+button.danger:not(:disabled) > .icon,
+button.active > .icon { color: inherit; }
+.data .actions > button.danger:not(:disabled) > .icon { color: var(--bad); }
+
+/* A log level and the engine status show their icon in their own color. */
+.log-level > .icon, .status > .icon { color: inherit; }
+.log-level > .icon { margin-right: 0.25em; }
+
+/* A state badge (Running, Finished, Failed…) carries its icon from its class. */
+.badge.running::before, .badge.stopping::before, .badge.done::before, .badge.error::before,
+.badge.cancelled::before, .badge.stopped::before, .badge.interrupted::before,
+.badge.pod-running::before, .badge.pod-provisioning::before, .badge.pod-starting::before,
+.badge.pod-error::before, .badge.pod-terminated::before, .badge.pod-exited::before {
+  font-family: "tabler-icons";
+  font-weight: 400;
+  display: inline-block;
+  margin-right: 0.25em;
+  vertical-align: -0.1em;
+}
+.badge.running::before, .badge.stopping::before,
+.badge.pod-provisioning::before, .badge.pod-starting::before {
+  content: "\f226"; animation: icon-spin 1s linear infinite;
+}
+.badge.done::before, .badge.pod-running::before { content: "\ea5e"; }
+.badge.error::before, .badge.pod-error::before { content: "\ea05"; }
+.badge.cancelled::before, .badge.stopped::before, .badge.pod-terminated::before, .badge.pod-exited::before { content: "\ea2e"; }
+.badge.interrupted::before { content: "\ed45"; }

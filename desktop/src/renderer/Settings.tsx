@@ -6,6 +6,7 @@ import { EngineSettingsForm } from "./EngineSettings";
 import { Logs } from "./Logs";
 import { SearchSettingsForm } from "./SearchSettings";
 import type { EngineState } from "./types";
+import { Icon, type IconName } from "./Icon";
 
 type Section = "engine" | "chat" | "search" | "crawler" | "logs";
 
@@ -15,6 +16,14 @@ const SECTIONS: Record<Section, string> = {
   search: "Search settings",
   crawler: "Crawler settings",
   logs: "Logs",
+};
+
+const SECTION_ICONS: Record<Section, IconName> = {
+  engine: "server",
+  chat: "message",
+  search: "search",
+  crawler: "spider",
+  logs: "list",
 };
 
 /** App settings, saved as they are changed. Engine settings stay in .env. */
@@ -36,6 +45,7 @@ export function Settings({
       <aside>
         {(Object.keys(SECTIONS) as Section[]).map((s) => (
           <button key={s} className={s === section ? "active" : ""} onClick={() => setSection(s)}>
+            <Icon name={SECTION_ICONS[s]} />
             {SECTIONS[s]}
           </button>
         ))}
@@ -157,7 +167,7 @@ function ChatSettingsForm({ value, onChange }: { value: ChatSettings; onChange: 
       </Check>
 
       <div>
-        <button onClick={() => onChange(CHAT_DEFAULTS)}>Reset to defaults</button>
+        <button onClick={() => onChange(CHAT_DEFAULTS)}><Icon name="restore" />Reset to defaults</button>
       </div>
     </div>
   );

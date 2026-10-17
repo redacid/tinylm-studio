@@ -2,6 +2,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { ChatMessage, Dataset, EngineClient, Example, ExampleFilter } from "./api";
 import { GeneratePanel } from "./Generate";
 import { useTabActive } from "./tabActive";
+import { Icon } from "./Icon";
 
 const PAGE_SIZE = 20;
 const NEW_EXAMPLE: ChatMessage[] = [
@@ -62,7 +63,7 @@ export function Datasets({ client }: { client: EngineClient }) {
         ))}
         <form onSubmit={create}>
           <input placeholder="New dataset" value={newName} onChange={(e) => setNewName(e.target.value)} />
-          <button type="submit" disabled={!newName.trim()}>Add</button>
+          <button type="submit" disabled={!newName.trim()}><Icon name="plus" />Add</button>
         </form>
       </aside>
       <section>
@@ -231,7 +232,7 @@ function DatasetView({
     <>
       <div className="actions">
         <label>
-          <span className="button">Import file</span>
+          <span className="button"><Icon name="file-import" />Import file</span>
           <input type="file" multiple accept=".jsonl,.json,.csv" onChange={(e) => importFiles(e.target.files)} disabled={importing} />
         </label>
         <button
@@ -239,10 +240,10 @@ function DatasetView({
           disabled={exporting || dataset.examples === 0}
           title="Saves the examples to a JSONL file, for Import file on another engine, e.g. a RunPod pod"
         >
-          Export
+          <Icon name="file-export" />Export
         </button>
-        <button onClick={() => edit(null)} disabled={editing !== null}>Add example</button>
-        <button onClick={() => setGenerating(!generating)}>Generate</button>
+        <button onClick={() => edit(null)} disabled={editing !== null}><Icon name="plus" />Add example</button>
+        <button onClick={() => setGenerating(!generating)}><Icon name="sparkles" />Generate</button>
         <label title="Examples held out from training to measure the model on data it has not seen">
           Evaluation{" "}
           <input
@@ -261,10 +262,10 @@ function DatasetView({
         {confirmDelete ? (
           <span className="danger">
             Delete "{dataset.name}" and all its examples?{" "}
-            <button onClick={removeDataset}>Delete</button> <button onClick={() => setConfirmDelete(false)}>Cancel</button>
+            <button onClick={removeDataset}><Icon name="trash" />Delete</button> <button onClick={() => setConfirmDelete(false)}><Icon name="x" />Cancel</button>
           </span>
         ) : (
-          <button className="danger" onClick={() => setConfirmDelete(true)}>Delete dataset</button>
+          <button className="danger" onClick={() => setConfirmDelete(true)}><Icon name="trash" />Delete dataset</button>
         )}
       </div>
       <p className="muted">
@@ -287,8 +288,8 @@ function DatasetView({
                 <option value="assistant">assistant</option>
               </select>
               <textarea value={m.content} onChange={(e) => setMessage(i, { content: e.target.value })} />
-              <button type="button" onClick={() => setDraft((d) => d.filter((_, j) => j !== i))} disabled={draft.length <= 2}>
-                ✕
+              <button type="button" onClick={() => setDraft((d) => d.filter((_, j) => j !== i))} disabled={draft.length <= 2} title="Remove this message">
+                <Icon name="x" />
               </button>
             </div>
           ))}
@@ -299,10 +300,11 @@ function DatasetView({
                 setDraft((d) => [...d, { role: d[d.length - 1]?.role === "user" ? "assistant" : "user", content: "" }])
               }
             >
+              <Icon name="plus" />
               Add message
             </button>
-            <button type="button" onClick={() => setEditing(null)}>Cancel</button>
-            <button type="submit" disabled={draft.some((m) => !m.content.trim())}>Save</button>
+            <button type="button" onClick={() => setEditing(null)}><Icon name="x" />Cancel</button>
+            <button type="submit" disabled={draft.some((m) => !m.content.trim())}><Icon name="device-floppy" />Save</button>
           </div>
         </form>
       )}
@@ -333,9 +335,9 @@ function DatasetView({
             <option value="generated">Generated</option>
           </select>
           <span className="pager">
-            <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>‹ Previous</button>
+            <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}><Icon name="chevron-left" />Previous</button>
             <span className="muted">{total === 0 ? "0" : `${offset + 1}–${last}`} of {total}</span>
-            <button disabled={last >= total} onClick={() => setOffset(offset + PAGE_SIZE)}>Next ›</button>
+            <button disabled={last >= total} onClick={() => setOffset(offset + PAGE_SIZE)}>Next<Icon name="chevron-right" /></button>
           </span>
         </div>
         {examples.map((example) => (
@@ -350,8 +352,8 @@ function DatasetView({
                 </span>
               )}
               <span className="buttons">
-                <button onClick={() => edit(example)} disabled={editing !== null}>Edit</button>
-                <button onClick={() => remove(example.id)}>Delete</button>
+                <button onClick={() => edit(example)} disabled={editing !== null}><Icon name="pencil" />Edit</button>
+                <button onClick={() => remove(example.id)}><Icon name="trash" />Delete</button>
               </span>
             </div>
             {example.messages.map((m, i) => (

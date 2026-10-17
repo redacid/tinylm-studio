@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Dataset, EngineClient, Evaluation, EvaluationOptions, Teacher, TrainedModel } from "./api";
 import { useTabActive } from "./tabActive";
+import { Icon } from "./Icon";
 
 const STATE_LABELS: Record<Evaluation["state"], string> = {
   running: "Running",
@@ -34,7 +35,7 @@ export function EvaluationScreen({ client }: { client: EngineClient }) {
       <aside>
         <strong>Evaluations</strong>
         <button className={selected === "new" ? "active" : ""} onClick={() => setSelected("new")}>
-          New evaluation
+          <Icon name="plus" />New evaluation
         </button>
         {runs.map((run) => (
           <button key={run.id} className={run.id === selected ? "active" : ""} onClick={() => setSelected(run.id)}>
@@ -205,7 +206,7 @@ function EvaluationForm({ client, onStarted }: { client: EngineClient; onStarted
       </p>
       {error && <p className="error">{error}</p>}
       <div className="buttons">
-        <button type="submit" disabled={!count || options.models.length === 0}>Start evaluation</button>
+        <button type="submit" disabled={!count || options.models.length === 0}><Icon name="player-play" />Start evaluation</button>
       </div>
     </form>
   );
@@ -278,9 +279,9 @@ function Report({
         </span>
         <span className="buttons">
           {run.state === "running" ? (
-            <button onClick={() => client.stopEvaluation(id).catch(report)}>Stop</button>
+            <button onClick={() => client.stopEvaluation(id).catch(report)}><Icon name="player-stop" />Stop</button>
           ) : (
-            <button onClick={remove}>Delete</button>
+            <button onClick={remove}><Icon name="trash" />Delete</button>
           )}
         </span>
       </div>

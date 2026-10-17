@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { ChatMessage, ChatParams, ChatTrace, EngineClient, Source, Timings } from "./api";
 import { ChatSettings, loadChatSession, saveChatSession } from "./chatSettings";
 import { LiveStatus, Progress, Stats } from "./Stats";
+import { Icon } from "./Icon";
 
 /** A question and its answer share the trace of the request that answered it. */
 type Turn = ChatMessage & { sources?: Source[]; timings?: Timings; model?: string; trace?: ChatTrace };
@@ -149,7 +150,7 @@ export function Chat({
     return (
       <div className="empty">
         <p>No models installed yet.</p>
-        <button onClick={onNeedModel}>Download a model</button>
+        <button onClick={onNeedModel}><Icon name="download" />Download a model</button>
       </div>
     );
   }
@@ -192,7 +193,7 @@ export function Chat({
           value={system}
           onChange={(e) => setSystem(e.target.value)}
         />
-        <button onClick={() => setMessages([])} disabled={busy}>New chat</button>
+        <button onClick={() => setMessages([])} disabled={busy}><Icon name="message-plus" />New chat</button>
       </div>
       <div className="messages">
         {messages.map((m, i) => (
@@ -203,7 +204,7 @@ export function Chat({
                 title={m.role === "user" ? "Show the JSON sent" : "Show the JSON received"}
                 onClick={() => setTraceView({ trace: m.trace!, side: m.role === "user" ? "sent" : "received" })}
               >
-                {"{ }"}
+                <Icon name="braces" />
               </button>
             )}
             {m.content || (busy ? "…" : "")}
@@ -239,9 +240,9 @@ export function Chat({
           }}
         />
         {busy ? (
-          <button type="button" onClick={() => abort.current?.abort()}>Stop</button>
+          <button type="button" onClick={() => abort.current?.abort()}><Icon name="player-stop" />Stop</button>
         ) : (
-          <button type="submit" disabled={!input.trim()}>Send</button>
+          <button type="submit" disabled={!input.trim()}><Icon name="send" />Send</button>
         )}
       </form>
     </div>
@@ -283,11 +284,11 @@ function TraceDialog({
       <div className="trace-dialog" onClick={(e) => e.stopPropagation()}>
         <div className="trace-header">
           <div className="tabs">
-            <button className={side === "sent" ? "active" : ""} onClick={() => onSide("sent")}>Sent</button>
-            <button className={side === "received" ? "active" : ""} onClick={() => onSide("received")}>Received</button>
+            <button className={side === "sent" ? "active" : ""} onClick={() => onSide("sent")}><Icon name="arrow-up-right" />Sent</button>
+            <button className={side === "received" ? "active" : ""} onClick={() => onSide("received")}><Icon name="arrow-down-left" />Received</button>
           </div>
-          <button onClick={() => navigator.clipboard.writeText(all.map(([, v]) => text(v)).join("\n\n"))}>Copy</button>
-          <button onClick={onClose}>Close</button>
+          <button onClick={() => navigator.clipboard.writeText(all.map(([, v]) => text(v)).join("\n\n"))}><Icon name="copy" />Copy</button>
+          <button onClick={onClose}><Icon name="x" />Close</button>
         </div>
         {all.map(([title, value]) => (
           <section key={title}>

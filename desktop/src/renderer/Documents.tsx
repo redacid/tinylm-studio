@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { DocumentFilter, DocumentInfo, EngineClient } from "./api";
+import { Icon } from "./Icon";
 
 const PAGE_SIZE = 50;
 
@@ -96,7 +97,7 @@ export function Documents({
               <td className="nowrap">{new Date(d.created_at).toLocaleString()}</td>
               <td className="nowrap">{d.chars < 1000 ? `${d.chars} chars` : `${Math.round(d.chars / 1000)}k chars`}</td>
               <td>{d.chunks}</td>
-              <td><button onClick={() => onDelete(d.id)}>Delete</button></td>
+              <td><button onClick={() => onDelete(d.id)}><Icon name="trash" />Delete</button></td>
             </tr>
           ))}
         </tbody>
@@ -124,9 +125,9 @@ function Pager({
 }) {
   return (
     <span className="pager">
-      <button disabled={offset === 0} onClick={() => onChange(Math.max(0, offset - PAGE_SIZE))}>‹ Previous</button>
+      <button disabled={offset === 0} onClick={() => onChange(Math.max(0, offset - PAGE_SIZE))}><Icon name="chevron-left" />Previous</button>
       <span className="muted">{total === 0 ? "0" : `${offset + 1}–${last}`} of {total}</span>
-      <button disabled={last >= total} onClick={() => onChange(offset + PAGE_SIZE)}>Next ›</button>
+      <button disabled={last >= total} onClick={() => onChange(offset + PAGE_SIZE)}>Next<Icon name="chevron-right" /></button>
     </span>
   );
 }

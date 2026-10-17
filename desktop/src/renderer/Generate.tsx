@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Collection, EngineClient, GenerationJob, GenerationOptions, Served, Teacher, TeacherRequest } from "./api";
 import { useTabActive } from "./tabActive";
+import { Icon } from "./Icon";
 
 const LANGUAGES = [
   ["uk", "Ukrainian"],
@@ -125,7 +126,7 @@ export function GeneratePanel({
       <form className="training-form" onSubmit={start}>
         <div className="websites-head">
           <strong>Generate examples</strong>
-          <button type="button" onClick={onClose}>Close</button>
+          <button type="button" onClick={onClose}><Icon name="x" />Close</button>
         </div>
         <p className="muted">
           A larger teacher model reads documents of a collection and writes question and answer pairs from them. With
@@ -215,9 +216,9 @@ export function GeneratePanel({
           </label>
           <span className="buttons">
             {running ? (
-              <button type="button" onClick={() => client.cancelGeneration(job.id).catch(report)}>Stop</button>
+              <button type="button" onClick={() => client.cancelGeneration(job.id).catch(report)}><Icon name="player-stop" />Stop</button>
             ) : (
-              <button type="submit" disabled={!options.collection || !options.teacher || unused === 0}>Generate</button>
+              <button type="submit" disabled={!options.collection || !options.teacher || unused === 0}><Icon name="sparkles" />Generate</button>
             )}
           </span>
         </div>
@@ -304,6 +305,7 @@ function TeacherRequests({ requests }: { requests: TeacherRequest[] }) {
       </table>
       {requests.length > 10 && (
         <button type="button" onClick={() => setAll(!all)}>
+          <Icon name={all ? "eye-off" : "eye"} />
           {all ? "Show the last 10" : `Show all ${requests.length}`}
         </button>
       )}

@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { CrawlJob, EngineClient, SearchKind, SearchOutcome, SearchResult, SearchSettings } from "./api";
 import { PROVIDER_TITLES } from "./SearchSettings";
 import { CrawlProgress } from "./Websites";
+import { Icon } from "./Icon";
 
 /**
  * Finds pages and videos on the web and adds them to a collection: pages are downloaded and
@@ -169,7 +170,7 @@ export function Search({
           <option value="ru">Русский</option>
           <option value="en">English</option>
         </select>
-        <button type="submit" disabled={busy || !query.trim()}>{busy ? "Searching…" : "Search"}</button>
+        <button type="submit" disabled={busy || !query.trim()}><Icon name={busy ? "loader-2" : "search"} spin={busy} />{busy ? "Searching…" : "Search"}</button>
       </form>
       <SearchSummary settings={searchSettings} outcome={outcome} />
       {error && <p className="error">{error}</p>}
@@ -196,14 +197,16 @@ export function Search({
             {kind === "web" ? (
               <>
                 <button onClick={saveSites} disabled={chosen.length === 0} title="Save the sites of the selected pages, to crawl them further now and later">
-                  Save as websites
+                  <Icon name="world-plus" />Save as websites
                 </button>
                 <button onClick={addPages} disabled={chosen.length === 0 || job?.state === "running"}>
+                  <Icon name={job?.state === "running" ? "loader-2" : "file-plus"} spin={job?.state === "running"} />
                   {job?.state === "running" ? "Adding…" : `Add ${chosen.length} page${chosen.length === 1 ? "" : "s"}`}
                 </button>
               </>
             ) : (
               <button onClick={addLinks} disabled={chosen.length === 0 || adding} title="Keep title, address and description so answers can cite them">
+                <Icon name={adding ? "loader-2" : "link"} spin={adding} />
                 {adding ? "Adding…" : `Add ${chosen.length} link${chosen.length === 1 ? "" : "s"}`}
               </button>
             )}

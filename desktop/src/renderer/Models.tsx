@@ -14,6 +14,7 @@ import { HubSearch } from "./HubSearch";
 import { ModelSettingsForm } from "./ModelSettingsForm";
 import { Teachers } from "./Teachers";
 import { useTabActive } from "./tabActive";
+import { Icon } from "./Icon";
 
 const FORMATS: Record<InstalledModel["format"], string> = {
   gguf: "GGUF, llama.cpp",
@@ -145,11 +146,11 @@ export function Models({ client }: { client: EngineClient }) {
         {usedBy.length > 0 && (
           <div className="error">Fine-tuned models {usedBy.join(", ")} need it and stop working.</div>
         )}
-        <button className="danger" onClick={() => remove(id)}>Delete</button>{" "}
-        <button onClick={() => setConfirmDelete(null)}>Cancel</button>
+        <button className="danger" onClick={() => remove(id)}><Icon name="trash" />Delete</button>{" "}
+        <button onClick={() => setConfirmDelete(null)}><Icon name="x" />Cancel</button>
       </>
     ) : (
-      <button onClick={() => setConfirmDelete(id)}>Delete</button>
+      <button onClick={() => setConfirmDelete(id)}><Icon name="trash" />Delete</button>
     );
 
   const saveButton = (id: string) => (
@@ -158,13 +159,14 @@ export function Models({ client }: { client: EngineClient }) {
       disabled={busy}
       title="Saves the model to a file on this computer, for Import model on another engine"
     >
+      <Icon name="download" />
       Save to file
     </button>
   );
 
   const settingsButton = (id: string) =>
     byId.has(id) && (
-      <button onClick={() => setConfiguring(configuring === id ? null : id)}>Settings</button>
+      <button onClick={() => setConfiguring(configuring === id ? null : id)}><Icon name="settings" />Settings</button>
     );
 
   const settingsForm = (id: string) => {
@@ -195,6 +197,7 @@ export function Models({ client }: { client: EngineClient }) {
           disabled={busy}
           title="Uploads a model saved with Save to file, or a .gguf file, from this computer to the engine"
         >
+          <Icon name="upload" />
           Import model
         </button>
       </div>
@@ -291,6 +294,7 @@ export function Models({ client }: { client: EngineClient }) {
                             disabled={!m.base_installed || exports.some((x) => x.state === "running")}
                             onClick={() => setExporting(exporting === m.id ? null : m.id)}
                           >
+                            <Icon name="package-export" />
                             Export to GGUF
                           </button>
                         )}{" "}
@@ -343,7 +347,7 @@ export function Models({ client }: { client: EngineClient }) {
                 ) : m.download?.state === "downloading" ? (
                   "Downloading…"
                 ) : (
-                  <button onClick={() => download(m.id)}>Download</button>
+                  <button onClick={() => download(m.id)}><Icon name="download" />Download</button>
                 )}
               </td>
             </tr>
@@ -457,7 +461,7 @@ function ExportForm({ client, model, onDone }: { client: EngineClient; model: st
           <option key={c} value={c}>With data: {c}</option>
         ))}
       </select>
-      <button onClick={start}>Start export</button>
+      <button onClick={start}><Icon name="package-export" />Start export</button>
       {error && <div className="error">{error}</div>}
     </div>
   );

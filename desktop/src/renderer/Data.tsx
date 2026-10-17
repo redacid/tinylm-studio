@@ -4,6 +4,7 @@ import { Documents } from "./Documents";
 import { Search } from "./Search";
 import { Websites } from "./Websites";
 import { useTabActive } from "./tabActive";
+import { Icon } from "./Icon";
 
 export function Data({ client }: { client: EngineClient }) {
   const [collections, setCollections] = useState<Collection[]>([]);
@@ -139,10 +140,10 @@ export function Data({ client }: { client: EngineClient }) {
         ))}
         <form onSubmit={create}>
           <input placeholder="New collection" value={newName} onChange={(e) => setNewName(e.target.value)} />
-          <button type="submit" disabled={!newName.trim()}>Add</button>
+          <button type="submit" disabled={!newName.trim()}><Icon name="plus" />Add</button>
         </form>
         <label title="A file saved with Export on another engine: this computer's, a server's or a RunPod pod's">
-          <span className="button">Import collection</span>
+          <span className="button"><Icon name="file-import" />Import collection</span>
           <input type="file" accept=".jsonl" onChange={(e) => { importCollection(e.target.files); e.target.value = ""; }} disabled={!!progress} />
         </label>
       </aside>
@@ -155,27 +156,27 @@ export function Data({ client }: { client: EngineClient }) {
           <>
             <div className="actions">
               <label>
-                <span className="button">Add files</span>
+                <span className="button"><Icon name="file-plus" />Add files</span>
                 <input type="file" multiple onChange={(e) => upload(e.target.files)} disabled={!!progress} />
               </label>
               <label>
-                <span className="button">Add folder</span>
+                <span className="button"><Icon name="folder-open" />Add folder</span>
                 {/* @ts-expect-error webkitdirectory is supported by Chromium (Electron) */}
                 <input type="file" webkitdirectory="" onChange={(e) => upload(e.target.files)} disabled={!!progress} />
               </label>
               <button onClick={exportCollection} disabled={!!progress} title="Saves its documents to a file, for Import collection on another engine, e.g. a RunPod pod">
-                Export
+                <Icon name="file-export" />Export
               </button>
               {progress && <span className="muted">{progress}</span>}
               {confirmDelete ? (
                 <span className="danger">
                   Delete "{selected}" and all its documents?{" "}
-                  <button onClick={removeCollection}>Delete</button>{" "}
-                  <button onClick={() => setConfirmDelete(false)}>Cancel</button>
+                  <button onClick={removeCollection}><Icon name="trash" />Delete</button>{" "}
+                  <button onClick={() => setConfirmDelete(false)}><Icon name="x" />Cancel</button>
                 </span>
               ) : (
                 <button className="danger" onClick={() => setConfirmDelete(true)} disabled={!!progress}>
-                  Delete collection
+                  <Icon name="trash" />Delete collection
                 </button>
               )}
             </div>

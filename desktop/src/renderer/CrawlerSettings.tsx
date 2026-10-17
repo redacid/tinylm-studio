@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { CrawlerSettings, EngineClient } from "./api";
 import { Field } from "./SearchSettings";
+import { Icon } from "./Icon";
 
 type Draft = Record<keyof CrawlerSettings, string | boolean>;
 
@@ -223,11 +224,11 @@ export function CrawlerSettingsForm({
       {notice && <p className="notice">{notice}</p>}
       <div className="buttons-row">
         <button onClick={save} disabled={busy || !dirty}>
-          Save
+          <Icon name="device-floppy" />Save
         </button>
         {dirty && (
           <button onClick={() => setDraft(draftOf(saved))} disabled={busy}>
-            Discard changes
+            <Icon name="arrow-back-up" />Discard changes
           </button>
         )}
       </div>

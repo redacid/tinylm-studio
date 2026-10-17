@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CrawlJob, EngineClient, Website } from "./api";
 import { useTabActive } from "./tabActive";
+import { Icon } from "./Icon";
 
 type Draft = {
   name: string;
@@ -173,7 +174,7 @@ export function Websites({
     <div className="websites">
       <div className="websites-head">
         <strong>Websites</strong>
-        {editing === null && <button onClick={() => edit(null)}>Add website</button>}
+        {editing === null && <button onClick={() => edit(null)}><Icon name="world-plus" />Add website</button>}
       </div>
       {editing !== null && (
         <form onSubmit={(e) => save(e, true)}>
@@ -216,9 +217,9 @@ export function Websites({
               />
             </label>
             <span className="buttons">
-              <button type="button" onClick={() => setEditing(null)}>Cancel</button>
-              <button type="button" onClick={(e) => save(e, false)} disabled={!draft.urls.trim()}>Save</button>
-              <button type="submit" disabled={!draft.urls.trim()}>Save and crawl</button>
+              <button type="button" onClick={() => setEditing(null)}><Icon name="x" />Cancel</button>
+              <button type="button" onClick={(e) => save(e, false)} disabled={!draft.urls.trim()}><Icon name="device-floppy" />Save</button>
+              <button type="submit" disabled={!draft.urls.trim()}><Icon name="spider" />Save and crawl</button>
             </span>
           </div>
         </form>
@@ -248,18 +249,18 @@ export function Websites({
               </div>
               <div className="buttons">
                 {running ? (
-                  <button onClick={() => client.cancelCrawl(job.id)}>Stop</button>
+                  <button onClick={() => client.cancelCrawl(job.id)}><Icon name="player-stop" />Stop</button>
                 ) : (
-                  <button onClick={() => start(w.id)}>Crawl</button>
+                  <button onClick={() => start(w.id)}><Icon name="spider" />Crawl</button>
                 )}
-                <button onClick={() => edit(w)} disabled={running}>Edit</button>
+                <button onClick={() => edit(w)} disabled={running}><Icon name="pencil" />Edit</button>
                 {confirmDelete === w.id ? (
                   <>
-                    <button className="danger" onClick={() => remove(w.id)}>Delete</button>
-                    <button onClick={() => setConfirmDelete(null)}>Cancel</button>
+                    <button className="danger" onClick={() => remove(w.id)}><Icon name="trash" />Delete</button>
+                    <button onClick={() => setConfirmDelete(null)}><Icon name="x" />Cancel</button>
                   </>
                 ) : (
-                  <button onClick={() => setConfirmDelete(w.id)} disabled={running}>Delete</button>
+                  <button onClick={() => setConfirmDelete(w.id)} disabled={running}><Icon name="trash" />Delete</button>
                 )}
               </div>
             </div>

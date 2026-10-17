@@ -5,6 +5,7 @@ import {
   SearchSettings,
   SearchSettingsChanges,
 } from "./api";
+import { Icon } from "./Icon";
 
 export const PROVIDER_TITLES: Record<SearchProviderName, string> = {
   searxng: "SearXNG",
@@ -342,18 +343,19 @@ export function SearchSettingsForm({
       {notice && <p className="notice">{notice}</p>}
       <div className="buttons-row">
         <button onClick={save} disabled={busy || !dirty}>
-          Save
+          <Icon name="device-floppy" />Save
         </button>
         <button
           onClick={test}
           disabled={busy}
           title="Save, then search for a word to check the provider"
         >
+          <Icon name="flask" />
           Test search
         </button>
         {dirty && (
           <button onClick={() => setDraft(draftOf(saved))} disabled={busy}>
-            Discard changes
+            <Icon name="arrow-back-up" />Discard changes
           </button>
         )}
       </div>
@@ -410,9 +412,9 @@ function KeyField({
           onChange={(e) => onChange(e.target.value || undefined)}
         />
         {isSet && !removing && (
-          <button onClick={() => onChange("")}>Remove</button>
+          <button onClick={() => onChange("")}><Icon name="trash" />Remove</button>
         )}
-        {removing && <button onClick={() => onChange(undefined)}>Keep</button>}
+        {removing && <button onClick={() => onChange(undefined)}><Icon name="arrow-back-up" />Keep</button>}
       </span>
     </Field>
   );

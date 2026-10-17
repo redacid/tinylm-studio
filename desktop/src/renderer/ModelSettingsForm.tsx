@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { EngineClient, InstalledModel, ModelSettings } from "./api";
 import { Field, NumberInput } from "./Settings";
+import { Icon } from "./Icon";
 
 type NumberKey = Exclude<keyof ModelSettings, "thinking" | "collection">;
 
@@ -240,10 +241,10 @@ export function ModelSettingsForm({
       </div>
       <div className="buttons-row">
         <button className="primary" onClick={() => save(value)}>
-          Save
+          <Icon name="device-floppy" />Save
         </button>{" "}
-        <button onClick={() => save({})}>Reset to defaults</button>{" "}
-        <button onClick={onDone}>Cancel</button>
+        <button onClick={() => save({})}><Icon name="restore" />Reset to defaults</button>{" "}
+        <button onClick={onDone}><Icon name="x" />Cancel</button>
       </div>
       {error && <p className="error">{error}</p>}
     </div>

@@ -10,6 +10,7 @@ import { Settings } from "./Settings";
 import { Training } from "./Training";
 import { TabActive } from "./tabActive";
 import type { EngineState } from "./types";
+import { Icon, type IconName } from "./Icon";
 
 const PHASE_LABELS: Record<EngineState["phase"], string> = {
   "setting-up": "Setting up the Python environment…",
@@ -17,6 +18,14 @@ const PHASE_LABELS: Record<EngineState["phase"], string> = {
   ready: "Engine ready",
   error: "Engine error",
   stopped: "Engine stopped",
+};
+
+const PHASE_ICONS: Record<EngineState["phase"], { name: IconName; spin?: boolean }> = {
+  "setting-up": { name: "loader-2", spin: true },
+  starting: { name: "loader-2", spin: true },
+  ready: { name: "circle-check" },
+  error: { name: "alert-circle" },
+  stopped: { name: "circle-off" },
 };
 
 type Tab = "chat" | "data" | "datasets" | "training" | "evaluation" | "models" | "settings";
@@ -32,6 +41,16 @@ const TAB_LABELS: Record<Tab, string> = {
   evaluation: "Evaluation",
   models: "Models",
   settings: "Settings",
+};
+
+const TAB_ICONS: Record<Tab, IconName> = {
+  chat: "message",
+  data: "database",
+  datasets: "table",
+  training: "barbell",
+  evaluation: "chart-bar",
+  models: "cube",
+  settings: "settings",
 };
 
 export function App() {
@@ -62,11 +81,13 @@ export function App() {
         <nav>
           {(Object.keys(TAB_LABELS) as Tab[]).map((t) => (
             <button key={t} className={t === tab ? "active" : ""} onClick={() => setTab(t)}>
+              <Icon name={TAB_ICONS[t]} />
               {TAB_LABELS[t]}
             </button>
           ))}
         </nav>
         <span className={`status ${engine.phase}`}>
+          <Icon {...PHASE_ICONS[engine.phase]} />
           {PHASE_LABELS[engine.phase]}
           {engine.phase === "starting" && engine.where && ` · ${engine.where}`}
           {engine.phase === "starting" && engine.detail && ` · ${engine.detail}`}

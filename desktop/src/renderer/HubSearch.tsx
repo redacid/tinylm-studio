@@ -1,6 +1,7 @@
 import { FormEvent, useState } from "react";
 import { Download, EngineClient, HubFiles, HubFormat, HubModel } from "./api";
 import { formatSize } from "./format";
+import { Icon } from "./Icon";
 
 /** Finds open models on Hugging Face and downloads one GGUF file or the PyTorch weights. */
 export function HubSearch({
@@ -84,6 +85,7 @@ export function HubSearch({
           <option value="hf">PyTorch: can be fine-tuned</option>
         </select>
         <button type="submit" disabled={searching}>
+          <Icon name={searching ? "loader-2" : "search"} spin={searching} />
           {searching ? "Searching…" : "Search"}
         </button>
       </form>
@@ -145,6 +147,7 @@ export function HubSearch({
                 </td>
                 <td>
                   <button onClick={() => showFiles(m.repo)}>
+                    <Icon name={open === m.repo ? "eye-off" : "list-check"} />
                     {open === m.repo ? "Hide" : "Choose"}
                   </button>
                 </td>
@@ -173,6 +176,7 @@ function RepoFiles({
     return files.hf ? (
       <div className="repo-files">
         <button disabled={!!busy} onClick={() => onDownload()}>
+          <Icon name={busy ? "loader-2" : "download"} spin={!!busy} />
           {busy ?? `Download (${formatSize(files.hf.size)})`}
         </button>
       </div>
@@ -197,7 +201,7 @@ function RepoFiles({
             <td className="nowrap">{formatSize(f.size)}</td>
             <td>
               <button disabled={!!busy} onClick={() => onDownload(f.file)}>
-                Download
+                <Icon name="download" />Download
               </button>
             </td>
           </tr>

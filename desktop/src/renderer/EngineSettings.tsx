@@ -10,6 +10,7 @@ import type {
   RunPodCatalog,
   RunPodRequest,
 } from "./types";
+import { Icon } from "./Icon";
 
 const MODES: { mode: EngineMode; title: string; text: string }[] = [
   {
@@ -281,12 +282,13 @@ export function EngineSettingsForm({ engine }: { engine: EngineState }) {
                     disabled={busy}
                     onClick={() => podAction("start")}
                   >
+                    <Icon name="player-play" />
                     Start
                   </button>
                 )}
                 {pod && ACTIVE.includes(pod.status) && (
                   <button disabled={busy} onClick={() => podAction("stop")}>
-                    Stop
+                    <Icon name="player-stop" />Stop
                   </button>
                 )}
                 {confirmTerminate ? (
@@ -297,10 +299,11 @@ export function EngineSettingsForm({ engine }: { engine: EngineState }) {
                       disabled={busy}
                       onClick={() => podAction("terminate")}
                     >
+                      <Icon name="power" />
                       Terminate
                     </button>{" "}
                     <button onClick={() => setConfirmTerminate(false)}>
-                      Cancel
+                      <Icon name="x" />Cancel
                     </button>
                   </span>
                 ) : (
@@ -308,6 +311,7 @@ export function EngineSettingsForm({ engine }: { engine: EngineState }) {
                     disabled={busy}
                     onClick={() => setConfirmTerminate(true)}
                   >
+                    <Icon name="power" />
                     Terminate
                   </button>
                 )}
@@ -332,6 +336,7 @@ export function EngineSettingsForm({ engine }: { engine: EngineState }) {
                   disabled={busy || !(runpodKey || saved.runpod.apiKeySet)}
                   onClick={loadCatalog}
                 >
+                  <Icon name={catalog ? "refresh" : "download"} />
                   {catalog ? "Refresh lists" : "Load lists from RunPod"}
                 </button>
                 {catalog && (
@@ -350,9 +355,11 @@ export function EngineSettingsForm({ engine }: { engine: EngineState }) {
                   }
                   onClick={create}
                 >
+                  <Icon name="rocket" />
                   Create pod
                 </button>
                 <button onClick={() => setShowRequest(!showRequest)}>
+                  <Icon name={showRequest ? "eye-off" : "eye"} />
                   {showRequest ? "Hide request" : "Show request"}
                 </button>
               </div>
@@ -413,11 +420,12 @@ export function EngineSettingsForm({ engine }: { engine: EngineState }) {
       )}
       <div className="buttons-row">
         <button className="primary" disabled={busy} onClick={() => save(true)}>
+          <Icon name="plug-connected" />
           {connected ? "Save and reconnect" : "Connect"}
         </button>
         {mode !== "local" && (
           <button disabled={busy} onClick={() => save(false)}>
-            Save
+            <Icon name="device-floppy" />Save
           </button>
         )}
       </div>
