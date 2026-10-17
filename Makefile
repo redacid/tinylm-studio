@@ -159,18 +159,21 @@ search: ## Find pages on the web: make search Q="elden ring review" [VIDEO=1] [A
 ##@ Browser for crawling
 
 CDP_PORT ?= 9222
+# The languages the browser asks sites for (Accept-Language, navigator.languages); headless
+# Chrome sends none by default. The same as the crawler's plain HTTP requests.
+CDP_LANG ?= uk,ru,en
 # The container network of the helpers and the engine image (make run-image): there they reach
 # each other by name, e.g. http://tinylm-chrome:9222, as 127.0.0.1 in a container is itself.
 NETWORK ?= tinylm
 
 .PHONY: chrome
-chrome: ## Start a headless Chrome for crawling with Browser (CDP) on 127.0.0.1:CDP_PORT [CDP_PROXY=socks5://host:port]
+chrome: ## Start a headless Chrome for crawling with Browser (CDP) on 127.0.0.1:CDP_PORT [CDP_PROXY=socks5://host:port] [CDP_LANG=uk,en]
 	@test -n "$(CONTAINER)" || { echo "Install Docker or Podman, or start Chrome yourself (see the user guide)."; exit 1; }
 	-$(CONTAINER) rm -f tinylm-chrome >/dev/null 2>&1
 	-$(CONTAINER) network create $(NETWORK) >/dev/null 2>&1
 	$(CONTAINER) run -d --name tinylm-chrome --restart unless-stopped --shm-size=1g --network $(NETWORK) \
 		-p 127.0.0.1:$(CDP_PORT):9222 \
-		docker.io/chromedp/headless-shell:stable $(if $(CDP_PROXY),--proxy-server=$(CDP_PROXY))
+		docker.io/chromedp/headless-shell:stable --accept-lang=$(CDP_LANG) $(if $(CDP_PROXY),--proxy-server=$(CDP_PROXY))
 	@echo "Chrome's DevTools run on http://127.0.0.1:$(CDP_PORT) (Settings > Crawler > Browser address);"
 	@echo "from the engine image (make run-image): http://tinylm-chrome:9222"
 

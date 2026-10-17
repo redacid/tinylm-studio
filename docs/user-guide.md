@@ -737,13 +737,16 @@ The quickest is a headless Chrome in Docker or Podman:
 make chrome                                   # on http://127.0.0.1:9222
 make chrome CDP_PROXY=socks5://host:1080      # its traffic through a proxy
 make chrome CDP_PORT=9333                     # another port; change Browser address to match
+make chrome CDP_LANG=uk-UA,uk,en              # the languages it asks sites for (default uk,ru,en)
 make chrome-stop
 ```
 
 It runs `chromedp/headless-shell` and restarts with Docker. Inside the container, `127.0.0.1`
 and `localhost` are the container itself: for a site on your own machine use the host's
 address (with Docker on Linux usually `172.17.0.1`), and for a proxy on your machine too. The
-browser keeps no logins between restarts.
+browser keeps no logins between restarts. It asks sites for pages in `CDP_LANG`
+(`Accept-Language` and `navigator.languages`; headless Chrome sends no language of its own),
+like the crawler's plain HTTP requests; dates and numbers in scripts stay in `en-US`.
 
 An engine that runs in a container itself cannot reach the browser at `127.0.0.1`, which is
 its own container there. `make chrome`, `make searxng` and `make run-image` put their
