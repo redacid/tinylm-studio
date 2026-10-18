@@ -438,8 +438,9 @@ sees a token.
 4. Press **Test**. A tool that is not logged in says so; log in and test again.
 
 Things to know:
-- It only works where the tool is installed: an engine on this computer, not a container or a
-  RunPod pod.
+- It works where the tool is installed: on this computer, or in the engine's container image,
+  which has all three. In a container or a RunPod pod, log in from a shell in it (see
+  [deployment.md](deployment.md#container-image)); the logins are kept on its volume.
 - Answers count toward the subscription's usage limits. When a limit is reached the studio
   waits ten minutes and tries again, up to five times, then stops the run; a long generation
   can outlast a limit window.

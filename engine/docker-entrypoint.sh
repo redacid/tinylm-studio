@@ -8,4 +8,8 @@ if [ -z "$TINYLM_API_KEY" ] && [ -z "$TINYLM_ALLOW_NO_API_KEY" ]; then
     exit 1
 fi
 mkdir -p "$TINYLM_DATA_DIR"
+# The logins of the command-line tools (cli teachers), readable only here.
+for folder in "$CLAUDE_CONFIG_DIR" "$CODEX_HOME" "$GEMINI_CLI_HOME"; do
+    [ -n "$folder" ] && mkdir -p -m 700 "$folder"
+done
 exec "$@"

@@ -75,9 +75,10 @@ The engine image comes in two variants, each in two layers:
 - the **base** ([engine/Dockerfile.base](../engine/Dockerfile.base)): the system, Python,
   llama.cpp (compiled) and PyTorch, and every dependency of the engine. Building it takes long,
   the CUDA one most, and it changes only with the dependencies;
-- the **engine** ([engine/Dockerfile](../engine/Dockerfile)): the base plus the engine's code.
-  It builds in about a minute and adds a few megabytes, so a new engine build is quick to push,
-  and a pod whose host already has the base downloads only that.
+- the **engine** ([engine/Dockerfile](../engine/Dockerfile)): the base plus the command-line
+  tools of subscriptions (about 1 GB, see below) and the engine's code. It builds in about a
+  minute; the tools' layer is reused while their versions stay, so a new engine build adds a few
+  megabytes to push, and a pod whose host already has the earlier layers downloads only that.
 
 | Variant | Base | For |
 |---|---|---|
@@ -129,6 +130,16 @@ use, and points the engine at them by name (`http://tinylm-chrome:9222`,
   from outside; set `TINYLM_ALLOW_NO_API_KEY=1` to run it without one on a private network.
 - Pass `HF_TOKEN` for gated models. The embedding model and models are downloaded on first use,
   into the volume.
+- **Subscription tools.** The engine image has Claude Code, Codex CLI and Gemini CLI, on their
+  own Node.js in `/opt/node`, for [subscription teachers](user-guide.md#subscriptions-through-a-command-line-tool).
+  Their versions are build arguments (`NODE_VERSION`, `CLAUDE_CODE_VERSION`, `CODEX_VERSION`,
+  `GEMINI_CLI_VERSION`); Claude Code's own updater is off. Their logins are kept on the volume
+  in `/workspace/tinylm-studio/cli-logins` (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`,
+  `GEMINI_CLI_HOME`), so they outlast the container. Log in once from a shell in the container:
+  `docker exec -it <container> claude` (then `/login`), `docker exec -it <container> codex login
+  --device-auth`, `docker exec -it <container> gemini` (choose *Login with Google*); on RunPod,
+  run the same commands in the pod's web terminal or over SSH. Each tool prints a link to open
+  in your browser and asks for the code it shows, or waits for you to confirm there.
 - With the CUDA image the embedding model runs on the GPU (`TINYLM_EMBEDDING_DEVICE=auto`), so
   imported collections and uploads are indexed many times faster than on a CPU.
 
