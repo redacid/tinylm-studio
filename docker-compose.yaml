@@ -9,11 +9,13 @@
 # TINYLM_API_KEY is required. Connect the desktop app under Settings > Engine to
 # http://127.0.0.1:8765 with that key.
 
-name: tinylm
+name: tinylm-stack
 
 services:
   engine:
-    image: ${TINYLM_IMAGE:-tinylm-engine:cpu}
+    image: ${TINYLM_IMAGE:-redacid/tinylm-engine:cpu}
+    # NVIDIA GPU
+    # image: ${TINYLM_IMAGE:-redacid/tinylm-engine:cuda}
     restart: unless-stopped
     depends_on: [searxng, chrome]
     ports:
