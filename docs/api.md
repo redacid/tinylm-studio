@@ -465,6 +465,23 @@ out or `null`, each request uses its own:
 | POST | `/api/teachers/models` | The same body (or with `id` to use a saved key): the provider's models as `id`, `name`, `free`, free ones first; 502 with the provider's error |
 | POST | `/api/teachers/test` | The same body: sends "Say OK." and returns `{"reply": "OK", "served": {"model": "...", "provider": "..."}}`; 502 with the reason (rejected key, not reachable, unknown model) |
 
+### Subscription tools
+
+The command-line tools of `cli` teachers (`claude`, `codex`, `gemini`), logged in from the app.
+The logins are the engine's, in `<data dir>/cli-logins/<tool>` (`TINYLM_CLI_HOME`), and the
+engine runs the tools with them (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `GEMINI_CLI_HOME`) and
+without API keys in their environment. A login runs `claude auth login`, `codex login
+--device-auth` or Gemini CLI in a pseudo-terminal; the user opens `url` in a browser and, for
+Claude Code and Gemini CLI, sends the code the page shows.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/api/cli-tools` | Each tool: `tool`, `name`, `installed`, `version`, `logged_in`, `account` (when the tool says), `login` (the last login: `state` `running`, `done`, `failed` or `cancelled`, `output` without terminal codes, `url`, `wants_code`, `error`) |
+| POST | `/api/cli-tools/{tool}/login` | Starts a login (one still running is stopped); returns the tool as above; 409 when it is not installed, 404 for another tool |
+| POST | `/api/cli-tools/{tool}/login/code` | `{"code": "..."}` from the login page; 409 when the login waits for none |
+| DELETE | `/api/cli-tools/{tool}/login` | Stops a login; 204 |
+| POST | `/api/cli-tools/{tool}/logout` | Logs the tool out; returns the tool |
+
 ## Fine-tuning
 
 A training run teaches a base model with PyTorch weights (e.g. `qwen3-0.6b`) the answers of a
@@ -549,4 +566,5 @@ POST /api/evaluations
 | `TINYLM_SEARXNG_URL` | `http://127.0.0.1:8888` | SearXNG address (`make searxng` starts one) |
 | `TINYLM_SEARCH_INCLUDE_DOMAINS` / `TINYLM_SEARCH_EXCLUDE_DOMAINS` | `[]` | Only / never these sites (JSON list of domains or patterns like `*.ua`) |
 | `TINYLM_BRAVE_API_KEY`, `TINYLM_TAVILY_API_KEY`, `TINYLM_EXA_API_KEY`, `TINYLM_PERPLEXITY_API_KEY`, `TINYLM_SERPER_API_KEY` | none | API keys of the hosted search providers |
+| `TINYLM_CLI_HOME` | `<data dir>/cli-logins` | Where the subscription tools of `cli` teachers keep the logins made in the app |
 | `TINYLM_LLAMA_CPP_DIR` | none | A llama.cpp checkout whose `convert_hf_to_gguf.py` exports to GGUF; by default the converter is downloaded once from PyPI |

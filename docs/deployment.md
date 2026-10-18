@@ -135,11 +135,10 @@ use, and points the engine at them by name (`http://tinylm-chrome:9222`,
   Their versions are build arguments (`NODE_VERSION`, `CLAUDE_CODE_VERSION`, `CODEX_VERSION`,
   `GEMINI_CLI_VERSION`); Claude Code's own updater is off. Their logins are kept on the volume
   in `/workspace/tinylm-studio/cli-logins` (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`,
-  `GEMINI_CLI_HOME`), so they outlast the container. Log in once from a shell in the container:
-  `docker exec -it <container> claude` (then `/login`), `docker exec -it <container> codex login
-  --device-auth`, `docker exec -it <container> gemini` (choose *Login with Google*); on RunPod,
-  run the same commands in the pod's web terminal or over SSH. Each tool prints a link to open
-  in your browser and asks for the code it shows, or waits for you to confirm there.
+  `GEMINI_CLI_HOME`), so they outlast the container. Log them in from the app, under
+  [Settings › Subscriptions](user-guide.md#subscriptions), like an engine on this computer. A
+  shell in the container works too, with the same folders: `docker exec -it <container> claude`
+  (then `/login`), `codex login --device-auth` or `gemini`; on RunPod in the pod's web terminal.
 - With the CUDA image the embedding model runs on the GPU (`TINYLM_EMBEDDING_DEVICE=auto`), so
   imported collections and uploads are indexed many times faster than on a CPU.
 

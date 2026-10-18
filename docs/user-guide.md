@@ -422,25 +422,24 @@ A teacher can answer with a subscription instead of an API key, through the subs
 command-line tool: **Claude Code** (`claude`, a Claude Pro or Max plan), **Codex CLI**
 (`codex`, a ChatGPT plan) or **Gemini CLI** (`gemini`, a Google account). The engine runs the
 tool headless for every request, in an empty folder and without its tools (it cannot read
-files or run commands), and reads the answer. The tool keeps its own login: the studio never
-sees a token.
+files or run commands), and reads the answer. The login is the engine's own: you log each tool
+in once under **Settings › Subscriptions**, and the engine keeps it in its data folder.
 
 ![A Claude subscription as a teacher](images/teacher-cli.png)
 
-1. Install the tool on the computer the engine runs on, and log in once in a terminal:
-   `claude` (then `/login`), `codex login`, or `gemini` (choose *Login with Google*).
+1. Install the tool on the computer the engine runs on (the engine's container image has all
+   three), and log it in under [Settings › Subscriptions](#subscriptions).
 2. Press **Add teacher** and choose *Claude subscription (Claude Code)*, *ChatGPT subscription
    (Codex CLI)* or *Google account (Gemini CLI)*. **Program** is the command, or its full path
    when the engine does not find it on its `PATH`.
 3. **Model** is optional: empty leaves it to the tool. Claude Code takes `sonnet`, `opus` and
    `haiku` (**List models** offers them) or a full model id; the others take their own model
    names.
-4. Press **Test**. A tool that is not logged in says so; log in and test again.
+4. Press **Test**. A tool that is not logged in says so; log it in and test again.
 
 Things to know:
 - It works where the tool is installed: on this computer, or in the engine's container image,
-  which has all three. In a container or a RunPod pod, log in from a shell in it (see
-  [deployment.md](deployment.md#container-image)); the logins are kept on its volume.
+  which has all three. A container or a RunPod pod keeps the logins on its volume.
 - Answers count toward the subscription's usage limits. When a limit is reached the studio
   waits ten minutes and tries again, up to five times, then stops the run; a long generation
   can outlast a limit window.
@@ -597,7 +596,8 @@ reports are kept until you delete them.
 ## Settings
 
 The **Settings** tab holds the app's own settings, saved as you change them and kept after a
-restart, except the search and crawler settings, which the engine keeps. The engine's other
+restart, except the search and crawler settings and the subscriptions' logins, which the engine
+keeps. The engine's other
 settings (proxy, hardware, folders) go into `.env`; see below.
 
 ### Engine
@@ -760,6 +760,29 @@ variables in the table only give the defaults. Changes apply to crawls started a
 
 Pages, depth, requests per minute and fetching are only where a new website starts: each saved website
 keeps its own values, changed in its form on the Data tab.
+
+### Subscriptions
+
+Settings › **Subscriptions** logs the command-line tools of
+[subscription teachers](#subscriptions-through-a-command-line-tool) in: Claude Code, Codex CLI
+and Gemini CLI, on the computer the engine runs on, also a remote engine or a RunPod pod. Each
+tool shows its version and whether it is logged in, and as whom when it says.
+
+![Logging the subscriptions' tools in](images/subscriptions.png)
+
+Press **Log in**, then **Open the login page** (or **Copy link** to open it on another
+computer) and sign in there:
+- **Claude Code** (a Claude Pro or Max plan): the page shows a code; paste it and press
+  **Send**.
+- **Codex CLI** (a ChatGPT plan): enter the one-time code shown here on the page. The login
+  finishes by itself once you confirm it there.
+- **Gemini CLI** (a Google account): the page shows an authorization code; paste it and press
+  **Send**.
+
+The logins are the engine's, in `<data dir>/cli-logins` (`TINYLM_CLI_HOME`), on the volume of a
+container or pod; they are not the ones you may have in a terminal on this computer, and another
+engine needs its own. **Log out** removes one. **The tool's output** shows what the tool printed,
+which helps when a login fails. A login nobody finishes stops after 15 minutes.
 
 ### Logs
 

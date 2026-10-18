@@ -5,16 +5,18 @@ import { CrawlerSettingsForm } from "./CrawlerSettings";
 import { EngineSettingsForm } from "./EngineSettings";
 import { Logs } from "./Logs";
 import { SearchSettingsForm } from "./SearchSettings";
+import { SubscriptionsForm } from "./Subscriptions";
 import type { EngineState } from "./types";
 import { Icon, type IconName } from "./Icon";
 
-type Section = "engine" | "chat" | "search" | "crawler" | "logs";
+type Section = "engine" | "chat" | "search" | "crawler" | "subscriptions" | "logs";
 
 const SECTIONS: Record<Section, string> = {
   engine: "Engine",
   chat: "Chat settings",
   search: "Search settings",
   crawler: "Crawler settings",
+  subscriptions: "Subscriptions",
   logs: "Logs",
 };
 
@@ -23,6 +25,7 @@ const SECTION_ICONS: Record<Section, IconName> = {
   chat: "message",
   search: "search",
   crawler: "spider",
+  subscriptions: "key",
   logs: "list",
 };
 
@@ -50,7 +53,8 @@ export function Settings({
           </button>
         ))}
         <p className="muted">
-          Engine and chat settings are kept by this app; search and crawler settings by the engine. Other engine settings (proxy,
+          Engine and chat settings are kept by this app; search and crawler settings and the subscriptions' logins by
+          the engine. Other engine settings (proxy,
           hardware, models folder) are in <code>.env</code>; see the user guide.
         </p>
       </aside>
@@ -59,6 +63,7 @@ export function Settings({
         {section === "chat" && <ChatSettingsForm value={chat} onChange={onChat} />}
         {section === "search" && <SearchSettingsForm client={client} />}
         {section === "crawler" && <CrawlerSettingsForm client={client} />}
+        {section === "subscriptions" && <SubscriptionsForm client={client} />}
         {section === "logs" && <Logs client={client} engine={engine} />}
       </section>
     </div>

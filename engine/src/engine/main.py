@@ -7,6 +7,7 @@ from engine import __version__
 from engine.api import (
     admin,
     anthropic,
+    cli_tools,
     datasets,
     evaluations,
     exports,
@@ -31,6 +32,7 @@ from engine.models.transfer import ModelUploads
 from engine.rag.embeddings import HashEmbedder, SentenceTransformerEmbedder
 from engine.rag.store import KnowledgeStore
 from engine.rag.transfer import ImportManager
+from engine.teachers.cli_tools import CliTools
 from engine.teachers.store import TeacherStore
 from engine.training.jobs import TrainingManager
 from engine.web.crawl_settings import CrawlSettingsStore
@@ -87,7 +89,8 @@ def create_app(
     # A new search client per request, so a changed setting or a missing key shows up at once.
     app.state.search_settings = search_settings(settings)
     app.state.datasets = DatasetStore(app.state.knowledge)
-    app.state.teachers = TeacherStore(app.state.knowledge, app.state.models)
+    app.state.cli_tools = CliTools(settings.cli_logins_dir)
+    app.state.teachers = TeacherStore(app.state.knowledge, app.state.models, app.state.cli_tools)
     app.state.models.teachers = app.state.teachers
     app.state.generations = GenerationManager(
         Generator(app.state.knowledge, app.state.datasets, app.state.teachers)
@@ -148,6 +151,7 @@ def create_app(
     app.include_router(datasets.router)
     app.include_router(training.router)
     app.include_router(teachers.router)
+    app.include_router(cli_tools.router)
     app.include_router(generations.router)
     app.include_router(evaluations.router)
     app.include_router(exports.router)

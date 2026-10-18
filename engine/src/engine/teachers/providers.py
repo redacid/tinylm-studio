@@ -517,7 +517,7 @@ def transcript(messages: list[Message]) -> tuple[str, str]:
 class CliTeacher:
     """A subscription's command-line tool (Claude Code, Codex, Gemini CLI) run headless, one
     process per request, without its tools. It answers with the account it is logged in with,
-    so the user logs in once in a terminal (claude, codex login, gemini)."""
+    which the user logs in once in the app (Settings › Subscriptions, see cli_tools.py)."""
 
     def __init__(
         self,
@@ -534,6 +534,9 @@ class CliTeacher:
         self.timeout = timeout
         self.options = options or AnswerOptions()
         self.last_served: dict | None = None
+        # The environment the tool runs in, with the engine's logins (CliTools.environment());
+        # None: the engine's own without API keys.
+        self.environment: dict | None = None
 
     def complete(
         self, system: str, prompt: str, max_tokens: int = 2048, temperature: float = 0.7
@@ -583,6 +586,8 @@ class CliTeacher:
                 "--prompt", ""], stdin  # fmt: skip
 
     def _environment(self) -> dict:
+        if self.environment is not None:
+            return self.environment
         return {k: v for k, v in os.environ.items() if k not in API_KEY_VARIABLES}
 
     def _run(self, args: list[str], stdin: str) -> str:
@@ -620,8 +625,9 @@ class CliTeacher:
         if any(w in lowered for w in LIMIT_WORDS):
             raise RateLimited(f"{self.name}: {message}", LIMIT_WAIT)
         if any(w in lowered for w in LOGIN_WORDS):
-            command = {"claude": "claude", "codex": "codex login", "gemini": "gemini"}[self.tool]
-            raise TeacherError(f"{self.name} is not logged in: run {command} in a terminal")
+            raise TeacherError(
+                f"{self.name} is not logged in: log in under Settings › Subscriptions"
+            )
         raise TeacherError(f"{self.name}: {message}")
 
     def _claude_answer(self, events: list[dict]) -> str:

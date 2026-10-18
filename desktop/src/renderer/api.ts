@@ -288,6 +288,29 @@ export type TeacherInput = {
 
 export type TeacherModel = { id: string; name: string; free: boolean };
 
+/** A subscription's command-line tool on the engine (cli teachers) and its login. */
+export type CliTool = {
+  tool: "claude" | "codex" | "gemini";
+  name: string;
+  installed: boolean;
+  version: string | null;
+  logged_in: boolean;
+  /** Who is logged in, when the tool says. */
+  account: string | null;
+  login: CliLogin | null;
+};
+
+export type CliLogin = {
+  state: "running" | "done" | "failed" | "cancelled";
+  /** The tool's output, without terminal codes. */
+  output: string;
+  /** The link to open in a browser. */
+  url: string | null;
+  /** Waiting for the code the login page shows (Claude Code, Gemini CLI). */
+  wants_code: boolean;
+  error: string | null;
+};
+
 export type GenerationOptions = {
   collection: string;
   teacher: string;
@@ -747,6 +770,30 @@ export class EngineClient {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(teacher),
     });
+  }
+
+  async cliTools(): Promise<CliTool[]> {
+    return (await this.json<{ data: CliTool[] }>("/api/cli-tools")).data;
+  }
+
+  async cliLogin(tool: string): Promise<CliTool> {
+    return this.json<CliTool>(`/api/cli-tools/${tool}/login`, { method: "POST" });
+  }
+
+  async cliLoginCode(tool: string, code: string): Promise<void> {
+    await this.send(`/api/cli-tools/${tool}/login/code`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ code }),
+    });
+  }
+
+  async cliLoginCancel(tool: string): Promise<void> {
+    await this.send(`/api/cli-tools/${tool}/login`, { method: "DELETE" });
+  }
+
+  async cliLogout(tool: string): Promise<CliTool> {
+    return this.json<CliTool>(`/api/cli-tools/${tool}/logout`, { method: "POST" });
   }
 
   async evaluations(): Promise<Evaluation[]> {

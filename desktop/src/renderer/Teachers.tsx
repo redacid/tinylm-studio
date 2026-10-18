@@ -13,20 +13,12 @@ const PROVIDERS = [
   { label: "Anthropic", kind: "anthropic", base_url: "https://api.anthropic.com", per_minute: null },
   { label: "Ollama (this computer)", kind: "openai", base_url: "http://localhost:11434/v1", per_minute: null },
   { label: "LM Studio (this computer)", kind: "openai", base_url: "http://localhost:1234/v1", per_minute: null },
-  // Subscriptions: the engine runs the tool, logged in once in a terminal.
+  // Subscriptions: the engine runs the tool, logged in once under Settings › Subscriptions.
   { label: "Claude subscription (Claude Code)", kind: "cli", base_url: "claude", per_minute: null },
   { label: "ChatGPT subscription (Codex CLI)", kind: "cli", base_url: "codex", per_minute: null },
   { label: "Google account (Gemini CLI)", kind: "cli", base_url: "gemini", per_minute: null },
 ] as const;
 
-/** The command that logs each tool in, shown with a cli teacher. */
-const LOGIN: Record<string, string> = { claude: "claude", codex: "codex login", gemini: "gemini" };
-
-function loginCommand(program: string): string {
-  const name = program.split("/").pop() ?? "";
-  const tool = Object.keys(LOGIN).find((t) => name.startsWith(t));
-  return tool ? LOGIN[tool] : program;
-}
 
 const EMPTY: TeacherInput = {
   id: null,
@@ -168,8 +160,8 @@ export function Teachers({ client }: { client: EngineClient }) {
           {cli && (
             <p className="muted">
               The engine runs <code>{editing.base_url || "claude"}</code> on its computer for every request, without its
-              tools. Log in there once in a terminal with <code>{loginCommand(editing.base_url || "claude")}</code>; the
-              answers then count toward that subscription's limits, and the studio never sees a token.
+              tools. Log the tool in once under <strong>Settings › Subscriptions</strong>; the answers then count toward
+              that subscription's limits.
             </p>
           )}
           {!cli && <label>

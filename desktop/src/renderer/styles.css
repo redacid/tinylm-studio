@@ -406,3 +406,14 @@ label.check { display: inline-flex; align-items: center; gap: 4px; cursor: point
 .log-good { color: var(--ok); font-weight: 600; }
 .log-bad { color: var(--bad); font-weight: 600; }
 .log-entry.warning .log-more { border-color: var(--warn); color: var(--warn); }
+
+/* Settings › Subscriptions */
+.cli-tool { background: var(--card); box-shadow: var(--shadow); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin: 0; }
+.cli-tool-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cli-tool-actions { margin-left: auto; display: flex; gap: 8px; }
+.cli-login { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+.cli-login p { margin: 0; }
+.cli-login a.button { color: inherit; text-decoration: none; }
+.device-code { font-size: 16px; font-weight: 600; letter-spacing: 1px; }
+.cli-output summary { cursor: pointer; color: var(--muted); font-size: 12px; margin-top: 6px; }
+.cli-output pre { max-height: 160px; overflow: auto; font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface); padding: 6px 8px; border-radius: 6px; }

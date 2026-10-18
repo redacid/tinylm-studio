@@ -39,8 +39,9 @@ Models screen:
 - [ ] Subscription teachers (proof of concept): try Claude Code, Codex CLI and Gemini CLI logged
       in on the target machine; check their error texts for a reached usage limit and a missing
       login against the ones the engine expects; measure seconds per request.
-- [ ] Build the engine image with the subscription tools (`make image`, cpu and cuda) and log
-      in to each from `docker exec` and from a RunPod pod's web terminal.
+- [ ] Log each subscription tool in from Settings › Subscriptions with a real account, on this
+      computer and on a RunPod pod: check the link, the code step and the account shown
+      (Claude Code's `auth status` may not name the account).
 - [ ] Evaluation on the target machine: qwen3-0.6b against its fine-tune on a generated
       dataset, judged by an OpenRouter free model; check that judge scores agree with a manual
       read of 20 answers.

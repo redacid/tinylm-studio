@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from engine.api.deps import require_api_key
 from engine.teachers.providers import TeacherError, cli_tool
-from engine.teachers.store import TeacherConfig, TeacherNotFound, TeacherStore, client
+from engine.teachers.store import TeacherConfig, TeacherNotFound, TeacherStore
 
 router = APIRouter(
     prefix="/api/teachers", dependencies=[Depends(require_api_key)], tags=["teachers"]
@@ -99,7 +99,7 @@ def delete_teacher(teacher_id: int, store: TeacherStore = Depends(teachers)) -> 
 def provider_models(body: TeacherRequest, store: TeacherStore = Depends(teachers)) -> dict:
     """The provider's models, free ones first (OpenRouter marks them)."""
     try:
-        return {"data": client(config(body, store)).models()}
+        return {"data": store.client(config(body, store)).models()}
     except TeacherError as e:
         raise HTTPException(502, str(e)) from None
 
@@ -107,7 +107,7 @@ def provider_models(body: TeacherRequest, store: TeacherStore = Depends(teachers
 @router.post("/test")
 def test_teacher(body: TeacherRequest, store: TeacherStore = Depends(teachers)) -> dict:
     """Sends a tiny request to check the address, key and model."""
-    teacher = client(config(body, store))
+    teacher = store.client(config(body, store))
     try:
         reply = teacher.complete("Reply with one word.", "Say OK.", max_tokens=16, temperature=0)
     except TeacherError as e:

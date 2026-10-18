@@ -16,7 +16,8 @@ tool = os.path.basename(sys.argv[0])
 stdin = sys.stdin.read()
 with open(os.path.join({seen!r}, tool + ".json"), "w") as f:
     json.dump({{"args": sys.argv[1:], "stdin": stdin, "cwd": os.getcwd(),
-               "key": os.environ.get("ANTHROPIC_API_KEY")}}, f)
+               "key": os.environ.get("ANTHROPIC_API_KEY"),
+               "home": os.environ.get("CLAUDE_CONFIG_DIR")}}, f)
 if "LOGIN" in stdin and tool == "gemini":
     print("Error:", json.dumps({{"error": {{"message": "Please set an Auth method"}}}}, indent=2),
           file=sys.stderr); sys.exit(41)
@@ -108,9 +109,9 @@ def test_chat_with_a_tool(tools):
 
 def test_tool_errors(tools):
     folder, _ = tools
-    with pytest.raises(TeacherError, match="not logged in: run codex login"):
+    with pytest.raises(TeacherError, match="not logged in: log in under Settings"):
         CliTeacher(str(folder / "codex")).complete("", "LOGIN")
-    with pytest.raises(TeacherError, match="not logged in: run gemini"):
+    with pytest.raises(TeacherError, match="not logged in: log in under Settings"):
         CliTeacher(str(folder / "gemini")).complete("", "LOGIN")
     with pytest.raises(RateLimited, match="usage limit"):
         CliTeacher(str(folder / "claude")).complete("", "LIMIT")
@@ -120,12 +121,14 @@ def test_tool_errors(tools):
         CliTeacher("bash")
 
 
-def test_saving_a_cli_teacher(client, tools):
+def test_saving_a_cli_teacher(client, tools, settings):
     folder, ran = tools
     body = {"kind": "cli", "base_url": str(folder / "claude"), "api_key": "ignored"}
     saved = client.post("/api/teachers", json=body).json()
     assert saved["name"] == "claude" and saved["model"] == "" and not saved["has_key"]
     assert client.post("/api/teachers/test", json=body).json()["reply"] == "Квен."
+    # It answers with the engine's login (Settings › Subscriptions).
+    assert ran("claude")["home"] == str(settings.data_dir / "cli-logins" / "claude")
     models = client.post("/api/teachers/models", json=body).json()["data"]
     assert "sonnet" in [m["id"] for m in models]
     assert client.post("/api/teachers", json={**body, "base_url": "bash"}).status_code == 422

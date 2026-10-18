@@ -75,6 +75,9 @@ class Settings(BaseSettings):
     # default the converter of the installed llama-cpp-python is downloaded once from PyPI.
     llama_cpp_dir: Path | None = None
     brave_api_key: str | None = None
+    # Where the subscription tools of cli teachers (Claude Code, Codex CLI, Gemini CLI) keep the
+    # logins made in the app; default <data dir>/cli-logins.
+    cli_home: Path | None = None
     # DEBUG, INFO, WARNING or ERROR: what goes to the console and <data dir>/logs/engine.log.
     log_level: str = "INFO"
 
@@ -85,6 +88,10 @@ class Settings(BaseSettings):
     @property
     def knowledge_db(self) -> Path:
         return self.workspace_dir / "knowledge.db"
+
+    @property
+    def cli_logins_dir(self) -> Path:
+        return self.cli_home or self.data_dir / "cli-logins"
 
     @property
     def models_dir(self) -> Path:

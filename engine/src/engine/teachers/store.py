@@ -95,9 +95,11 @@ def client(config: TeacherConfig):
 
 
 class TeacherStore:
-    def __init__(self, store: KnowledgeStore, models):
+    def __init__(self, store: KnowledgeStore, models, cli_tools=None):
         self.store = store
         self.models = models
+        # The logins of cli teachers (CliTools); None leaves them to the tools' own folders.
+        self.cli_tools = cli_tools
         self._lock = store._lock
         self.db.executescript(SCHEMA)
         columns = {r["name"] for r in self.db.execute("PRAGMA table_info(teachers)")}
@@ -175,7 +177,7 @@ class TeacherStore:
         """A saved teacher as a runtime the chat answers with ("teacher:<id>" there)."""
         if not teacher_id.isdigit():
             raise TeacherNotFound(teacher_id)
-        return TeacherRuntime(client(self.get(int(teacher_id))))
+        return TeacherRuntime(self.client(self.get(int(teacher_id))))
 
     def teacher(self, ref: str) -> Paced:
         """A ready-to-use teacher for "local:<model id>" or a saved teacher's id."""
@@ -187,4 +189,11 @@ class TeacherStore:
         if not ref.isdigit():
             raise TeacherNotFound(ref)
         config = self.get(int(ref))
-        return Paced(client(config), config.per_minute)
+        return Paced(self.client(config), config.per_minute)
+
+    def client(self, config: TeacherConfig):
+        """client(), with the engine's logins for a cli teacher."""
+        teacher = client(config)
+        if config.kind == "cli" and self.cli_tools is not None:
+            teacher.environment = self.cli_tools.environment()
+        return teacher
