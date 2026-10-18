@@ -37,6 +37,9 @@ CREATE TABLE IF NOT EXISTS generated_chunks (
     created_at TEXT NOT NULL,
     PRIMARY KEY (dataset, chunk_id)
 );
+-- Deleting a chunk looks up its rows here (the foreign key); without it every deleted chunk
+-- reads the whole table, and deleting thousands of documents takes many minutes.
+CREATE INDEX IF NOT EXISTS generated_chunks_by_chunk ON generated_chunks (chunk_id);
 """
 
 SYSTEM = (

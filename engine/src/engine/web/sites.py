@@ -36,6 +36,9 @@ CREATE TABLE IF NOT EXISTS crawled_pages (
     fetched_at TEXT NOT NULL,
     PRIMARY KEY (collection, url)
 );
+-- Deleting a document looks up its page here (the foreign key); without it every deleted
+-- document reads the whole table.
+CREATE INDEX IF NOT EXISTS crawled_pages_by_document ON crawled_pages (document_id);
 """
 
 
