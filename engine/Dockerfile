@@ -75,6 +75,7 @@ ENV TINYLM_HOST=0.0.0.0 \
 EXPOSE 8765
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s \
     CMD curl -fsS "http://127.0.0.1:${TINYLM_PORT}/health" || exit 1
-COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+# --chmod: the script runs even when the checkout lost its executable bit.
+COPY --chmod=755 docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["python", "-m", "engine", "serve"]
