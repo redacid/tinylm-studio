@@ -309,9 +309,18 @@ in the query), and example queries: click one to load it.
 - **Run** (or Ctrl+Enter) runs the query and shows up to **Rows at most** rows (500 by default,
   up to 10,000); when there are more, the line under the query says so. The query stays there
   after a restart.
-- Queries only read: one `SELECT` (or `WITH`) over the listed tables. Writing, `PRAGMA`,
-  `ATTACH`, other tables (such as the teachers with their API keys) and several statements at
-  once are refused, and a query is stopped after 15 seconds.
+- A query is one `SELECT` (or `WITH`) over the listed tables, or a `DELETE FROM` a table
+  marked **delete** (collections, documents, chunks, websites, crawled pages), for example
+  `DELETE FROM documents WHERE source LIKE '%https://example.com/old/%'`. A `DELETE` first
+  shows how many rows match; **Delete** removes them, the way the Data tab does: a document
+  takes its chunks, search index entries and crawled page along, a collection all of its
+  documents and websites. It cannot be undone.
+
+  ![SQL: a DELETE waiting to be confirmed](images/sql-delete.png)
+
+- Other changes (`INSERT`, `UPDATE`, `DROP`), `PRAGMA`, `ATTACH`, other tables (such as the
+  teachers with their API keys) and several statements at once are refused, and a query is
+  stopped after 15 seconds.
 - Full-text search: `chunk_text MATCH 'words'` finds chunks by word (`rowid` is `chunks.id`),
   `bm25(chunk_text)` ranks them and `snippet(chunk_text, 0, '[', ']', '…', 12)` shows where
   the words are.

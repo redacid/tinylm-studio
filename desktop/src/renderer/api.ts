@@ -317,6 +317,8 @@ export type CliLogin = {
 export type DataTable = {
   name: string;
   about: string;
+  /** DELETE FROM it is allowed. */
+  deletable: boolean;
   columns: { name: string; type: string; not_null: boolean; primary_key: boolean; about: string }[];
 };
 
@@ -331,6 +333,8 @@ export type QueryResult = {
   /** There were more rows than the limit. */
   truncated: boolean;
   elapsed_ms: number;
+  /** A DELETE: the rows it matches, and whether they were deleted (confirm) or only counted. */
+  delete?: { table: string; rows: number; done: boolean };
 };
 
 export type GenerationOptions = {
@@ -827,12 +831,12 @@ export class EngineClient {
     return this.json<DataSchema>("/api/query/schema");
   }
 
-  /** Runs one read-only SELECT over the data. */
-  async query(sql: string, limit: number): Promise<QueryResult> {
+  /** Runs one SELECT over the data, or a DELETE: only counted unless confirm. */
+  async query(sql: string, limit: number, confirm = false): Promise<QueryResult> {
     return this.json<QueryResult>("/api/query", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ sql, limit }),
+      body: JSON.stringify({ sql, limit, confirm }),
     });
   }
 

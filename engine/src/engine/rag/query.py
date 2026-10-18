@@ -4,11 +4,19 @@ A query runs on its own read-only connection that may only read the data's table
 else (writing, PRAGMA, ATTACH, other tables such as the teachers with their API keys) is refused
 by SQLite's authorizer before it runs. Queries are stopped after a time limit, and only the
 first rows are returned.
+
+DELETE FROM one of the data's tables is the one way to change them. Its WHERE runs as a SELECT
+under the same rules, so it can only read the data, and the matching rows are then deleted by
+the knowledge store the way the Data tab deletes them: their search vectors go too, and rows
+that depend on them (a collection's documents, a document's chunks and crawled pages) follow.
+It first says how many rows would go; only a confirmed DELETE deletes.
 """
 
+import re
 import sqlite3
 import time
-from pathlib import Path
+
+from engine.rag.store import KnowledgeStore, marks
 
 # The tables a query may read, with what they hold and what their columns mean.
 TABLES = {
@@ -127,6 +135,10 @@ EXAMPLES = [
         "       (SELECT count(*) FROM crawled_pages p WHERE p.collection = w.collection) AS pages\n"
         "FROM websites w\nORDER BY w.last_crawled_at DESC",
     ),
+    (
+        "Delete documents by address (asks first)",
+        "DELETE FROM documents\nWHERE source LIKE '%example.com/old/%'",
+    ),
 ]
 
 DEFAULT_LIMIT = 500
@@ -137,6 +149,15 @@ FULL_TEXT_PREFIX = "chunk_text"
 ALLOWED_ACTIONS = {sqlite3.SQLITE_SELECT, sqlite3.SQLITE_FUNCTION, sqlite3.SQLITE_RECURSIVE}
 # The full-text index asks whether the file changed before a MATCH; it only reads a counter.
 ALLOWED_PRAGMAS = {"data_version"}
+# Tables DELETE may delete from; the full-text index follows chunks by itself.
+DELETABLE = ["collections", "documents", "chunks", "websites", "crawled_pages"]
+DELETE = re.compile(
+    r"DELETE\s+FROM\s+(?P<table>\w+)(?:\s+(?:AS\s+)?(?P<alias>(?!WHERE\b)\w+))?"
+    r"(?:\s+(?P<where>WHERE\b.*))?",
+    re.IGNORECASE | re.DOTALL,
+)
+# Rows deleted per statement, under SQLite's limit on bound values.
+BATCH = 500
 
 
 class QueryError(Exception):
@@ -165,9 +186,14 @@ def cell(value):
     return value
 
 
+def is_delete(sql: str) -> bool:
+    return re.match(r"\s*DELETE\b", sql, re.IGNORECASE) is not None
+
+
 class DataQuery:
-    def __init__(self, path: Path):
-        self.path = path
+    def __init__(self, store: KnowledgeStore):
+        self.store = store
+        self.path = store.path
 
     def schema(self) -> dict:
         """The tables a query may read, their columns with types, and example queries."""
@@ -181,6 +207,7 @@ class DataQuery:
                     {
                         "name": name,
                         "about": about,
+                        "deletable": name in DELETABLE,
                         "columns": [
                             {
                                 "name": c[1],
@@ -196,19 +223,39 @@ class DataQuery:
         examples = [{"title": title, "sql": sql} for title, sql in EXAMPLES]
         return {"tables": tables, "examples": examples}
 
-    def run(self, sql: str, limit: int = DEFAULT_LIMIT) -> dict:
-        """Runs one SELECT; returns its columns and up to limit rows."""
+    def run(self, sql: str, limit: int = DEFAULT_LIMIT, confirm: bool = False) -> dict:
+        """Runs one SELECT and returns its columns and up to limit rows, or a DELETE: without
+        confirm it only counts the rows it would delete (in "delete"), with it deletes them."""
         sql = sql.strip().rstrip(";").strip()
         if not sql:
             raise QueryError("Write a query first.")
-        limit = max(1, min(limit, MAX_LIMIT))
         started = time.monotonic()
+        if is_delete(sql):
+            table, rowids = self._matching(sql, started)
+            deleted = self._delete(table, rowids) if confirm else 0
+            result = {
+                "columns": ["table", "deleted" if confirm else "rows to delete"],
+                "rows": [[table, deleted if confirm else len(rowids)]],
+                "truncated": False,
+                "delete": {"table": table, "rows": len(rowids), "done": confirm},
+            }
+        else:
+            limit = max(1, min(limit, MAX_LIMIT))
+            columns, rows = self._select(sql, limit + 1, started)
+            result = {
+                "columns": columns,
+                "rows": [[cell(v) for v in row] for row in rows[:limit]],
+                "truncated": len(rows) > limit,
+            }
+        return {**result, "elapsed_ms": round((time.monotonic() - started) * 1000, 1)}
+
+    def _select(self, sql: str, limit: int | None, started: float) -> tuple[list[str], list]:
         with self._connect() as db:
             db.set_authorizer(authorize)
             db.set_progress_handler(lambda: int(time.monotonic() - started > TIME_LIMIT), 10_000)
             try:
                 cursor = db.execute(sql)
-                rows = cursor.fetchmany(limit + 1)
+                rows = cursor.fetchall() if limit is None else cursor.fetchmany(limit)
             except sqlite3.DatabaseError as e:
                 message = str(e)
                 if message == "interrupted":
@@ -216,18 +263,66 @@ class DataQuery:
                 elif "not authorized" in message or "prohibited" in message:
                     message = (
                         "Not allowed: queries can only read the tables listed "
-                        f"({', '.join(TABLES)})."
+                        f"({', '.join(TABLES)}) and delete from "
+                        f"{', '.join(DELETABLE)}."
                     )
                 raise QueryError(message) from None
             except sqlite3.Warning as e:  # e.g. two statements at once
                 raise QueryError(str(e)) from None
-            columns = [d[0] for d in cursor.description or []]
-        return {
-            "columns": columns,
-            "rows": [[cell(v) for v in row] for row in rows[:limit]],
-            "truncated": len(rows) > limit,
-            "elapsed_ms": round((time.monotonic() - started) * 1000, 1),
-        }
+            return [d[0] for d in cursor.description or []], rows
+
+    def _matching(self, sql: str, started: float) -> tuple[str, list[int]]:
+        """The table of a DELETE and the rowids of the rows it would delete."""
+        found = DELETE.fullmatch(sql)
+        if not found:
+            raise QueryError("Write a DELETE as: DELETE FROM table WHERE condition")
+        table = found["table"].lower()
+        if table not in DELETABLE:
+            raise QueryError(f"Not allowed: DELETE works on {', '.join(DELETABLE)}.")
+        alias = f" AS {found['alias']}" if found["alias"] else ""
+        select = (
+            f"SELECT {found['alias'] or table}.rowid FROM {table}{alias} {found['where'] or ''}"
+        )
+        _, rows = self._select(select, None, started)
+        return table, [r[0] for r in rows]
+
+    def _delete(self, table: str, rowids: list[int]) -> int:
+        """Deletes rows by rowid on the store's connection, with their search vectors."""
+        store, deleted = self.store, 0
+        with store._lock:
+            try:
+                for start in range(0, len(rowids), BATCH):
+                    batch = rowids[start : start + BATCH]
+                    where = f"rowid IN ({marks(batch)})"
+                    if store._has_vectors():
+                        self._delete_vectors(table, where, batch)
+                    deleted += store.db.execute(
+                        f"DELETE FROM {table} WHERE {where}", batch
+                    ).rowcount
+                store.db.commit()
+            except BaseException:
+                store.db.rollback()
+                raise
+        return deleted
+
+    def _delete_vectors(self, table: str, where: str, batch: list[int]) -> None:
+        db = self.store.db
+        if table == "collections":
+            db.execute(
+                f"DELETE FROM chunk_vectors WHERE collection IN "
+                f"(SELECT name FROM collections WHERE {where})",
+                batch,
+            )
+            return
+        chunks = {
+            "documents": f"SELECT id FROM chunks WHERE document_id IN "
+            f"(SELECT id FROM documents WHERE {where})",
+            "chunks": f"SELECT id FROM chunks WHERE {where}",
+        }.get(table)
+        if chunks:
+            ids = [r[0] for r in db.execute(chunks, batch)]
+            if ids:
+                db.execute(f"DELETE FROM chunk_vectors WHERE chunk_id IN ({marks(ids)})", ids)
 
     def _connect(self) -> sqlite3.Connection:
         if not self.path.exists():

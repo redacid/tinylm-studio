@@ -440,3 +440,6 @@ label.check { display: inline-flex; align-items: center; gap: 4px; cursor: point
 .sql-result { flex: 1; overflow: auto; border: 1px solid var(--border); border-radius: 6px; min-height: 0; }
 .sql-result th { position: sticky; top: 0; z-index: 1; text-transform: none; letter-spacing: 0; }
 .sql-result td { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; max-width: 480px; white-space: pre-wrap; word-break: break-word; user-select: text; }
+.sql-confirm { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--warn); border-radius: 6px; background: var(--warn-soft); }
+.sql-done { margin: 0; color: var(--ok); }
+.sql-confirm span { flex: 1; }

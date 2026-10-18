@@ -12,6 +12,8 @@ router = APIRouter(prefix="/api/query", dependencies=[Depends(require_api_key)],
 class QueryRequest(BaseModel):
     sql: str
     limit: int = Field(DEFAULT_LIMIT, ge=1, le=MAX_LIMIT)
+    # A DELETE only counts its rows unless confirmed.
+    confirm: bool = False
 
 
 def data_query(request: Request) -> DataQuery:
@@ -29,8 +31,9 @@ def schema(query: DataQuery = Depends(data_query)) -> dict:
 
 @router.post("")
 def run(body: QueryRequest, query: DataQuery = Depends(data_query)) -> dict:
-    """Runs one read-only SELECT over the data; returns its columns and the first rows."""
+    """Runs one SELECT over the data (its columns and the first rows), or a DELETE from a data
+    table: it counts the rows, and deletes them when confirmed."""
     try:
-        return query.run(body.sql, body.limit)
+        return query.run(body.sql, body.limit, body.confirm)
     except QueryError as e:
         raise HTTPException(400, str(e)) from None

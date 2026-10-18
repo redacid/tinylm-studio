@@ -245,17 +245,22 @@ PyPI (downloaded once into `<data dir>/tools/`) or from `TINYLM_LLAMA_CPP_DIR`.
 
 ### SQL queries
 
-Read-only SQL (SQLite) over the data, for the app's SQL tab.
+SQL (SQLite) over the data, for the app's SQL tab: reading, and deleting rows.
 
 | Method | Path | Description |
 | --- | --- | --- |
-| GET | `/api/query/schema` | `tables` a query may read (`name`, `about`, `columns`: `name`, `type`, `not_null`, `primary_key`, `about`) and `examples` (`title`, `sql`) |
+| GET | `/api/query/schema` | `tables` a query may read (`name`, `about`, `deletable`, `columns`: `name`, `type`, `not_null`, `primary_key`, `about`) and `examples` (`title`, `sql`) |
 | POST | `/api/query` | `{"sql": "SELECT ...", "limit": 500}` (`limit` 1–10,000) returns `columns`, `rows` (lists of values), `truncated` (there were more rows) and `elapsed_ms`; 400 with the reason for a refused or failed query |
+| POST | `/api/query` | `{"sql": "DELETE FROM documents WHERE ...", "confirm": false}` counts the matching rows: `delete` is `{"table", "rows", "done": false}`; with `"confirm": true` deletes them (`done: true`, `rows` gives the count deleted) |
 
 A query runs on its own read-only connection whose SQLite authorizer allows only reading the
 tables `collections`, `documents`, `chunks`, `chunk_text` (the FTS5 index), `websites` and
-`crawled_pages`: writing, `PRAGMA`, `ATTACH`, other tables (such as `teachers`, with API keys)
-and several statements are refused. A query is stopped after 15 seconds. `casefold(text)` is
+`crawled_pages`: other writes, `PRAGMA`, `ATTACH`, other tables (such as `teachers`, with API
+keys) and several statements are refused. `DELETE FROM` one of `collections`, `documents`,
+`chunks`, `websites` or `crawled_pages` (an alias and a `WHERE`, nothing else) runs its
+`WHERE` as a `SELECT` under the same rules, then deletes the matching rows through the
+knowledge store with their search vectors; the full-text index and rows that depend on them
+follow (foreign keys). A query is stopped after 15 seconds. `casefold(text)` is
 a case-insensitive form that also works for Cyrillic.
 
 ## Websites

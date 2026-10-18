@@ -86,7 +86,7 @@ def create_app(
 
     app.state.knowledge = knowledge_store or open_knowledge(settings)
     app.state.imports = ImportManager(app.state.knowledge)
-    app.state.data_query = DataQuery(app.state.knowledge.path)
+    app.state.data_query = DataQuery(app.state.knowledge)
     app.state.crawl_settings = crawl_settings(settings)
     app.state.crawls = CrawlManager(crawler(settings, app.state.knowledge))
     # A new search client per request, so a changed setting or a missing key shows up at once.

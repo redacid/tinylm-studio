@@ -230,7 +230,7 @@ grounded answers with sources through both APIs, Data screen and cited answers i
 - Answers grounded in retrieved chunks with source citations.
 - Data screen in the UI.
 - **Done when:** a user drops a folder of documents, or a list of gaming sites, and gets cited answers about them through both the UI and the APIs.
-- **Done (2026-10-18):** the SQL tab: read-only SQL over the data (collections, documents, chunks, the full-text index, websites, crawled pages) with the tables' fields, types and example queries. SQLite's authorizer on a read-only connection allows only reading those tables, so writing, `PRAGMA`, `ATTACH` and the teachers' API keys stay out of reach; queries stop after 15 s.
+- **Done (2026-10-18):** the SQL tab: read-only SQL over the data (collections, documents, chunks, the full-text index, websites, crawled pages) with the tables' fields, types and example queries. SQLite's authorizer on a read-only connection allows only reading those tables, so writing, `PRAGMA`, `ATTACH` and the teachers' API keys stay out of reach; queries stop after 15 s. `DELETE FROM` a data table counts its rows first and deletes them once confirmed, through the knowledge store, so search vectors and the full-text index stay in step.
 
 ### Phase 3 – Fine-tuning (in progress)
 

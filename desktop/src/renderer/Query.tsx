@@ -57,16 +57,20 @@ export function Query({ client }: { client: EngineClient }) {
     }
   }, [sql]);
 
-  async function run() {
+  async function run(confirm = false) {
     if (!sql.trim() || running.busy) return;
     setError(null);
     try {
-      setResult(await running.run("Running the query…", () => client.query(sql, limit)));
+      const label = confirm ? "Deleting…" : "Running the query…";
+      setResult(await running.run(label, () => client.query(sql, limit, confirm)));
     } catch (e) {
       setResult(null);
       report(e);
     }
   }
+
+  // A DELETE first only counts its rows; it deletes them once confirmed here.
+  const pending = result?.delete && !result.delete.done ? result.delete : null;
 
   function keys(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
@@ -100,6 +104,7 @@ export function Query({ client }: { client: EngineClient }) {
               <button className="link" onClick={() => insert(table.name)} title="Put in the query">
                 {table.name}
               </button>
+              {table.deletable && <span className="badge" title="DELETE FROM it is allowed">delete</span>}
             </summary>
             <p className="muted">{table.about}</p>
             <ul>
@@ -127,8 +132,9 @@ export function Query({ client }: { client: EngineClient }) {
       </aside>
       <section>
         <p className="muted">
-          Only reading: a query is one SELECT over the tables on the left. Writing, other tables and PRAGMA are refused,
-          and a query is stopped after 15 seconds.
+          A query is one SELECT over the tables on the left, or a DELETE FROM a table marked delete: it first shows how
+          many rows match and deletes them once you confirm, with their chunks and search index. Other changes, other
+          tables and PRAGMA are refused, and a query is stopped after 15 seconds.
         </p>
         <textarea
           ref={editor}
@@ -140,7 +146,7 @@ export function Query({ client }: { client: EngineClient }) {
           onKeyDown={keys}
         />
         <div className="actions">
-          <button className="primary" onClick={run} disabled={!sql.trim() || running.busy}>
+          <button className="primary" onClick={() => run()} disabled={!sql.trim() || running.busy}>
             <Icon name="player-play" />
             Run
           </button>
@@ -156,7 +162,7 @@ export function Query({ client }: { client: EngineClient }) {
             </select>
           </label>
           <BusySpinner busy={running} />
-          {result && !running.busy && (
+          {result && !result.delete && !running.busy && (
             <span className="muted">
               {result.rows.length.toLocaleString()} {result.rows.length === 1 ? "row" : "rows"}
               {result.truncated && ` shown, there are more (raise the limit or add LIMIT)`} ·{" "}
@@ -165,7 +171,37 @@ export function Query({ client }: { client: EngineClient }) {
           )}
         </div>
         {error && <p className="error">{error}</p>}
-        {result && (
+        {pending && !running.busy && (
+          <div className="sql-confirm">
+            <Icon name="alert-triangle" />
+            {pending.rows === 0 ? (
+              <span>No rows in {pending.table} match: nothing to delete.</span>
+            ) : (
+              <>
+                <span>
+                  Delete {pending.rows.toLocaleString()} {pending.rows === 1 ? "row" : "rows"} from {pending.table}?
+                  {pending.table === "collections" && " Their documents, websites and pages go too."}
+                  {pending.table === "documents" && " Their chunks and crawled pages go too."} This cannot be undone.
+                </span>
+                <button className="danger" onClick={() => run(true)}>
+                  <Icon name="trash" />
+                  Delete
+                </button>
+                <button onClick={() => setResult(null)}>
+                  <Icon name="x" />
+                  Cancel
+                </button>
+              </>
+            )}
+          </div>
+        )}
+        {result?.delete?.done && (
+          <p className="sql-done">
+            <Icon name="circle-check" /> Deleted {(result.rows[0]?.[1] as number).toLocaleString()}{" "}
+            {result.rows[0]?.[1] === 1 ? "row" : "rows"} from {result.delete.table}.
+          </p>
+        )}
+        {result && !result.delete && (
           <div className="sql-result">
             <table>
               <thead>
