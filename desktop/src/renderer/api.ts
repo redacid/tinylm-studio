@@ -313,6 +313,26 @@ export type CliLogin = {
   error: string | null;
 };
 
+/** A table SQL queries may read (the SQL tab), with its columns. */
+export type DataTable = {
+  name: string;
+  about: string;
+  columns: { name: string; type: string; not_null: boolean; primary_key: boolean; about: string }[];
+};
+
+export type DataSchema = {
+  tables: DataTable[];
+  examples: { title: string; sql: string }[];
+};
+
+export type QueryResult = {
+  columns: string[];
+  rows: unknown[][];
+  /** There were more rows than the limit. */
+  truncated: boolean;
+  elapsed_ms: number;
+};
+
 export type GenerationOptions = {
   collection: string;
   teacher: string;
@@ -801,6 +821,19 @@ export class EngineClient {
 
   async cliLogout(tool: string): Promise<CliTool> {
     return this.json<CliTool>(`/api/cli-tools/${tool}/logout`, { method: "POST" });
+  }
+
+  async dataSchema(): Promise<DataSchema> {
+    return this.json<DataSchema>("/api/query/schema");
+  }
+
+  /** Runs one read-only SELECT over the data. */
+  async query(sql: string, limit: number): Promise<QueryResult> {
+    return this.json<QueryResult>("/api/query", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sql, limit }),
+    });
   }
 
   async evaluations(): Promise<Evaluation[]> {

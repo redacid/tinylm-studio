@@ -243,6 +243,21 @@ PyPI (downloaded once into `<data dir>/tools/`) or from `TINYLM_LLAMA_CPP_DIR`.
 - Whole folders can be added from the command line:
   `make ingest COLLECTION=games FILES=~/Documents/games` (or `python -m engine ingest games PATH...`).
 
+### SQL queries
+
+Read-only SQL (SQLite) over the data, for the app's SQL tab.
+
+| Method | Path | Description |
+| --- | --- | --- |
+| GET | `/api/query/schema` | `tables` a query may read (`name`, `about`, `columns`: `name`, `type`, `not_null`, `primary_key`, `about`) and `examples` (`title`, `sql`) |
+| POST | `/api/query` | `{"sql": "SELECT ...", "limit": 500}` (`limit` 1–10,000) returns `columns`, `rows` (lists of values), `truncated` (there were more rows) and `elapsed_ms`; 400 with the reason for a refused or failed query |
+
+A query runs on its own read-only connection whose SQLite authorizer allows only reading the
+tables `collections`, `documents`, `chunks`, `chunk_text` (the FTS5 index), `websites` and
+`crawled_pages`: writing, `PRAGMA`, `ATTACH`, other tables (such as `teachers`, with API keys)
+and several statements are refused. A query is stopped after 15 seconds. `casefold(text)` is
+a case-insensitive form that also works for Cyrillic.
+
 ## Websites
 
 `POST /api/collections/{name}/crawl` (or `make crawl COLLECTION=games URLS="https://site/ ..."`,

@@ -14,6 +14,7 @@ from engine.api import (
     generations,
     knowledge,
     openai,
+    query,
     search,
     system,
     teachers,
@@ -30,6 +31,7 @@ from engine.models.bundles import bundled_collection, import_bundles_in_backgrou
 from engine.models.manager import ModelManager
 from engine.models.transfer import ModelUploads
 from engine.rag.embeddings import HashEmbedder, SentenceTransformerEmbedder
+from engine.rag.query import DataQuery
 from engine.rag.store import KnowledgeStore
 from engine.rag.transfer import ImportManager
 from engine.teachers.cli_tools import CliTools
@@ -84,6 +86,7 @@ def create_app(
 
     app.state.knowledge = knowledge_store or open_knowledge(settings)
     app.state.imports = ImportManager(app.state.knowledge)
+    app.state.data_query = DataQuery(app.state.knowledge.path)
     app.state.crawl_settings = crawl_settings(settings)
     app.state.crawls = CrawlManager(crawler(settings, app.state.knowledge))
     # A new search client per request, so a changed setting or a missing key shows up at once.
@@ -146,6 +149,7 @@ def create_app(
     app.include_router(anthropic.router)
     app.include_router(admin.router)
     app.include_router(knowledge.router)
+    app.include_router(query.router)
     app.include_router(web.router)
     app.include_router(search.router)
     app.include_router(datasets.router)

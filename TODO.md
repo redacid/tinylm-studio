@@ -84,5 +84,7 @@ The engine runs in a container in a Kubernetes cluster or a RunPod pod; see
       **Import collection** on the Data page.
 - [x] Logs: the engine and the app log to files; Settings › Logs shows both, colored and
       filtered, also the engine's in a RunPod pod.
+- [x] SQL tab: read-only SQL queries over the data, with the tables' fields, types and
+      example queries.
 - [x] Icons on tabs, buttons, run states, the engine status and log levels, colored by what
       they do (the bundled Tabler Icons font).

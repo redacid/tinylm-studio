@@ -10,6 +10,7 @@ For the HTTP API see [api.md](api.md); for the design and roadmap see the
   - [Model settings: context, threads, sampling, thinking](#model-settings)
 - [Data: collections, files, web search and websites](#data)
   - [Moving a collection to another engine](#moving-a-collection-to-another-engine)
+- [SQL: queries over the data](#sql)
 - [Datasets](#datasets)
   - [Generating examples from your documents](#generating-examples)
 - [Teachers: OpenRouter, Anthropic, subscriptions and local models](#teachers)
@@ -295,6 +296,27 @@ uploading it again:
 ![A collection imported into a remote engine](images/data-import.png)
 
 The saved websites of a collection are not exported, only its documents.
+
+## SQL
+
+![SQL: the tables with their fields, examples and a query's result](images/sql.png)
+
+The **SQL** tab runs SQL queries (SQLite) over the data: collections, documents, their chunks
+and the full-text index, saved websites and crawled pages. On the left are the tables with
+their fields, types and what each field holds (click a table to open it; click a name to put it
+in the query), and example queries: click one to load it.
+
+- **Run** (or Ctrl+Enter) runs the query and shows up to **Rows at most** rows (500 by default,
+  up to 10,000); when there are more, the line under the query says so. The query stays there
+  after a restart.
+- Queries only read: one `SELECT` (or `WITH`) over the listed tables. Writing, `PRAGMA`,
+  `ATTACH`, other tables (such as the teachers with their API keys) and several statements at
+  once are refused, and a query is stopped after 15 seconds.
+- Full-text search: `chunk_text MATCH 'words'` finds chunks by word (`rowid` is `chunks.id`),
+  `bm25(chunk_text)` ranks them and `snippet(chunk_text, 0, '[', ']', '…', 12)` shows where
+  the words are.
+- SQLite's `lower()` and `LIKE` ignore case only for Latin letters; `casefold(text)` works for
+  Cyrillic too: `WHERE casefold(c.text) LIKE '%' || casefold('Відьмак') || '%'`.
 
 ## Datasets
 

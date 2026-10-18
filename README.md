@@ -61,6 +61,10 @@ make ingest COLLECTION=games FILES=~/Documents/games
 make crawl COLLECTION=games URLS="https://example.com/reviews/"  # run again for the next new pages
 ```
 
+The **SQL** tab queries the data directly (read-only SQLite: documents, chunks, full-text
+search, crawled pages), with the tables' fields and example queries; see
+[SQL](docs/user-guide.md#sql).
+
 Crawling can go through a proxy (`TINYLM_PROXY=socks5://127.0.0.1:1080` in `.env`) and, for
 sites that need JavaScript, through a real Chrome/Chromium controlled over CDP; see
 [Proxy](docs/user-guide.md#proxy) and [Browser (CDP)](docs/user-guide.md#browser-cdp).

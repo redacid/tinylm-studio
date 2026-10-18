@@ -3,6 +3,7 @@ import { EngineClient } from "./api";
 import { Chat } from "./Chat";
 import { Data } from "./Data";
 import { Datasets } from "./Datasets";
+import { Query } from "./Query";
 import { EvaluationScreen } from "./Evaluation";
 import { loadChatSettings, saveChatSettings } from "./chatSettings";
 import { Models } from "./Models";
@@ -28,14 +29,15 @@ const PHASE_ICONS: Record<EngineState["phase"], { name: IconName; spin?: boolean
   stopped: { name: "circle-off" },
 };
 
-type Tab = "chat" | "data" | "datasets" | "training" | "evaluation" | "models" | "settings";
+type Tab = "chat" | "data" | "sql" | "datasets" | "training" | "evaluation" | "models" | "settings";
 
 // Tabs that need the engine and keep their state while hidden (the chat has its own).
-const PAGES: Tab[] = ["data", "datasets", "training", "evaluation", "models"];
+const PAGES: Tab[] = ["data", "sql", "datasets", "training", "evaluation", "models"];
 
 const TAB_LABELS: Record<Tab, string> = {
   chat: "Chat",
   data: "Data",
+  sql: "SQL",
   datasets: "Datasets",
   training: "Training",
   evaluation: "Evaluation",
@@ -46,6 +48,7 @@ const TAB_LABELS: Record<Tab, string> = {
 const TAB_ICONS: Record<Tab, IconName> = {
   chat: "message",
   data: "database",
+  sql: "sql",
   datasets: "table",
   training: "barbell",
   evaluation: "chart-bar",
@@ -128,6 +131,8 @@ export function App() {
               <TabActive.Provider value={tab === page}>
                 {page === "data" ? (
                   <Data client={client} />
+                ) : page === "sql" ? (
+                  <Query client={client} />
                 ) : page === "datasets" ? (
                   <Datasets client={client} />
                 ) : page === "training" ? (
