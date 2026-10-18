@@ -12,7 +12,7 @@ For the HTTP API see [api.md](api.md); for the design and roadmap see the
   - [Moving a collection to another engine](#moving-a-collection-to-another-engine)
 - [Datasets](#datasets)
   - [Generating examples from your documents](#generating-examples)
-- [Teachers: OpenRouter, Anthropic and local models](#teachers)
+- [Teachers: OpenRouter, Anthropic, subscriptions and local models](#teachers)
 - [Training](#training)
   - [Exporting a fine-tuned model to GGUF](#exporting-to-gguf)
   - [Moving a model between a pod and this computer](#moving-a-model)
@@ -397,6 +397,8 @@ A teacher is the model that writes examples. Teachers are set up at the bottom o
 - **Anthropic** (Claude): choose the Anthropic provider and paste a key from
   [console.anthropic.com](https://console.anthropic.com). Newer Claude models (Haiku 5.5,
   Sonnet 5.5, Opus 4.7 and later) refuse a temperature; the studio then asks them without one.
+- **A subscription** (Claude Pro or Max, ChatGPT, a Google account) instead of API keys: see
+  [Subscriptions through a command-line tool](#subscriptions-through-a-command-line-tool) below.
 - **Installed models** are offered as teachers without any setup. They are free and private,
   but a 4B model on a CPU takes minutes per chunk; use them for small runs.
 
@@ -413,6 +415,43 @@ and judging).
 - **Temperature**: how varied the answers are.
 - **Thinking**: *The model's default*, *Off* or *On*, for models that think before answering
   (Claude 4.6 and later, OpenRouter's reasoning models). Some models cannot turn it off.
+
+### Subscriptions through a command-line tool
+
+A teacher can answer with a subscription instead of an API key, through the subscription's own
+command-line tool: **Claude Code** (`claude`, a Claude Pro or Max plan), **Codex CLI**
+(`codex`, a ChatGPT plan) or **Gemini CLI** (`gemini`, a Google account). The engine runs the
+tool headless for every request, in an empty folder and without its tools (it cannot read
+files or run commands), and reads the answer. The tool keeps its own login: the studio never
+sees a token.
+
+![A Claude subscription as a teacher](images/teacher-cli.png)
+
+1. Install the tool on the computer the engine runs on, and log in once in a terminal:
+   `claude` (then `/login`), `codex login`, or `gemini` (choose *Login with Google*).
+2. Press **Add teacher** and choose *Claude subscription (Claude Code)*, *ChatGPT subscription
+   (Codex CLI)* or *Google account (Gemini CLI)*. **Program** is the command, or its full path
+   when the engine does not find it on its `PATH`.
+3. **Model** is optional: empty leaves it to the tool. Claude Code takes `sonnet`, `opus` and
+   `haiku` (**List models** offers them) or a full model id; the others take their own model
+   names.
+4. Press **Test**. A tool that is not logged in says so; log in and test again.
+
+Things to know:
+- It only works where the tool is installed: an engine on this computer, not a container or a
+  RunPod pod.
+- Answers count toward the subscription's usage limits. When a limit is reached the studio
+  waits ten minutes and tries again, up to five times, then stops the run; a long generation
+  can outlast a limit window.
+- Each request starts the tool anew, which adds a second or more per request. The chat streams
+  Claude Code's answer as it is written; Codex and Gemini answer at once.
+- Max tokens, temperature and thinking are the tool's own and cannot be set. Codex and Gemini
+  keep their own system prompt, so the studio's instructions go before the request.
+- API keys in the engine's environment (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
+  `GEMINI_API_KEY` and the like) are not passed to the tool, so it answers with the
+  subscription rather than billing the API.
+- Check your provider's terms before generating training data with a subscription: they may
+  not allow its answers to be used to train other models.
 
 ![Saved teachers](images/teachers.png)
 

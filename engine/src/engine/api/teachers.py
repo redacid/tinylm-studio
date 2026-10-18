@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from engine.api.deps import require_api_key
-from engine.teachers.providers import TeacherError
+from engine.teachers.providers import TeacherError, cli_tool
 from engine.teachers.store import TeacherConfig, TeacherNotFound, TeacherStore, client
 
 router = APIRouter(
@@ -16,9 +16,11 @@ router = APIRouter(
 
 class TeacherRequest(BaseModel):
     name: str = ""  # defaults to the model
-    kind: Literal["openai", "anthropic"] = "openai"
+    kind: Literal["openai", "anthropic", "cli"] = "openai"
     # Defaults: https://openrouter.ai/api/v1 (openai) and https://api.anthropic.com (anthropic).
+    # For cli, the program: claude, codex or gemini, or a path to one.
     base_url: str = ""
+    # Empty for cli leaves the model to the tool.
     model: str = ""
     # Left empty when editing: the saved key is kept.
     api_key: str | None = None
@@ -42,12 +44,18 @@ def config(body: TeacherRequest, store: TeacherStore) -> TeacherConfig:
             api_key = store.get(body.id).api_key
         except TeacherNotFound:
             raise HTTPException(404, f"Unknown teacher {body.id}") from None
+    name = body.name.strip() or body.model.strip()
+    if body.kind == "cli":
+        try:
+            name = name or cli_tool(body.base_url.strip() or "claude")
+        except TeacherError as e:
+            raise HTTPException(422, str(e)) from None
     return TeacherConfig(
-        name=body.name.strip() or body.model,
+        name=name,
         kind=body.kind,
         model=body.model.strip(),
         base_url=body.base_url.strip(),
-        api_key=api_key or None,
+        api_key=(api_key or None) if body.kind != "cli" else None,
         per_minute=body.per_minute,
         max_tokens=body.max_tokens,
         temperature=body.temperature,
@@ -64,7 +72,7 @@ def list_teachers(store: TeacherStore = Depends(teachers)) -> dict:
 
 @router.post("", status_code=201)
 def add_teacher(body: TeacherRequest, store: TeacherStore = Depends(teachers)) -> dict:
-    if not body.model.strip():
+    if not body.model.strip() and body.kind != "cli":
         raise HTTPException(422, "Choose a model.")
     return store.add(config(body, store)).to_dict()
 

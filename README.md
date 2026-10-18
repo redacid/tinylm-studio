@@ -6,8 +6,8 @@ A desktop studio for building small, narrowly specialized language models that r
 
 Chat with local models, let them answer from your files and websites (with sources), collect
 pages and trailers from the web, generate training examples from your documents with a larger
-teacher model (local, OpenRouter including its free models, any OpenAI-compatible API, or
-Anthropic), fine-tune a small model on them, and compare it with the base model on held-out
+teacher model (local, OpenRouter including its free models, any OpenAI-compatible API,
+Anthropic, or a Claude, ChatGPT or Google subscription through its command-line tool), fine-tune a small model on them, and compare it with the base model on held-out
 questions, scored by a judge model. A fine-tuned model is exported to GGUF to run as fast as
 any llama.cpp model. The
 **[user guide](docs/user-guide.md)** walks through every screen and setting.

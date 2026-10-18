@@ -1,4 +1,5 @@
-"""Teachers saved by the user: OpenAI-compatible or Anthropic API endpoints with their keys.
+"""Teachers saved by the user: OpenAI-compatible or Anthropic API endpoints with their keys, or
+a subscription's command-line tool (its program in base_url, no key).
 
 Keys are stored in the workspace's SQLite file on this computer and never sent back to clients.
 Installed models are offered as local teachers without being saved.
@@ -11,6 +12,7 @@ from engine.teachers.providers import (
     DEFAULT_BASE_URLS,
     AnswerOptions,
     AnthropicTeacher,
+    CliTeacher,
     LocalTeacher,
     OpenAICompatibleTeacher,
     Paced,
@@ -86,6 +88,8 @@ class TeacherConfig:
 
 
 def client(config: TeacherConfig):
+    if config.kind == "cli":
+        return CliTeacher(config.base_url, config.model, config.name, options=config.options)
     kind = AnthropicTeacher if config.kind == "anthropic" else OpenAICompatibleTeacher
     return kind(config.base_url, config.api_key, config.model, config.name, options=config.options)
 

@@ -249,7 +249,7 @@ export type ExampleFilter = {
   limit?: number;
 };
 
-export type TeacherKind = "local" | "openai" | "anthropic";
+export type TeacherKind = "local" | "openai" | "anthropic" | "cli";
 
 /** A model that writes training examples: a saved API provider or an installed model. */
 export type Teacher = {
@@ -276,7 +276,7 @@ export type TeacherInput = {
   /** A saved teacher's id: its key is used when api_key is left empty. */
   id?: number | null;
   name?: string;
-  kind: "openai" | "anthropic";
+  kind: "openai" | "anthropic" | "cli";
   base_url?: string;
   model: string;
   api_key?: string | null;

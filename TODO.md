@@ -36,6 +36,9 @@ Models screen:
       (Llama 3.3 70B, Qwen3, Gemma 3 27B, DeepSeek V3) on quality of uk/ru pairs and on how often
       the check drops pairs; pick a recommended default.
 - [ ] Local teacher on the target machine: minutes per chunk with gemma-3-4b-gguf.
+- [ ] Subscription teachers (proof of concept): try Claude Code, Codex CLI and Gemini CLI logged
+      in on the target machine; check their error texts for a reached usage limit and a missing
+      login against the ones the engine expects; measure seconds per request.
 - [ ] Evaluation on the target machine: qwen3-0.6b against its fine-tune on a generated
       dataset, judged by an OpenRouter free model; check that judge scores agree with a manual
       read of 20 answers.

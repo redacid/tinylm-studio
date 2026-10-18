@@ -420,7 +420,8 @@ style samples.
 
 ### Teachers
 
-Saved API providers, plus installed models as local teachers. Keys are stored in `knowledge.db`
+Saved API providers and subscription command-line tools, plus installed models as local
+teachers. Keys are stored in `knowledge.db`
 and never returned: responses only have `has_key`.
 
 ```json
@@ -438,8 +439,12 @@ POST /api/teachers
 ```
 
 `kind` is `openai` (any OpenAI-compatible `/chat/completions` API; the base URL defaults to
-OpenRouter) or `anthropic` (the Messages API; defaults to `https://api.anthropic.com`). `name`
-defaults to the model. `per_minute` spaces requests out; HTTP 429 answers are waited out
+OpenRouter), `anthropic` (the Messages API; defaults to `https://api.anthropic.com`) or `cli`
+(a subscription's command-line tool, run headless: `base_url` is the program, `claude`,
+`codex` or `gemini` or a path to one, defaulting to `claude`; `model` may be empty to leave it
+to the tool; `api_key` and the answer settings are ignored; 422 for another program). `name`
+defaults to the model, for `cli` then to the tool. A `cli` teacher's usage limit is waited out
+for ten minutes, up to five times. `per_minute` spaces requests out; HTTP 429 answers are waited out
 (`Retry-After`) and retried up to five times.
 
 Answer settings apply to every request the teacher gets (the chat, generation, judging); left

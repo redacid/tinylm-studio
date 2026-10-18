@@ -13,7 +13,20 @@ const PROVIDERS = [
   { label: "Anthropic", kind: "anthropic", base_url: "https://api.anthropic.com", per_minute: null },
   { label: "Ollama (this computer)", kind: "openai", base_url: "http://localhost:11434/v1", per_minute: null },
   { label: "LM Studio (this computer)", kind: "openai", base_url: "http://localhost:1234/v1", per_minute: null },
+  // Subscriptions: the engine runs the tool, logged in once in a terminal.
+  { label: "Claude subscription (Claude Code)", kind: "cli", base_url: "claude", per_minute: null },
+  { label: "ChatGPT subscription (Codex CLI)", kind: "cli", base_url: "codex", per_minute: null },
+  { label: "Google account (Gemini CLI)", kind: "cli", base_url: "gemini", per_minute: null },
 ] as const;
+
+/** The command that logs each tool in, shown with a cli teacher. */
+const LOGIN: Record<string, string> = { claude: "claude", codex: "codex login", gemini: "gemini" };
+
+function loginCommand(program: string): string {
+  const name = program.split("/").pop() ?? "";
+  const tool = Object.keys(LOGIN).find((t) => name.startsWith(t));
+  return tool ? LOGIN[tool] : program;
+}
 
 const EMPTY: TeacherInput = {
   id: null,
@@ -111,6 +124,8 @@ export function Teachers({ client }: { client: EngineClient }) {
   const saved = teachers.filter((t) => t.kind !== "local");
   const local = teachers.filter((t) => t.kind === "local");
   const provider = PROVIDERS.find((p) => p.base_url === editing?.base_url && p.kind === editing?.kind)?.label ?? "";
+  const cli = editing?.kind === "cli";
+  const ready = cli || !!editing?.model.trim();
   const shown = freeOnly && models.some((m) => m.free) ? models.filter((m) => m.free) : models;
 
   return (
@@ -121,7 +136,8 @@ export function Teachers({ client }: { client: EngineClient }) {
       </div>
       <p className="muted">
         Teachers are larger models that write training examples from your documents (Datasets → Generate). Use any
-        OpenAI-compatible API, such as OpenRouter with its free models, or Anthropic. Installed models can be teachers too
+        OpenAI-compatible API, such as OpenRouter with its free models, or Anthropic, or a subscription through its
+        command-line tool (Claude Code, Codex, Gemini CLI). Installed models can be teachers too
         {local.length > 0 ? `: ${local.map((t) => t.name).join(", ")}` : ""}; they are free and private but slow on a CPU.
       </p>
       {error && <p className="error">{error}</p>}
@@ -142,13 +158,21 @@ export function Teachers({ client }: { client: EngineClient }) {
             <select value={editing.kind} onChange={(e) => set({ kind: e.target.value as TeacherInput["kind"] })}>
               <option value="openai">OpenAI-compatible</option>
               <option value="anthropic">Anthropic</option>
+              <option value="cli">Command-line tool (subscription)</option>
             </select>
           </label>
-          <label>
-            <span>Base URL</span>
+          <label title={cli ? "claude, codex or gemini, or the full path to one" : undefined}>
+            <span>{cli ? "Program" : "Base URL"}</span>
             <input value={editing.base_url ?? ""} onChange={(e) => set({ base_url: e.target.value })} />
           </label>
-          <label>
+          {cli && (
+            <p className="muted">
+              The engine runs <code>{editing.base_url || "claude"}</code> on its computer for every request, without its
+              tools. Log in there once in a terminal with <code>{loginCommand(editing.base_url || "claude")}</code>; the
+              answers then count toward that subscription's limits, and the studio never sees a token.
+            </p>
+          )}
+          {!cli && <label>
             <span>API key</span>
             <input
               type="password"
@@ -157,12 +181,12 @@ export function Teachers({ client }: { client: EngineClient }) {
               value={editing.api_key ?? ""}
               onChange={(e) => set({ api_key: e.target.value })}
             />
-          </label>
+          </label>}
           <label>
             <span>Model</span>
             <input
               list="teacher-models"
-              placeholder="e.g. meta-llama/llama-3.3-70b-instruct:free"
+              placeholder={cli ? "Empty: the tool's default, e.g. sonnet" : "e.g. meta-llama/llama-3.3-70b-instruct:free"}
               value={editing.model}
               onChange={(e) => set({ model: e.target.value })}
             />
@@ -184,7 +208,7 @@ export function Teachers({ client }: { client: EngineClient }) {
           )}
           <label>
             <span>Name</span>
-            <input placeholder="Defaults to the model" value={editing.name ?? ""} onChange={(e) => set({ name: e.target.value })} />
+            <input placeholder={cli ? "Defaults to the model or the tool" : "Defaults to the model"} value={editing.name ?? ""} onChange={(e) => set({ name: e.target.value })} />
           </label>
           <label title="Free plans limit requests per minute; the studio waits between requests">
             <span>Requests per minute</span>
@@ -197,6 +221,7 @@ export function Teachers({ client }: { client: EngineClient }) {
               onChange={(e) => set({ per_minute: number(e.target.value) })}
             />
           </label>
+          {!cli && <>
           <p className="muted">
             Answer settings apply to everything this teacher does: the chat, generating examples, judging. Left empty,
             each request uses its own.
@@ -234,14 +259,15 @@ export function Teachers({ client }: { client: EngineClient }) {
               <option value="on">On</option>
             </select>
           </label>
+          </>}
           {result && <p className={result.ok ? "muted" : "error"}>{result.text}</p>}
           <div className="buttons">
-            <button type="button" onClick={test} disabled={checking || !editing.model.trim()}>
+            <button type="button" onClick={test} disabled={checking || !ready}>
               <Icon name={checking ? "loader-2" : "flask"} spin={checking} />
               {checking ? "Checking…" : "Test"}
             </button>
             <button type="button" onClick={() => setEditing(null)}><Icon name="x" />Cancel</button>
-            <button type="submit" disabled={!editing.model.trim()}><Icon name="device-floppy" />Save</button>
+            <button type="submit" disabled={!ready}><Icon name="device-floppy" />Save</button>
           </div>
         </form>
       )}
@@ -255,16 +281,18 @@ export function Teachers({ client }: { client: EngineClient }) {
               <tr key={t.ref}>
                 <td>
                   {t.name}
-                  {t.name !== t.model && <div className="muted">{t.model}</div>}
+                  {t.model && t.name !== t.model && <div className="muted">{t.model}</div>}
                 </td>
                 <td>
                   {t.base_url}
                   <div className="muted">
-                    {t.kind === "anthropic" ? "Anthropic API" : "OpenAI-compatible"} · {t.has_key ? "key saved" : "no key"}
+                    {t.kind === "cli"
+                      ? "Command-line tool · subscription"
+                      : `${t.kind === "anthropic" ? "Anthropic API" : "OpenAI-compatible"} · ${t.has_key ? "key saved" : "no key"}`}
                   </div>
                 </td>
                 <td className="nowrap">{t.per_minute ? `${t.per_minute} / min` : "none"}</td>
-                <td className="nowrap">{answerSettings(t)}</td>
+                <td className="nowrap">{t.kind === "cli" ? "the tool's" : answerSettings(t)}</td>
                 <td className="nowrap">
                   {confirmDelete === t.id ? (
                     <>

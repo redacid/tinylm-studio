@@ -1,18 +1,24 @@
 """Teacher models: larger models that write training examples for a small one.
 
-Three kinds:
+Four kinds:
 - local: a model installed in the studio (e.g. gemma-3-4b-gguf). Free and private, but slow on a
   CPU.
 - openai: any OpenAI-compatible chat completions API: OpenRouter (including its free models),
   OpenAI, Groq, a local llama.cpp server, Ollama or LM Studio.
 - anthropic: the Anthropic Messages API (Claude).
+- cli: the command-line tool of a subscription (Claude Code, Codex or Gemini CLI), run headless.
+  The tool keeps its own login; the studio never sees a token.
 """
 
 import json
 import logging
+import os
+import subprocess
+import tempfile
 import time
 from collections.abc import Iterator
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal, Protocol
 
 import httpx
@@ -21,10 +27,11 @@ from engine.chat import ChatRequest, Finish, Message, StreamEvent, TextDelta, Us
 
 log = logging.getLogger(__name__)
 
-TeacherKind = Literal["local", "openai", "anthropic"]
+TeacherKind = Literal["local", "openai", "anthropic", "cli"]
 DEFAULT_BASE_URLS = {
     "openai": "https://openrouter.ai/api/v1",
     "anthropic": "https://api.anthropic.com",
+    "cli": "claude",
 }
 ANTHROPIC_VERSION = "2023-06-01"
 # OpenRouter shows these on its activity page; other providers ignore them.
@@ -426,6 +433,273 @@ class AnthropicTeacher:
             {"id": m["id"], "name": m.get("display_name") or m["id"], "free": False}
             for m in response.json().get("data", [])
         ]
+
+
+# Command-line tools a cli teacher can run, by the name of the program.
+CLI_TOOLS = ("claude", "codex", "gemini")
+# Model names the tools take besides full ones; empty leaves the model to the tool.
+CLI_MODELS = {
+    "claude": [
+        {"id": "sonnet", "name": "Claude Sonnet (latest)", "free": False},
+        {"id": "opus", "name": "Claude Opus (latest)", "free": False},
+        {"id": "haiku", "name": "Claude Haiku (latest)", "free": False},
+    ],
+}
+# With one of these set a tool bills the API instead of the subscription it is logged in with.
+API_KEY_VARIABLES = (
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_AUTH_TOKEN",
+    "OPENAI_API_KEY",
+    "CODEX_API_KEY",
+    "GEMINI_API_KEY",
+    "GOOGLE_API_KEY",
+)
+# Words in a tool's error that mean the subscription's usage limit was reached.
+LIMIT_WORDS = ("usage limit", "rate limit", "limit reached", "quota", "429")
+# How long to wait out a reached limit; subscription limits reset within a few hours.
+LIMIT_WAIT = 600.0
+LOGIN_WORDS = (
+    "log in",
+    "login",
+    "logged in",
+    "not authenticated",
+    "unauthorized",
+    "401",
+    "auth method",
+)
+
+
+def cli_tool(program: str) -> str:
+    """Which tool a program is ("claude" for /usr/local/bin/claude), by its name."""
+    name = Path(program).name.lower()
+    for tool in CLI_TOOLS:
+        if name.startswith(tool):
+            return tool
+    raise TeacherError(f"{program}: not a known tool, use one of {', '.join(CLI_TOOLS)}")
+
+
+def json_events(text: str) -> list[dict]:
+    """The JSON objects a tool printed: one document, or one per line."""
+    try:
+        data = json.loads(text)
+        return [data] if isinstance(data, dict) else [d for d in data if isinstance(d, dict)]
+    except ValueError:
+        pass
+    events = []
+    for line in text.splitlines():
+        try:
+            data = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(data, dict):
+            events.append(data)
+    if not events and "{" in text:
+        # One indented document after some text, as Gemini CLI prints its errors.
+        try:
+            data, _ = json.JSONDecoder().raw_decode(text[text.index("{") :])
+            events = [data] if isinstance(data, dict) else []
+        except ValueError:
+            pass
+    return events
+
+
+def transcript(messages: list[Message]) -> tuple[str, str]:
+    """A conversation as one prompt, for tools that take a single one, and its system prompt."""
+    system = "\n\n".join(m.content for m in messages if m.role == "system")
+    turns = [m for m in messages if m.role != "system" and m.content]
+    if len(turns) == 1:
+        return system, turns[0].content
+    lines = [f"{'User' if m.role == 'user' else 'Assistant'}: {m.content}" for m in turns]
+    lines.append("Write the assistant's next answer only.")
+    return system, "\n\n".join(lines)
+
+
+class CliTeacher:
+    """A subscription's command-line tool (Claude Code, Codex, Gemini CLI) run headless, one
+    process per request, without its tools. It answers with the account it is logged in with,
+    so the user logs in once in a terminal (claude, codex login, gemini)."""
+
+    def __init__(
+        self,
+        program: str,
+        model: str = "",
+        name: str = "",
+        timeout: float = 600,
+        options: AnswerOptions | None = None,
+    ):
+        self.program = program or "claude"
+        self.tool = cli_tool(self.program)
+        self.model = model
+        self.name = name or model or self.tool
+        self.timeout = timeout
+        self.options = options or AnswerOptions()
+        self.last_served: dict | None = None
+
+    def complete(
+        self, system: str, prompt: str, max_tokens: int = 2048, temperature: float = 0.7
+    ) -> str:
+        # The tools set no token limit or temperature: their models answer with their own.
+        self.last_served = {"model": self.model or "default", "provider": self.tool}
+        args, stdin = self._command(system, prompt, stream=False)
+        events = json_events(self._run(args, stdin))
+        return getattr(self, f"_{self.tool}_answer")(events)
+
+    def stream_chat(self, request: ChatRequest) -> Iterator[StreamEvent]:
+        """Answers a whole conversation; Claude Code as it is written, the others at once."""
+        system, prompt = transcript(request.messages)
+        if self.tool != "claude":
+            text = self.complete(system, prompt)
+            yield TextDelta(text)
+            yield Finish("stop", Usage(output_tokens=len(text.split())))
+            return
+        yield from self._claude_stream(system, prompt)
+
+    def models(self) -> list[dict]:
+        return CLI_MODELS.get(self.tool, [])
+
+    def _command(self, system: str, prompt: str, stream: bool) -> tuple[list[str], str]:
+        """The tool's arguments and what it reads from stdin."""
+        model = ["--model", self.model] if self.model else []
+        if self.tool == "claude":
+            output = (
+                ["stream-json", "--verbose", "--include-partial-messages"] if stream else ["json"]
+            )
+            args = [
+                self.program, "-p", "--output-format", *output, "--tools", "",
+                "--strict-mcp-config", "--no-session-persistence", *model,
+            ]  # fmt: skip
+            if system:
+                args += ["--system-prompt", system]
+            return args, prompt
+        # Codex and Gemini CLI keep their own system prompt: ours goes before the request.
+        stdin = f"{system}\n\n{prompt}" if system else prompt
+        if self.tool == "codex":
+            args = [
+                self.program, "exec", "--json", "--skip-git-repo-check", "--ephemeral",
+                "--sandbox", "read-only", *model, "-",
+            ]  # fmt: skip
+            return args, stdin
+        return [self.program, "--output-format", "json", "--approval-mode", "plan", *model,
+                "--prompt", ""], stdin  # fmt: skip
+
+    def _environment(self) -> dict:
+        return {k: v for k, v in os.environ.items() if k not in API_KEY_VARIABLES}
+
+    def _run(self, args: list[str], stdin: str) -> str:
+        # An empty folder: the tool finds no project files or instructions of its own there.
+        with tempfile.TemporaryDirectory(prefix="tinylm-teacher-") as folder:
+            try:
+                done = subprocess.run(
+                    args, input=stdin, capture_output=True, text=True, cwd=folder,
+                    env=self._environment(), timeout=self.timeout,
+                )  # fmt: skip
+            except FileNotFoundError:
+                raise TeacherError(f"{self.program} is not installed or not on PATH") from None
+            except subprocess.TimeoutExpired:
+                raise TeacherError(f"{self.name} did not answer in {self.timeout:.0f} s") from None
+        if done.returncode != 0:
+            # Some tools print their error as JSON on stdout, others as text on stderr.
+            events = json_events(done.stdout) + json_events(done.stderr)
+            self._failed(self._error(events) or done.stderr or done.stdout)
+        return done.stdout
+
+    def _error(self, events: list[dict]) -> str:
+        for event in reversed(events):
+            error = event.get("error")
+            if isinstance(error, dict) and error.get("message"):
+                return error["message"]
+            if event.get("type") == "error" and event.get("message"):
+                return event["message"]
+            if event.get("is_error") and event.get("result"):
+                return event["result"]
+        return ""
+
+    def _failed(self, message: str):
+        message = " ".join(message.split())[-300:] or "no output"
+        lowered = message.lower()
+        if any(w in lowered for w in LIMIT_WORDS):
+            raise RateLimited(f"{self.name}: {message}", LIMIT_WAIT)
+        if any(w in lowered for w in LOGIN_WORDS):
+            command = {"claude": "claude", "codex": "codex login", "gemini": "gemini"}[self.tool]
+            raise TeacherError(f"{self.name} is not logged in: run {command} in a terminal")
+        raise TeacherError(f"{self.name}: {message}")
+
+    def _claude_answer(self, events: list[dict]) -> str:
+        for event in reversed(events):
+            if event.get("type") == "result":
+                if event.get("is_error"):
+                    self._failed(event.get("result") or event.get("subtype") or "")
+                return event.get("result") or ""
+        self._failed(self._error(events) or "no answer")
+
+    def _codex_answer(self, events: list[dict]) -> str:
+        # Codex reports reconnecting as errors too: only a failed turn without an answer counts.
+        answers = [
+            e["item"].get("text") or ""
+            for e in events
+            if e.get("type") == "item.completed"
+            and isinstance(e.get("item"), dict)
+            and e["item"].get("type") == "agent_message"
+        ]
+        if not answers:
+            self._failed(self._error(events) or "no answer")
+        return answers[-1]
+
+    def _gemini_answer(self, events: list[dict]) -> str:
+        if error := self._error(events):
+            self._failed(error)
+        for event in reversed(events):
+            if "response" in event:
+                return event.get("response") or ""
+        self._failed("no answer")
+
+    def _claude_stream(self, system: str, prompt: str) -> Iterator[StreamEvent]:
+        self.last_served = {"model": self.model or "default", "provider": self.tool}
+        args, stdin = self._command(system, prompt, stream=True)
+        usage, answered, reason = Usage(), False, "stop"
+        with tempfile.TemporaryDirectory(prefix="tinylm-teacher-") as folder:
+            try:
+                process = subprocess.Popen(
+                    args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    text=True, cwd=folder, env=self._environment(),
+                )  # fmt: skip
+            except FileNotFoundError:
+                raise TeacherError(f"{self.program} is not installed or not on PATH") from None
+            try:
+                process.stdin.write(stdin)
+                process.stdin.close()
+                for line in process.stdout:
+                    try:
+                        data = json.loads(line)
+                    except ValueError:
+                        continue
+                    kind = data.get("type")
+                    if kind == "stream_event":
+                        event = data.get("event") or {}
+                        delta = event.get("delta") or {}
+                        if event.get("type") == "content_block_delta" and delta.get("type") == (
+                            "text_delta"
+                        ):
+                            answered = True
+                            yield TextDelta(delta.get("text") or "")
+                    elif kind == "result":
+                        if data.get("is_error"):
+                            self._failed(data.get("result") or data.get("subtype") or "")
+                        counted = data.get("usage") or {}
+                        usage.input_tokens = counted.get("input_tokens") or 0
+                        usage.output_tokens = counted.get("output_tokens") or 0
+                        if data.get("stop_reason") == "max_tokens":
+                            reason = "length"
+                        if not answered and data.get("result"):
+                            yield TextDelta(data["result"])
+                            answered = True
+                if process.wait() != 0 and not answered:
+                    self._failed(process.stderr.read())
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait()
+        yield Finish(reason, usage)
 
 
 class TeacherRuntime:
