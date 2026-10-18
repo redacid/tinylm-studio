@@ -12,7 +12,7 @@ from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import httpx
 
-DEFAULT_USER_AGENT = "tinylm-studio/0.1 (local research crawler)"
+DEFAULT_USER_AGENT = "tinylm-studio/0.1"
 MAX_REDIRECTS = 10
 
 
