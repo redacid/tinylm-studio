@@ -432,9 +432,10 @@ in once under **Settings › Subscriptions**, and the engine keeps it in its dat
 2. Press **Add teacher** and choose *Claude subscription (Claude Code)*, *ChatGPT subscription
    (Codex CLI)* or *Google account (Gemini CLI)*. **Program** is the command, or its full path
    when the engine does not find it on its `PATH`.
-3. **Model** is optional: empty leaves it to the tool. Claude Code takes `sonnet`, `opus` and
-   `haiku` (**List models** offers them) or a full model id; the others take their own model
-   names.
+3. **Model** is optional: empty leaves it to the tool. **List models** offers Claude Code's
+   `sonnet`, `opus` and `haiku`, the models of Codex CLI's catalog (`codex debug models`, the
+   account's once it is logged in) and Gemini CLI's `auto`, `pro`, `flash` and `flash-lite`;
+   each tool also takes a full model id.
 4. Press **Test**. A tool that is not logged in says so; log it in and test again.
 
 Things to know:
@@ -770,12 +771,14 @@ tool shows its version and whether it is logged in, and as whom when it says.
 
 ![Logging the subscriptions' tools in](images/subscriptions.png)
 
-Press **Log in**, then **Open the login page** (or **Copy link** to open it on another
+Press **Log in** (a spinner shows until the tool has given its link), then **Open the login page** (or **Copy link** to open it on another
 computer) and sign in there:
 - **Claude Code** (a Claude Pro or Max plan): the page shows a code; paste it and press
   **Send**.
 - **Codex CLI** (a ChatGPT plan): enter the one-time code shown here on the page. The login
-  finishes by itself once you confirm it there.
+  finishes by itself once you confirm it there. First turn on device code login for Codex in
+  ChatGPT's settings (Settings › Security, linked from the Codex card): without it the page
+  refuses with *Enable device code login for Codex… in ChatGPT security settings*.
 - **Gemini CLI** (a Google account): the page shows an authorization code; paste it and press
   **Send**.
 

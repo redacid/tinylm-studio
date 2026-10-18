@@ -30,14 +30,19 @@ def list_tools(store: CliTools = Depends(tools)) -> dict:
     return {"data": store.status()}
 
 
+@router.get("/logins")
+def logins(store: CliTools = Depends(tools)) -> dict:
+    """Each tool's last login (or null), quick to ask while one goes on."""
+    return store.login_states()
+
+
 @router.post("/{tool}/login")
 def start_login(tool: str, store: CliTools = Depends(tools)) -> dict:
-    """Starts logging the tool in; the status's login then has the link to open."""
+    """Starts logging the tool in and returns the login; its link follows in /logins."""
     try:
-        store.login(tool)
+        return store.login(tool)
     except ToolError as e:
         raise HTTPException(404 if "Unknown" in str(e) else 409, str(e)) from None
-    return tool_status(store, tool)
 
 
 @router.post("/{tool}/login/code")

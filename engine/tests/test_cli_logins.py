@@ -101,12 +101,13 @@ def test_status_of_the_tools(tools):
 
 def test_claude_login_with_a_code(tools, settings):
     started = tools.post("/api/cli-tools/claude/login").json()
-    assert started["login"]["state"] == "running"
+    assert started["state"] == "running"
+    assert tools.get("/api/cli-tools/logins").json()["claude"]["state"] == "running"
+    assert tools.get("/api/cli-tools/logins").json()["codex"] is None
     login = wait(tools, "claude", "running", wants_code=True)["login"]
     assert login["url"] == "https://claude.com/oauth?code=true&x=1"
-    assert (
-        tools.post("/api/cli-tools/claude/login/code", json={"code": " good "}).status_code == 200
-    )
+    sent = tools.post("/api/cli-tools/claude/login/code", json={"code": " good "}).json()
+    assert sent["checking_code"] and not sent["wants_code"]
     done = wait(tools, "claude", "done")
     assert done["logged_in"] and done["account"] == "me@example.com"
     # The login is the engine's, in its data folder.
@@ -138,7 +139,8 @@ def test_gemini_login_in_a_terminal(tools):
     tools.post("/api/cli-tools/gemini/login")
     wait(tools, "gemini", "running", wants_code=True)
     tools.post("/api/cli-tools/gemini/login/code", json={"code": "bad"})
-    time.sleep(0.5)
+    # Asked again after the wrong code.
+    wait(tools, "gemini", "running", wants_code=True)
     tools.post("/api/cli-tools/gemini/login/code", json={"code": "good"})
     done = wait(tools, "gemini", "done")
     assert "Failed to authenticate" in done["login"]["output"]

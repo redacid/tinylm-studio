@@ -20,6 +20,15 @@ const PROVIDERS = [
 ] as const;
 
 
+/** A model each tool takes, for the Model field's placeholder. */
+const CLI_EXAMPLES: Record<string, string> = { claude: "sonnet", codex: "gpt-5.5", gemini: "flash" };
+
+/** Which tool a program is ("claude" for /usr/local/bin/claude). */
+function cliTool(program: string | undefined): string {
+  const name = (program || "claude").split("/").pop() ?? "";
+  return Object.keys(CLI_EXAMPLES).find((tool) => name.startsWith(tool)) ?? "";
+}
+
 const EMPTY: TeacherInput = {
   id: null,
   name: "",
@@ -178,7 +187,7 @@ export function Teachers({ client }: { client: EngineClient }) {
             <span>Model</span>
             <input
               list="teacher-models"
-              placeholder={cli ? "Empty: the tool's default, e.g. sonnet" : "e.g. meta-llama/llama-3.3-70b-instruct:free"}
+              placeholder={cli ? `Empty: the tool's default, e.g. ${CLI_EXAMPLES[cliTool(editing.base_url)] ?? "sonnet"}` : "e.g. meta-llama/llama-3.3-70b-instruct:free"}
               value={editing.model}
               onChange={(e) => set({ model: e.target.value })}
             />
@@ -192,10 +201,16 @@ export function Teachers({ client }: { client: EngineClient }) {
           {models.length > 0 && (
             <label>
               <span />
-              <span className="muted">
-                {models.length} models, {models.filter((m) => m.free).length} free.{" "}
-                <input type="checkbox" checked={freeOnly} onChange={(e) => setFreeOnly(e.target.checked)} /> Free only
-              </span>
+              {cli ? (
+                <span className="muted">
+                  {models.length} models: {models.map((m) => m.id).join(", ")}. Pick one in the Model field.
+                </span>
+              ) : (
+                <span className="muted">
+                  {models.length} models, {models.filter((m) => m.free).length} free.{" "}
+                  <input type="checkbox" checked={freeOnly} onChange={(e) => setFreeOnly(e.target.checked)} /> Free only
+                </span>
+              )}
             </label>
           )}
           <label>

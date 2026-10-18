@@ -417,3 +417,6 @@ label.check { display: inline-flex; align-items: center; gap: 4px; cursor: point
 .device-code { font-size: 16px; font-weight: 600; letter-spacing: 1px; }
 .cli-output summary { cursor: pointer; color: var(--muted); font-size: 12px; margin-top: 6px; }
 .cli-output pre { max-height: 160px; overflow: auto; font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface); padding: 6px 8px; border-radius: 6px; }
+.cli-note { margin: 8px 0 0; font-size: 12px; }
+.cli-note a { color: var(--accent); }
+.cli-tool-actions .spinner { align-self: center; }

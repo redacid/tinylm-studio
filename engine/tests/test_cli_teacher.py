@@ -35,6 +35,11 @@ if tool == "claude":
                           "usage": {{"input_tokens": 9, "output_tokens": 3}}}}))
     else:
         print(json.dumps({{"type": "result", "is_error": False, "result": "Квен."}}))
+elif tool == "codex" and sys.argv[1:] == ["debug", "models"]:
+    print(json.dumps({{"models": [
+        {{"slug": "gpt-b", "display_name": "GPT B", "visibility": "list", "priority": 2}},
+        {{"slug": "hidden", "display_name": "Hidden", "visibility": "hide", "priority": 0}},
+        {{"slug": "gpt-a", "display_name": "GPT A", "visibility": "list", "priority": 1}}]}}))
 elif tool == "codex":
     print(json.dumps({{"type": "thread.started", "thread_id": "t"}}))
     print(json.dumps({{"type": "error", "message": "Reconnecting... 2/5"}}))
@@ -131,6 +136,13 @@ def test_saving_a_cli_teacher(client, tools, settings):
     assert ran("claude")["home"] == str(settings.data_dir / "cli-logins" / "claude")
     models = client.post("/api/teachers/models", json=body).json()["data"]
     assert "sonnet" in [m["id"] for m in models]
+    codex = {**body, "base_url": str(folder / "codex")}
+    models = client.post("/api/teachers/models", json=codex).json()["data"]
+    assert [(m["id"], m["name"]) for m in models] == [("gpt-a", "GPT A"), ("gpt-b", "GPT B")]
+    gemini = {**body, "base_url": str(folder / "gemini")}
+    assert "flash" in [
+        m["id"] for m in client.post("/api/teachers/models", json=gemini).json()["data"]
+    ]
     assert client.post("/api/teachers", json={**body, "base_url": "bash"}).status_code == 422
 
     answer = client.post(

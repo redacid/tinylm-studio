@@ -308,6 +308,8 @@ export type CliLogin = {
   url: string | null;
   /** Waiting for the code the login page shows (Claude Code, Gemini CLI). */
   wants_code: boolean;
+  /** A code was sent and the tool is checking it. */
+  checking_code: boolean;
   error: string | null;
 };
 
@@ -776,8 +778,13 @@ export class EngineClient {
     return (await this.json<{ data: CliTool[] }>("/api/cli-tools")).data;
   }
 
-  async cliLogin(tool: string): Promise<CliTool> {
-    return this.json<CliTool>(`/api/cli-tools/${tool}/login`, { method: "POST" });
+  /** Each tool's last login, quick to ask while one goes on. */
+  async cliLogins(): Promise<Record<string, CliLogin | null>> {
+    return this.json<Record<string, CliLogin | null>>("/api/cli-tools/logins");
+  }
+
+  async cliLogin(tool: string): Promise<CliLogin> {
+    return this.json<CliLogin>(`/api/cli-tools/${tool}/login`, { method: "POST" });
   }
 
   async cliLoginCode(tool: string, code: string): Promise<void> {

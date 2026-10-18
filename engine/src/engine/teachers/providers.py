@@ -444,6 +444,12 @@ CLI_MODELS = {
         {"id": "opus", "name": "Claude Opus (latest)", "free": False},
         {"id": "haiku", "name": "Claude Haiku (latest)", "free": False},
     ],
+    "gemini": [
+        {"id": "auto", "name": "Auto (Gemini CLI picks Pro or Flash)", "free": False},
+        {"id": "pro", "name": "Gemini Pro (latest)", "free": False},
+        {"id": "flash", "name": "Gemini Flash (latest)", "free": False},
+        {"id": "flash-lite", "name": "Gemini Flash-Lite (latest)", "free": False},
+    ],
 }
 # With one of these set a tool bills the API instead of the subscription it is logged in with.
 API_KEY_VARIABLES = (
@@ -558,7 +564,24 @@ class CliTeacher:
         yield from self._claude_stream(system, prompt)
 
     def models(self) -> list[dict]:
+        if self.tool == "codex":
+            return self._codex_models()
         return CLI_MODELS.get(self.tool, [])
+
+    def _codex_models(self) -> list[dict]:
+        """Codex CLI's model catalog (codex debug models): the account's when it is logged in,
+        else the one it ships with. Only the models it lists itself, in its order."""
+        try:
+            catalog = json.loads(self._run([self.program, "debug", "models"], ""))
+            models = [m for m in catalog["models"] if m.get("visibility") == "list"]
+        except (ValueError, KeyError, TypeError):
+            raise TeacherError(f"{self.name}: could not read its model list") from None
+        models.sort(key=lambda m: m.get("priority") or 0)
+        return [
+            {"id": m["slug"], "name": m.get("display_name") or m["slug"], "free": False}
+            for m in models
+            if m.get("slug")
+        ]
 
     def _command(self, system: str, prompt: str, stream: bool) -> tuple[list[str], str]:
         """The tool's arguments and what it reads from stdin."""

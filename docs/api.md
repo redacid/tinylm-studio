@@ -476,9 +476,10 @@ Claude Code and Gemini CLI, sends the code the page shows.
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/api/cli-tools` | Each tool: `tool`, `name`, `installed`, `version`, `logged_in`, `account` (when the tool says), `login` (the last login: `state` `running`, `done`, `failed` or `cancelled`, `output` without terminal codes, `url`, `wants_code`, `error`) |
-| POST | `/api/cli-tools/{tool}/login` | Starts a login (one still running is stopped); returns the tool as above; 409 when it is not installed, 404 for another tool |
-| POST | `/api/cli-tools/{tool}/login/code` | `{"code": "..."}` from the login page; 409 when the login waits for none |
+| GET | `/api/cli-tools` | Each tool: `tool`, `name`, `installed`, `version`, `logged_in`, `account` (when the tool says), `login` (the last login: `state` `running`, `done`, `failed` or `cancelled`, `output` without terminal codes, `url`, `wants_code`, `checking_code` (a code was sent and is being checked), `error`) |
+| GET | `/api/cli-tools/logins` | Each tool's last login as above, or `null`; quick, as it asks the tools nothing (for following a login) |
+| POST | `/api/cli-tools/{tool}/login` | Starts a login (one still running is stopped) and returns it; the link follows in `/logins`; 409 when the tool is not installed, 404 for another tool |
+| POST | `/api/cli-tools/{tool}/login/code` | `{"code": "..."}` from the login page; returns the login; 409 when it waits for none |
 | DELETE | `/api/cli-tools/{tool}/login` | Stops a login; 204 |
 | POST | `/api/cli-tools/{tool}/logout` | Logs the tool out; returns the tool |
 

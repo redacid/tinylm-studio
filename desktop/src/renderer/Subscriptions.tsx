@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { CliTool, EngineClient } from "./api";
-import { BusySpinner, useBusy } from "./Busy";
+import { BusySpinner, Spinner, useBusy } from "./Busy";
 import { Icon } from "./Icon";
 
 /** What to do on each tool's login page. */
@@ -10,6 +10,9 @@ const STEPS: Record<CliTool["tool"], string> = {
     "Open the link, sign in with your ChatGPT account and enter the one-time code below. The login finishes by itself.",
   gemini: "Open the link, sign in with your Google account and paste the authorization code the page shows below.",
 };
+
+/** Where ChatGPT turns on logging Codex in with a device code, which a login needs first. */
+const CHATGPT_SECURITY = "https://chatgpt.com/#settings/Security";
 
 /** Codex CLI's one-time code, such as ABCD-1234, from its output. */
 function oneTimeCode(output: string): string | null {
@@ -39,22 +42,43 @@ export function SubscriptionsForm({ client }: { client: EngineClient | null }) {
     load("Checking the tools…", refresh);
   }, [load, refresh]);
 
-  // While a login goes on, its link, output and end show up as they come.
+  // While a login goes on, its link, output and end show up as they come; asking for the logins
+  // only is quick, and the tools' status is checked again once one ends.
   const running = tools.some((t) => t.login?.state === "running");
   useEffect(() => {
-    if (!running) return;
-    const timer = setInterval(refresh, 1500);
+    if (!running || !client) return;
+    const timer = setInterval(async () => {
+      try {
+        const logins = await client.cliLogins();
+        const ended = tools.some((t) => t.login?.state === "running" && logins[t.tool]?.state !== "running");
+        setTools((list) => list.map((t) => ({ ...t, login: logins[t.tool] ?? null })));
+        if (ended) await load("Checking the login…", refresh);
+      } catch (e) {
+        report(e);
+      }
+    }, 1000);
     return () => clearInterval(timer);
-  }, [running, refresh]);
+  }, [running, client, tools, load, refresh]);
 
-  async function act(action: () => Promise<unknown>) {
+  async function act(action: () => Promise<unknown>, label?: string) {
     setError(null);
     try {
       await action();
     } catch (e) {
       report(e);
     }
-    await refresh();
+    await (label ? load(label, refresh) : refresh());
+  }
+
+  /** Starts a login: the card spins until the tool has printed its link. */
+  async function login(tool: CliTool) {
+    setError(null);
+    try {
+      const started = await client!.cliLogin(tool.tool);
+      setTools((list) => list.map((t) => (t.tool === tool.tool ? { ...t, login: started } : t)));
+    } catch (e) {
+      report(e);
+    }
   }
 
   if (!client) return <p className="muted">The engine is starting.</p>;
@@ -73,10 +97,13 @@ export function SubscriptionsForm({ client }: { client: EngineClient | null }) {
         <ToolCard
           key={t.tool}
           tool={t}
-          onLogin={() => act(() => client.cliLogin(t.tool))}
-          onCode={(code) => act(() => client.cliLoginCode(t.tool, code))}
+          onLogin={() => login(t)}
+          onCode={async (code) => {
+            await client.cliLoginCode(t.tool, code).catch(report);
+            setTools(await client.cliTools().catch(() => tools));
+          }}
           onCancel={() => act(() => client.cliLoginCancel(t.tool))}
-          onLogout={() => act(() => client.cliLogout(t.tool))}
+          onLogout={() => act(() => client.cliLogout(t.tool), `Logging ${t.name} out…`)}
         />
       ))}
     </div>
@@ -91,20 +118,37 @@ function ToolCard({
   onLogout,
 }: {
   tool: CliTool;
-  onLogin: () => void;
+  onLogin: () => Promise<void>;
   onCode: (code: string) => Promise<void>;
   onCancel: () => void;
   onLogout: () => void;
 }) {
   const [code, setCode] = useState("");
   const [confirmLogout, setConfirmLogout] = useState(false);
+  // Between pressing Log in and the engine starting the tool, and sending a code.
+  const [starting, setStarting] = useState(false);
+  const [sending, setSending] = useState(false);
   const login = t.login;
   const running = login?.state === "running";
 
+  async function start() {
+    setStarting(true);
+    try {
+      await onLogin();
+    } finally {
+      setStarting(false);
+    }
+  }
+
   async function send(event: FormEvent) {
     event.preventDefault();
-    await onCode(code);
-    setCode("");
+    setSending(true);
+    try {
+      await onCode(code);
+      setCode("");
+    } finally {
+      setSending(false);
+    }
   }
 
   const deviceCode = t.tool === "codex" && login ? oneTimeCode(login.output) : null;
@@ -120,7 +164,9 @@ function ToolCard({
           </span>
         )}
         <span className="cli-tool-actions">
-          {running ? (
+          {starting ? (
+            <Spinner label={`Starting ${t.name}…`} />
+          ) : running ? (
             <button onClick={onCancel}><Icon name="x" />Cancel</button>
           ) : confirmLogout ? (
             <>
@@ -129,7 +175,7 @@ function ToolCard({
             </>
           ) : (
             <>
-              <button onClick={onLogin} disabled={!t.installed}>
+              <button onClick={start} disabled={!t.installed}>
                 <Icon name="login" />
                 {t.logged_in ? "Log in again" : "Log in"}
               </button>
@@ -138,6 +184,13 @@ function ToolCard({
           )}
         </span>
       </div>
+      {t.tool === "codex" && t.installed && !t.logged_in && (
+        <p className="muted cli-note">
+          <Icon name="info-circle" /> First turn on device code login for Codex in ChatGPT's{" "}
+          <a href={CHATGPT_SECURITY} target="_blank" rel="noreferrer">security settings</a> (Settings › Security);
+          without it the login page refuses the code.
+        </p>
+      )}
       {running && (
         <div className="cli-login">
           <p>{STEPS[t.tool]}</p>
@@ -149,14 +202,15 @@ function ToolCard({
               <button onClick={() => navigator.clipboard.writeText(login.url!)}><Icon name="copy" />Copy link</button>
             </div>
           ) : (
-            <p className="muted"><Icon name="loader-2" spin /> Waiting for the tool's link…</p>
+            <Spinner label={`Waiting for ${t.name} to give the login link…`} />
           )}
           {deviceCode && (
             <p>
               One-time code: <code className="device-code">{deviceCode}</code>
             </p>
           )}
-          {login.wants_code && (
+          {(sending || login.checking_code) && <Spinner label="Checking the code…" />}
+          {login.wants_code && !sending && (
             <form className="key-row" onSubmit={send}>
               <input
                 placeholder="Code from the login page"

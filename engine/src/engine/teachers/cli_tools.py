@@ -37,6 +37,8 @@ LOGIN_TIMEOUT = 15 * 60
 OUTPUT_LIMIT = 4000
 ESCAPES = re.compile(r"\x1b\[[0-9;?<>=]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-_]")
 URL = re.compile(r"https://[^\s\"'<>]+")
+# A tool asking for a code, at the end of what it printed ("Enter the authorization code: ").
+CODE_PROMPT = re.compile(r"code[^\n]*[:>]\s*$", re.IGNORECASE)
 
 
 class ToolError(Exception):
@@ -70,7 +72,14 @@ class Login:
 
     @property
     def wants_code(self) -> bool:
-        return self.tool != "codex" and self.state == "running" and self.url is not None
+        """Waiting for a code: until one is sent, and again when the tool asks anew after a
+        wrong one."""
+        return (
+            self.tool != "codex"
+            and self.state == "running"
+            and self.url is not None
+            and not self.code_sent
+        )
 
     def to_dict(self) -> dict:
         return {
@@ -78,6 +87,8 @@ class Login:
             "output": self.output[-OUTPUT_LIMIT:],
             "url": self.url,
             "wants_code": self.wants_code,
+            # A code was sent and the tool is checking it.
+            "checking_code": self.code_sent and self.state == "running",
             "error": self.error,
         }
 
@@ -90,6 +101,8 @@ class CliTools:
         # The program of each tool; tests put stand-ins here.
         self.programs = programs or {tool: tool for tool in CLI_TOOLS}
         self.logins: dict[str, Login] = {}
+        # Versions by program: asking a tool takes a second, and the version rarely changes.
+        self._versions: dict[str, str | None] = {}
         self._lock = threading.Lock()
 
     def folder(self, tool: str) -> Path:
@@ -135,10 +148,10 @@ class CliTools:
         }
         if program is None:
             return status
-        version = self._run([program, "--version"])
-        status["version"] = (
-            version.stdout.strip().splitlines()[0] if version.stdout.strip() else None
-        )
+        if program not in self._versions:
+            version = self._run([program, "--version"]).stdout.strip()
+            self._versions[program] = version.splitlines()[0] if version else None
+        status["version"] = self._versions[program]
         status["logged_in"], status["account"] = getattr(self, f"_{tool}_status")(program)
         return status
 
@@ -176,6 +189,11 @@ class CliTools:
             return True, accounts.get("active")
         except (OSError, ValueError, AttributeError):
             return True, None
+
+    def login_states(self) -> dict:
+        """Each tool's last login, without asking the tools anything: for following a login."""
+        return {tool: (login.to_dict() if (login := self.logins.get(tool)) else None)
+                for tool in CLI_TOOLS}  # fmt: skip
 
     def login(self, tool: str) -> dict:
         """Starts logging a tool in; a login of it still going is stopped first."""
@@ -279,6 +297,8 @@ class CliTools:
                 if data:
                     text = login.output + clean(data.decode(errors="replace"))
                     login.output = text[-4 * OUTPUT_LIMIT :]
+                    if login.code_sent and CODE_PROMPT.search(login.output):
+                        login.code_sent = False  # asked again: the code was wrong
                 if login.tool == "gemini" and credentials.exists():
                     if credentials.stat().st_mtime != had_credentials:
                         login.state = "done"  # saved: the rest is Gemini CLI's chat
