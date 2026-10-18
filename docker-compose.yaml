@@ -1,0 +1,93 @@
+# The engine with its helpers: SearXNG for web search and a headless Chrome for crawling pages
+# that need JavaScript (Browser, CDP). An example to adapt; see docs/deployment.md#docker-compose.
+#
+#   make image                      # or IMAGE=docker.io/<you>/tinylm-engine, pushed before
+#   docker compose up -d            # reads .env next to this file
+#   docker compose logs -f engine
+#
+# Values come from .env (the one `make` uses), with the defaults after ":-". Only
+# TINYLM_API_KEY is required. Connect the desktop app under Settings > Engine to
+# http://127.0.0.1:8765 with that key.
+
+name: tinylm
+
+services:
+  engine:
+    image: ${TINYLM_IMAGE:-tinylm-engine:cpu}
+    restart: unless-stopped
+    depends_on: [searxng, chrome]
+    ports:
+      # 127.0.0.1: only this computer. Drop it to reach the engine from the network (the key
+      # still guards it).
+      - "127.0.0.1:${TINYLM_PORT:-8765}:8765"
+    volumes:
+      # Models, collections, datasets, training runs, the Hugging Face cache and the logins of
+      # the subscription tools.
+      - engine-data:/workspace
+    environment:
+      TINYLM_API_KEY: ${TINYLM_API_KEY:?Set TINYLM_API_KEY in .env, the key clients send}
+      HF_TOKEN: ${HF_TOKEN:-}
+      TINYLM_LOG_LEVEL: ${TINYLM_LOG_LEVEL:-INFO}
+      # Empty: physical cores, at most 8.
+      TINYLM_THREADS: ${TINYLM_THREADS:-}
+      TINYLM_RAG_TOP_K: ${TINYLM_RAG_TOP_K:-4}
+      TINYLM_EMBEDDING_DEVICE: ${TINYLM_EMBEDDING_DEVICE:-auto}
+      # The helpers below, by service name.
+      TINYLM_SEARCH_PROVIDER: ${TINYLM_SEARCH_PROVIDER:-searxng}
+      TINYLM_SEARXNG_URL: http://searxng:8080
+      TINYLM_CDP_URL: http://chrome:9222
+      # Crawling defaults; Settings > Crawler in the app saves its own values, which win.
+      TINYLM_CRAWL_USE_BROWSER: ${TINYLM_CRAWL_USE_BROWSER:-false}
+      TINYLM_CRAWL_PER_MINUTE: ${TINYLM_CRAWL_PER_MINUTE:-20}
+      TINYLM_CRAWL_RESPECT_ROBOTS: ${TINYLM_CRAWL_RESPECT_ROBOTS:-true}
+      TINYLM_CRAWL_MAX_PAGES: ${TINYLM_CRAWL_MAX_PAGES:-50}
+      TINYLM_CRAWL_MAX_DEPTH: ${TINYLM_CRAWL_MAX_DEPTH:-2}
+      # Plain HTTP crawling and search through a proxy: http://user:pass@host:port or
+      # socks5://host:port (a proxy on this computer is host.docker.internal, see extra_hosts).
+      TINYLM_PROXY: ${TINYLM_PROXY:-}
+      # Search providers with API keys, when TINYLM_SEARCH_PROVIDER is one of them.
+      TINYLM_BRAVE_API_KEY: ${TINYLM_BRAVE_API_KEY:-}
+      TINYLM_TAVILY_API_KEY: ${TINYLM_TAVILY_API_KEY:-}
+      TINYLM_EXA_API_KEY: ${TINYLM_EXA_API_KEY:-}
+      TINYLM_PERPLEXITY_API_KEY: ${TINYLM_PERPLEXITY_API_KEY:-}
+      TINYLM_SERPER_API_KEY: ${TINYLM_SERPER_API_KEY:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # NVIDIA GPU (TINYLM_IMAGE=tinylm-engine:cuda, NVIDIA Container Toolkit installed):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  searxng:
+    image: docker.io/searxng/searxng:latest
+    restart: unless-stopped
+    ports:
+      # Optional: for an engine run outside compose (TINYLM_SEARXNG_URL=http://127.0.0.1:8888).
+      - "127.0.0.1:${SEARXNG_PORT:-8888}:8080"
+    volumes:
+      # The repository's settings (JSON output for the engine, no bot detection), read-only;
+      # copy and edit it to change engines or add an outgoing proxy.
+      - ./scripts/searxng/settings.yml:/config/settings.yml:ro
+    environment:
+      SEARXNG_SETTINGS_PATH: /config/settings.yml
+      GRANIAN_HOST: 0.0.0.0
+      # Any random string, e.g. `openssl rand -hex 16`.
+      SEARXNG_SECRET: ${SEARXNG_SECRET:-change-me-to-a-random-string}
+
+  chrome:
+    image: docker.io/chromedp/headless-shell:stable
+    restart: unless-stopped
+    shm_size: 1g
+    ports:
+      # Optional: for an engine run outside compose (TINYLM_CDP_URL=http://127.0.0.1:9222).
+      - "127.0.0.1:${CDP_PORT:-9222}:9222"
+    # The languages pages are asked in. Add "--proxy-server=socks5://host.docker.internal:1080"
+    # to load pages through a proxy (with extra_hosts as on the engine).
+    command: ["--accept-lang=${CDP_LANG:-uk,ru,en}"]
+
+volumes:
+  engine-data:

@@ -98,6 +98,8 @@ prompt are on the Settings tab and are kept after a restart, together with the c
 
 The engine is meant to run in a container in a Kubernetes cluster; see
 [docs/deployment.md](docs/deployment.md) for what that requires and what is still missing.
+`docker compose up -d` runs the engine image with SearXNG and a headless Chrome
+([docker-compose.yaml](docker-compose.yaml), [Docker Compose](docs/deployment.md#docker-compose)).
 
 Engine only, for API clients (see [docs/api.md](docs/api.md)):
 

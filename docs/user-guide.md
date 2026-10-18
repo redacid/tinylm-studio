@@ -905,6 +905,10 @@ network existed. Chrome answers only requests addressed to an IP address or `loc
 the engine looks the name up and uses the address. A **Browser address** saved in
 [Crawler settings](#crawler-settings) wins over the one `make run-image` sets.
 
+[docker-compose.yaml](../docker-compose.yaml) starts the engine image, SearXNG and the browser
+together, already pointed at each other; see
+[Docker Compose](deployment.md#docker-compose).
+
 To log in to sites first, run your own Chrome or Chromium with a separate profile instead:
 
 ```bash

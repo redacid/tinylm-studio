@@ -1,4 +1,4 @@
-# Running the engine in a container: Kubernetes and RunPod
+# Running the engine in a container: Kubernetes, Docker Compose and RunPod
 
 **Target (decided 2026-10-13):** the engine runs as a container in a Kubernetes cluster. The
 desktop app, scripts and any OpenAI- or Anthropic-compatible client talk to it over HTTP. Running
@@ -141,6 +141,51 @@ use, and points the engine at them by name (`http://tinylm-chrome:9222`,
   (then `/login`), `codex login --device-auth` or `gemini`; on RunPod in the pod's web terminal.
 - With the CUDA image the embedding model runs on the GPU (`TINYLM_EMBEDDING_DEVICE=auto`), so
   imported collections and uploads are indexed many times faster than on a CPU.
+
+## Docker Compose
+
+[docker-compose.yaml](../docker-compose.yaml) runs the engine image with SearXNG for web search
+and a headless Chrome for crawling with **Browser (CDP)**, on one server or this computer. It
+is an example to adapt: the same image and variables go into a Kubernetes manifest.
+
+```bash
+make image                       # tinylm-engine:cpu (or TINYLM_IMAGE=docker.io/<you>/tinylm-engine:<tag>)
+echo "TINYLM_API_KEY=$(openssl rand -hex 24)" >> .env
+echo "SEARXNG_SECRET=$(openssl rand -hex 16)" >> .env
+docker compose up -d
+docker compose logs -f engine    # "Uvicorn running on http://0.0.0.0:8765"
+docker compose down              # stops it; the data stays in the volume tinylm_engine-data
+```
+
+Then connect the desktop app to `http://127.0.0.1:8765` with that key under
+[Settings › Engine](user-guide.md#engine).
+
+| Service | Image | Port on 127.0.0.1 | What for |
+|---|---|---|---|
+| `engine` | `${TINYLM_IMAGE:-tinylm-engine:cpu}` | `TINYLM_PORT` (8765) | The API and everything it keeps, on the volume `engine-data` at `/workspace` |
+| `searxng` | `searxng/searxng:latest` | `SEARXNG_PORT` (8888) | Web search; its settings are [scripts/searxng/settings.yml](../scripts/searxng/settings.yml), mounted read-only |
+| `chrome` | `chromedp/headless-shell:stable` | `CDP_PORT` (9222) | Pages that need JavaScript (Browser, CDP), in the languages `CDP_LANG` (uk,ru,en) |
+
+- **Variables.** Docker Compose reads `.env` next to the file, the one `make` uses
+  ([.env.example](../.env.example)). Only `TINYLM_API_KEY` is required; the others have the
+  defaults written after `:-` in the file. The engine reaches the helpers by service name
+  (`TINYLM_SEARXNG_URL=http://searxng:8080`, `TINYLM_CDP_URL=http://chrome:9222`), whatever
+  `.env` says for an engine on this computer. A variable left empty means its default.
+- **The helpers' ports** are only for an engine started outside Compose (`make app`, `make
+  run-engine`): remove them if nothing else uses SearXNG or Chrome. They clash with
+  `make searxng` and `make chrome`; stop those first (`make searxng-stop chrome-stop`).
+- **From the network.** The engine's port listens on `127.0.0.1` only; write
+  `"8765:8765"` to reach it from other computers (the key still guards it, put TLS in front
+  of it for the internet).
+- **Proxy.** `TINYLM_PROXY` sends plain crawling and search through a proxy; a proxy on the
+  host is `host.docker.internal`. Chrome needs its own `--proxy-server=...` in `command`.
+- **GPU.** With `TINYLM_IMAGE=tinylm-engine:cuda` and the NVIDIA Container Toolkit, uncomment
+  the `deploy.resources` block of `engine`.
+- **Subscriptions.** Log the tools in from the app (Settings › Subscriptions) as with any
+  engine; the logins are kept on the volume. A shell works too:
+  `docker compose exec engine claude`.
+- A **Browser address** or search provider saved in the app (Settings › Crawler, Settings ›
+  Search) wins over the variables, as always.
 
 ## RunPod
 

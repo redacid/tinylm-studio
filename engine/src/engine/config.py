@@ -17,7 +17,11 @@ def default_data_dir() -> Path:
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="TINYLM_", populate_by_name=True)
+    # An empty variable (HF_TOKEN= in .env, TINYLM_THREADS: "" in docker-compose.yaml) means
+    # the default, not an empty value.
+    model_config = SettingsConfigDict(
+        env_prefix="TINYLM_", populate_by_name=True, env_ignore_empty=True
+    )
 
     host: str = "127.0.0.1"
     port: int = 8765
