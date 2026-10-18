@@ -34,6 +34,9 @@ DOCUMENT_ORDER = {
 RRF_K = 60
 # Each ranking contributes this many candidates per requested hit before fusion.
 CANDIDATES_PER_HIT = 5
+# An export reads this many documents at a time, and their vectors this many at a time.
+EXPORT_BATCH = 200
+EXPORT_LOOKUP = 500
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -54,6 +57,9 @@ CREATE TABLE IF NOT EXISTS chunks (
     position INTEGER NOT NULL,
     text TEXT NOT NULL
 );
+-- A document's chunks in order: without it every lookup by document (its chunk count in the
+-- document list, an export, deleting it) reads all chunks of the knowledge base.
+CREATE INDEX IF NOT EXISTS chunks_by_document ON chunks (document_id, position);
 """
 
 # Full-text index over chunks.text, kept in sync by triggers (they also fire on cascade deletes).
@@ -103,6 +109,11 @@ def full_text_query(text: str) -> str:
         elif len(word) >= 2 or word.isdigit():
             terms.append(f'"{word}"')
     return " OR ".join(terms)
+
+
+def marks(values: list) -> str:
+    """The placeholders of an IN (...) list of the values."""
+    return ",".join("?" * len(values))
 
 
 def now() -> str:
@@ -322,22 +333,42 @@ class KnowledgeStore:
             (collection,),
         ).fetchall()
         vectors = vectors and self._has_vectors()
-        for d in documents:
+        # A batch of documents at a time, each with one query for the chunks and one per
+        # EXPORT_LOOKUP vectors: the vector table has no join that uses its key, so joining it
+        # to the chunks would read all of it again for every document.
+        for start in range(0, len(documents), EXPORT_BATCH):
+            batch = documents[start : start + EXPORT_BATCH]
+            ids = [d["id"] for d in batch]
+            chunks = self.db.execute(
+                f"SELECT id, document_id, text FROM chunks WHERE document_id IN ({marks(ids)}) "
+                "ORDER BY document_id, position",
+                ids,
+            ).fetchall()
+            embeddings: dict[int, bytes] = {}
             if vectors:
-                chunks = self.db.execute(
-                    "SELECT k.text, v.embedding FROM chunks k "
-                    "LEFT JOIN chunk_vectors v ON v.chunk_id = k.id "
-                    "WHERE k.document_id = ? ORDER BY k.position",
-                    (d["id"],),
-                ).fetchall()
-            else:
-                chunks = self.db.execute(
-                    "SELECT text FROM chunks WHERE document_id = ? ORDER BY position", (d["id"],)
-                ).fetchall()
-            document = {"name": d["name"], "source": d["source"], "chunks": [r[0] for r in chunks]}
-            if vectors:
-                document["vectors"] = [r[1] for r in chunks]
-            yield document
+                chunk_ids = [c["id"] for c in chunks]
+                for i in range(0, len(chunk_ids), EXPORT_LOOKUP):
+                    part = chunk_ids[i : i + EXPORT_LOOKUP]
+                    embeddings.update(
+                        self.db.execute(
+                            "SELECT chunk_id, embedding FROM chunk_vectors "
+                            f"WHERE chunk_id IN ({marks(part)})",
+                            part,
+                        ).fetchall()
+                    )
+            by_document: dict[int, list] = {d["id"]: [] for d in batch}
+            for c in chunks:
+                by_document[c["document_id"]].append(c)
+            for d in batch:
+                rows = by_document[d["id"]]
+                document = {
+                    "name": d["name"],
+                    "source": d["source"],
+                    "chunks": [c["text"] for c in rows],
+                }
+                if vectors:
+                    document["vectors"] = [embeddings.get(c["id"]) for c in rows]
+                yield document
 
     def embedding_model(self) -> str:
         """The model the stored vectors were made with: the knowledge base's, else this one."""
@@ -392,8 +423,7 @@ class KnowledgeStore:
                 )
             ]
             if ids and self._has_vectors():
-                marks = ",".join("?" * len(ids))
-                self.db.execute(f"DELETE FROM chunk_vectors WHERE chunk_id IN ({marks})", ids)
+                self.db.execute(f"DELETE FROM chunk_vectors WHERE chunk_id IN ({marks(ids)})", ids)
             deleted = self.db.execute(
                 "DELETE FROM documents WHERE id = ? AND collection = ?", (document_id, collection)
             ).rowcount

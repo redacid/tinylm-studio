@@ -406,3 +406,36 @@ def test_chunked_documents_are_embedded_together(tmp_path):
     assert store.search("games", "Igni", k=1)[0].document == "witcher.txt"
     assert store.search("games", "Hyrule", k=1)[0].document == "zelda.txt"
     assert store.count_documents("games") == 3
+
+
+def test_export_in_batches(tmp_path, monkeypatch):
+    # Small batches, so an export of a few documents crosses them: every document keeps its
+    # own chunks, in order, each with its own vector.
+    monkeypatch.setattr("engine.rag.store.EXPORT_BATCH", 3)
+    monkeypatch.setattr("engine.rag.store.EXPORT_LOOKUP", 4)
+    store = KnowledgeStore(tmp_path / "knowledge.db", HashEmbedder())
+    store.create_collection("games")
+    store.create_collection("other")
+    documents = [
+        {
+            "name": f"{i}.txt",
+            "source": "",
+            "chunks": [f"Game {i}, part {p}." for p in range(1 + i % 4)],
+        }
+        for i in range(10)
+    ]
+    store.add_chunked(documents, "games")
+    store.add_chunked([{"name": "x.txt", "source": "", "chunks": ["Elsewhere."]}], "other")
+    exported = list(store.export_documents("games", vectors=True))
+    assert [d["name"] for d in exported] == [d["name"] for d in documents]
+    assert [d["chunks"] for d in exported] == [d["chunks"] for d in documents]
+    for d in exported:
+        expected = store.embedder.embed_documents(d["chunks"])
+        assert [np.frombuffer(v, dtype=np.float32).tolist() for v in d["vectors"]] == [
+            list(row) for row in np.asarray(expected, dtype=np.float32)
+        ]
+    # The lookups by document use the index.
+    plan = store.db.execute(
+        "EXPLAIN QUERY PLAN SELECT text FROM chunks WHERE document_id = 1 ORDER BY position"
+    ).fetchall()
+    assert "chunks_by_document" in " ".join(str(tuple(r)) for r in plan)
