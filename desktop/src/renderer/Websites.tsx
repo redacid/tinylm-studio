@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CrawlJob, EngineClient, Website } from "./api";
 import { useTabActive } from "./tabActive";
 import { Icon } from "./Icon";
+import { BusySpinner, useBusy } from "./Busy";
 
 type Draft = {
   name: string;
@@ -53,9 +54,11 @@ export function Websites({
 
   const report = (e: unknown) => setError(e instanceof Error ? e.message : String(e));
 
+  const loading = useBusy();
+  const { run: load } = loading;
   const refreshWebsites = useCallback(async () => {
-    setWebsites(await client.websites(collection));
-  }, [client, collection]);
+    setWebsites(await load("Loading websites…", () => client.websites(collection)));
+  }, [client, collection, load]);
 
   useEffect(() => {
     setEditing(null);
@@ -225,7 +228,8 @@ export function Websites({
         </form>
       )}
       {error && <p className="error">{error}</p>}
-      {websites.length === 0 && editing === null && (
+      <BusySpinner busy={loading} />
+      {websites.length === 0 && editing === null && !loading.busy && (
         <p className="muted">Save a website to crawl it into this collection, now and again later.</p>
       )}
       {websites.map((w) => {

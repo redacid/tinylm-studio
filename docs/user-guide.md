@@ -83,6 +83,11 @@ in the engine; each tab keeps its form, selection and progress while another one
 refreshes its lists when you come back. Closing the app stops the engine, and with it a run in
 progress.
 
+Anything that takes more than a moment shows a spinning icon with what is going on: loading
+collections, documents, datasets, examples, models and runs (slow with an engine on a pod or a
+server), adding files, importing and exporting a collection or a dataset, installing an
+imported model. The buttons that would start another such operation wait until it is done.
+
 The app follows the system's light or dark theme. Colors carry meaning across the tabs: blue for
 section titles, table headers, the selected item and the main button of a form; green for the
 assistant's answers and finished runs; red for errors and for the button that confirms a delete.

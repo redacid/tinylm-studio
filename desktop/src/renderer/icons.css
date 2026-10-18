@@ -61,3 +61,8 @@ button.active > .icon { color: inherit; }
 .badge.error::before, .badge.pod-error::before { content: "\ea05"; }
 .badge.cancelled::before, .badge.stopped::before, .badge.pod-terminated::before, .badge.pod-exited::before { content: "\ea2e"; }
 .badge.interrupted::before { content: "\ed45"; }
+
+/* A spinner: the turning loader icon and what is going on. */
+.spinner { display: inline-flex; align-items: center; gap: 0.4em; color: var(--muted); font-size: 13px; }
+.spinner > .icon { margin-right: 0; color: var(--accent); }
+.spinner.block { display: flex; padding: 8px 0; }

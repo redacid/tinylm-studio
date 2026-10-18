@@ -3,6 +3,7 @@ import { ChatMessage, ChatParams, ChatTrace, EngineClient, Source, Timings } fro
 import { ChatSettings, loadChatSession, saveChatSession } from "./chatSettings";
 import { LiveStatus, Progress, Stats } from "./Stats";
 import { Icon } from "./Icon";
+import { Spinner, useBusy } from "./Busy";
 
 /** A question and its answer share the trace of the request that answered it. */
 type Turn = ChatMessage & { sources?: Source[]; timings?: Timings; model?: string; trace?: ChatTrace };
@@ -63,6 +64,9 @@ export function Chat({
     }
   }, [messages, model, collection, system, busy, settings.rememberChoice, settings.keepConversation]);
 
+  const loading = useBusy();
+  const { run: load } = loading;
+
   // Reloaded whenever the tab is shown: models and collections may have changed on other tabs.
   useEffect(() => {
     if (!active) return;
@@ -70,7 +74,9 @@ export function Chat({
       (info) => setModelData(Object.fromEntries(info.models.map((m) => [m.id, m.settings.collection ?? ""]))),
       () => {},
     );
-    Promise.all([client.installedModels(), client.defaultModel(), client.teachers().catch(() => [])]).then(
+    load("Loading models…", () =>
+      Promise.all([client.installedModels(), client.defaultModel(), client.teachers().catch(() => [])]),
+    ).then(
       ([ids, preferred, saved]) => {
         const remote = saved
           .filter((t) => t.kind !== "local" && t.id != null)
@@ -92,7 +98,7 @@ export function Chat({
       },
       () => {},
     );
-  }, [client, active]);
+  }, [client, active, load]);
 
   async function send(event: FormEvent) {
     event.preventDefault();
@@ -147,6 +153,12 @@ export function Chat({
   }
 
   if (models.length === 0 && teachers.length === 0) {
+    if (loading.busy)
+      return (
+        <div className="empty">
+          <Spinner label="Loading models…" />
+        </div>
+      );
     return (
       <div className="empty">
         <p>No models installed yet.</p>

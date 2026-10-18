@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { DocumentFilter, DocumentInfo, EngineClient } from "./api";
 import { Icon } from "./Icon";
+import { BusySpinner, useBusy } from "./Busy";
 
 const PAGE_SIZE = 50;
 
@@ -25,6 +26,8 @@ export function Documents({
   const [documents, setDocuments] = useState<DocumentInfo[]>([]);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const loading = useBusy();
+  const { run: load } = loading;
 
   // Search as the user types, but not on every keystroke.
   useEffect(() => {
@@ -37,8 +40,7 @@ export function Documents({
 
   useEffect(() => {
     let stale = false;
-    client
-      .documents(collection, { query: search, kind, sort, offset, limit: PAGE_SIZE })
+    load("Loading documents…", () => client.documents(collection, { query: search, kind, sort, offset, limit: PAGE_SIZE }))
       .then((page) => {
         if (stale) return;
         setDocuments(page.data);
@@ -51,7 +53,7 @@ export function Documents({
     return () => {
       stale = true;
     };
-  }, [client, collection, search, kind, sort, offset, version]);
+  }, [client, collection, search, kind, sort, offset, version, load]);
 
   const last = Math.min(offset + PAGE_SIZE, total);
   return (
@@ -83,6 +85,7 @@ export function Documents({
         <Pager offset={offset} last={last} total={total} onChange={setOffset} />
       </div>
       {error && <p className="error">{error}</p>}
+      <BusySpinner busy={loading} block />
       <table>
         <thead>
           <tr><th>Document</th><th>Added</th><th>Size</th><th>Chunks</th><th /></tr>
@@ -102,7 +105,7 @@ export function Documents({
           ))}
         </tbody>
       </table>
-      {total === 0 && <p className="muted">{search || kind !== "all" ? "Nothing matches." : "No documents yet."}</p>}
+      {total === 0 && !loading.busy && <p className="muted">{search || kind !== "all" ? "Nothing matches." : "No documents yet."}</p>}
       {total > PAGE_SIZE && (
         <div className="filters bottom">
           <Pager offset={offset} last={last} total={total} onChange={setOffset} />

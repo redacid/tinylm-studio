@@ -3,6 +3,7 @@ import { ChatMessage, Dataset, EngineClient, Example, ExampleFilter } from "./ap
 import { GeneratePanel } from "./Generate";
 import { useTabActive } from "./tabActive";
 import { Icon } from "./Icon";
+import { BusySpinner, useBusy } from "./Busy";
 
 const PAGE_SIZE = 20;
 const NEW_EXAMPLE: ChatMessage[] = [
@@ -20,13 +21,15 @@ export function Datasets({ client }: { client: EngineClient }) {
   const [version, setVersion] = useState(0);
 
   const report = (e: unknown) => setError(e instanceof Error ? e.message : String(e));
+  const loading = useBusy();
+  const { run: load } = loading;
 
   const refresh = useCallback(async () => {
     setVersion((v) => v + 1);
-    const list = await client.datasets();
+    const list = await load("Loading datasets…", () => client.datasets());
     setDatasets(list);
     setSelected((current) => (list.some((d) => d.name === current) ? current : list[0]?.name ?? ""));
-  }, [client]);
+  }, [client, load]);
 
   const active = useTabActive();
   useEffect(() => {
@@ -53,6 +56,7 @@ export function Datasets({ client }: { client: EngineClient }) {
     <div className="data">
       <aside>
         <strong>Datasets</strong>
+        <BusySpinner busy={loading} />
         {datasets.map((d) => (
           <button key={d.name} className={d.name === selected ? "active" : ""} onClick={() => setSelected(d.name)}>
             {d.name}
@@ -69,7 +73,7 @@ export function Datasets({ client }: { client: EngineClient }) {
       <section>
         {error && <p className="error">{error}</p>}
         {!dataset ? (
-          <p className="muted">
+          !loading.busy && <p className="muted">
             A dataset holds examples of conversations: questions and the answers the model should learn to give.
             Create one, then import a JSONL or CSV file or add examples by hand.
           </p>
@@ -110,8 +114,10 @@ function DatasetView({
   // The example being edited: its id, "new", or null.
   const [editing, setEditing] = useState<number | "new" | null>(null);
   const [draft, setDraft] = useState<ChatMessage[]>(NEW_EXAMPLE);
-  const [importing, setImporting] = useState(false);
-  const [exporting, setExporting] = useState(false);
+  // Loading the examples, and the long operations: importing, exporting, deleting.
+  const loading = useBusy();
+  const { run: load } = loading;
+  const busy = useBusy();
   const [log, setLog] = useState<string[]>([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -128,8 +134,7 @@ function DatasetView({
 
   useEffect(() => {
     let stale = false;
-    client
-      .examples(dataset.name, { query: search, split, origin, offset, limit: PAGE_SIZE })
+    load("Loading examples…", () => client.examples(dataset.name, { query: search, split, origin, offset, limit: PAGE_SIZE }))
       .then((page) => {
         if (stale) return;
         setExamples(page.data);
@@ -140,38 +145,39 @@ function DatasetView({
     return () => {
       stale = true;
     };
-  }, [client, dataset.name, search, split, origin, offset, version]);
+  }, [client, dataset.name, search, split, origin, offset, version, load]);
 
   async function importFiles(files: FileList | null) {
     if (!files) return;
     setError(null);
-    setImporting(true);
     const lines: string[] = [];
-    for (const file of Array.from(files)) {
-      try {
-        const r = await client.importExamples(dataset.name, file);
-        if (r.error) {
-          lines.push(`✗ ${file.name}: ${r.error}`);
-        } else {
-          lines.push(`✓ ${file.name}: ${r.added} added, ${r.duplicates} already there, ${r.invalid} invalid`);
-          for (const e of r.errors ?? []) lines.push(`    line ${e.line}: ${e.error}`);
-          if ((r.invalid ?? 0) > (r.errors?.length ?? 0)) lines.push(`    … and ${(r.invalid ?? 0) - (r.errors?.length ?? 0)} more`);
+    const list = Array.from(files);
+    await busy.run("Importing…", async (progress) => {
+      for (const [i, file] of list.entries()) {
+        progress(`Importing ${i + 1} of ${list.length}: ${file.name}`);
+        try {
+          const r = await client.importExamples(dataset.name, file);
+          if (r.error) {
+            lines.push(`✗ ${file.name}: ${r.error}`);
+          } else {
+            lines.push(`✓ ${file.name}: ${r.added} added, ${r.duplicates} already there, ${r.invalid} invalid`);
+            for (const e of r.errors ?? []) lines.push(`    line ${e.line}: ${e.error}`);
+            if ((r.invalid ?? 0) > (r.errors?.length ?? 0)) lines.push(`    … and ${(r.invalid ?? 0) - (r.errors?.length ?? 0)} more`);
+          }
+        } catch (e) {
+          lines.push(`✗ ${file.name}: ${e instanceof Error ? e.message : String(e)}`);
         }
-      } catch (e) {
-        lines.push(`✗ ${file.name}: ${e instanceof Error ? e.message : String(e)}`);
+        setLog([...lines]);
       }
-      setLog([...lines]);
-    }
-    setImporting(false);
+    });
     onChange();
   }
 
   // Saves the examples to a file, to import on another engine (a RunPod pod, say).
   async function exportDataset() {
     setError(null);
-    setExporting(true);
     try {
-      const blob = await client.exportDataset(dataset.name);
+      const blob = await busy.run(`Exporting ${dataset.name}…`, () => client.exportDataset(dataset.name));
       const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);
       link.download = `${dataset.name}.jsonl`;
@@ -179,8 +185,6 @@ function DatasetView({
       setTimeout(() => URL.revokeObjectURL(link.href), 60_000);
     } catch (e) {
       report(e);
-    } finally {
-      setExporting(false);
     }
   }
 
@@ -220,7 +224,7 @@ function DatasetView({
 
   async function removeDataset() {
     setConfirmDelete(false);
-    await client.deleteDataset(dataset.name).catch(report);
+    await busy.run(`Deleting ${dataset.name}…`, () => client.deleteDataset(dataset.name)).catch(report);
     onChange();
   }
 
@@ -233,11 +237,11 @@ function DatasetView({
       <div className="actions">
         <label>
           <span className="button"><Icon name="file-import" />Import file</span>
-          <input type="file" multiple accept=".jsonl,.json,.csv" onChange={(e) => importFiles(e.target.files)} disabled={importing} />
+          <input type="file" multiple accept=".jsonl,.json,.csv" onChange={(e) => importFiles(e.target.files)} disabled={busy.busy} />
         </label>
         <button
           onClick={exportDataset}
-          disabled={exporting || dataset.examples === 0}
+          disabled={busy.busy || dataset.examples === 0}
           title="Saves the examples to a JSONL file, for Import file on another engine, e.g. a RunPod pod"
         >
           <Icon name="file-export" />Export
@@ -258,14 +262,14 @@ function DatasetView({
           %
         </label>
         <span className="muted">{dataset.train} for training · {dataset.eval} held out</span>
-        {importing && <span className="muted">Importing…</span>}
+        <BusySpinner busy={busy} />
         {confirmDelete ? (
           <span className="danger">
             Delete "{dataset.name}" and all its examples?{" "}
             <button onClick={removeDataset}><Icon name="trash" />Delete</button> <button onClick={() => setConfirmDelete(false)}><Icon name="x" />Cancel</button>
           </span>
         ) : (
-          <button className="danger" onClick={() => setConfirmDelete(true)}><Icon name="trash" />Delete dataset</button>
+          <button className="danger" onClick={() => setConfirmDelete(true)} disabled={busy.busy}><Icon name="trash" />Delete dataset</button>
         )}
       </div>
       <p className="muted">
@@ -364,7 +368,7 @@ function DatasetView({
             ))}
           </div>
         ))}
-        {total === 0 && <p className="muted">{search || split !== "all" || origin ? "Nothing matches." : "No examples yet."}</p>}
+        {total === 0 && !loading.busy && <p className="muted">{search || split !== "all" || origin ? "Nothing matches." : "No examples yet."}</p>}
       </div>
     </>
   );

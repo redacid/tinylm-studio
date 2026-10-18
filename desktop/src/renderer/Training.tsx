@@ -2,6 +2,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Dataset, EngineClient, LossPoint, TrainingJob, TrainingSettings } from "./api";
 import { useTabActive } from "./tabActive";
 import { Icon } from "./Icon";
+import { Spinner, useBusy } from "./Busy";
 
 const DEFAULTS: Omit<TrainingSettings, "name" | "base" | "dataset"> = {
   epochs: 3,
@@ -34,12 +35,14 @@ export function Training({ client, onNeedModel }: { client: EngineClient; onNeed
   const set = (patch: Partial<TrainingSettings>) => setSettings((s) => ({ ...s, ...patch }));
 
   const refreshJobs = useCallback(async () => setJobs((await client.trainingJobs()).reverse()), [client]);
+  const loading = useBusy();
+  const { run: load } = loading;
 
   const active = useTabActive();
   useEffect(() => {
     if (!active) return;
-    (async () => {
-      const [models, sets] = await Promise.all([client.trainableModels(), client.datasets()]);
+    load("Loading models and datasets…", async () => {
+      const [models, sets] = await Promise.all([client.trainableModels(), client.datasets(), refreshJobs()]);
       setBases(models);
       setDatasets(sets);
       setSettings((s) => ({
@@ -47,11 +50,10 @@ export function Training({ client, onNeedModel }: { client: EngineClient; onNeed
         base: models.includes(s.base) ? s.base : models.find((m) => m.startsWith("qwen3-0.6b")) ?? models[0] ?? "",
         dataset: sets.some((d) => d.name === s.dataset) ? s.dataset : sets[0]?.name ?? "",
       }));
-    })().catch(report);
-    refreshJobs().catch(report);
+    }).catch(report);
     const timer = setInterval(() => refreshJobs().catch(() => {}), 3000);
     return () => clearInterval(timer);
-  }, [client, refreshJobs, active]);
+  }, [client, refreshJobs, active, load]);
 
   async function start(event: FormEvent) {
     event.preventDefault();
@@ -75,7 +77,9 @@ export function Training({ client, onNeedModel }: { client: EngineClient; onNeed
     <div className="training">
       <form className="training-form" onSubmit={start}>
         <strong>New fine-tuned model</strong>
-        {bases.length === 0 ? (
+        {loading.busy ? (
+          <Spinner label={loading.label ?? ""} block />
+        ) : bases.length === 0 ? (
           <p className="muted">
             Fine-tuning needs a model with PyTorch weights, such as qwen3-0.6b.{" "}
             <button type="button" onClick={onNeedModel}><Icon name="download" />Download one</button>
@@ -137,7 +141,7 @@ export function Training({ client, onNeedModel }: { client: EngineClient; onNeed
         {busy && <p className="muted">One run at a time: wait for the current run or stop it.</p>}
         {error && <p className="error">{error}</p>}
       </form>
-      {jobs.length === 0 && <p className="muted">No training runs yet.</p>}
+      {jobs.length === 0 && !loading.busy && <p className="muted">No training runs yet.</p>}
       {jobs.map((job) => (
         <JobCard key={job.id} client={client} job={job} onChange={() => refreshJobs().catch(report)} />
       ))}

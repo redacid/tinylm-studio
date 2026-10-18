@@ -15,6 +15,7 @@ import { ModelSettingsForm } from "./ModelSettingsForm";
 import { Teachers } from "./Teachers";
 import { useTabActive } from "./tabActive";
 import { Icon } from "./Icon";
+import { BusySpinner, Spinner, useBusy } from "./Busy";
 
 const FORMATS: Record<InstalledModel["format"], string> = {
   gguf: "GGUF, llama.cpp",
@@ -39,6 +40,9 @@ export function Models({ client }: { client: EngineClient }) {
   const [transfer, setTransfer] = useState<ModelFileProgress | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  // The list is polled; the spinner shows only until it first arrives.
+  const [loaded, setLoaded] = useState(false);
+  const installing = useBusy();
 
   useEffect(() => window.tinylm.onModelProgress(setTransfer), []);
 
@@ -51,6 +55,7 @@ export function Models({ client }: { client: EngineClient }) {
         setExports(x);
         setHfToken(c.hf_token);
         setTrained(t);
+        setLoaded(true);
       }, (e) => setError(String(e))),
     [client],
   );
@@ -97,11 +102,15 @@ export function Models({ client }: { client: EngineClient }) {
       let upload = await window.tinylm.uploadModel();
       setTransfer(null);
       if (!upload) return;
-      setNote(`Installing ${upload.name}…`);
-      while (upload.state === "installing" || upload.state === "receiving") {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        upload = await client.modelUpload(upload.id);
-      }
+      const id = upload.id;
+      upload = await installing.run(`Installing ${upload.name}…`, async () => {
+        let state = await client.modelUpload(id);
+        while (state.state === "installing" || state.state === "receiving") {
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          state = await client.modelUpload(id);
+        }
+        return state;
+      });
       if (upload.state === "error") {
         setNote(null);
         setError(`${upload.name}: ${upload.error}`);
@@ -202,8 +211,11 @@ export function Models({ client }: { client: EngineClient }) {
         </button>
       </div>
       {transfer && <TransferProgress progress={transfer} />}
+      <BusySpinner busy={installing} block />
       {note && <p className="muted">{note}</p>}
-      {base.length === 0 ? (
+      {!loaded ? (
+        <Spinner label="Loading models…" block />
+      ) : base.length === 0 ? (
         <p className="muted">No models yet: download one below.</p>
       ) : (
         <table className="installed-models">

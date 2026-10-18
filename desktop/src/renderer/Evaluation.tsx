@@ -2,6 +2,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Dataset, EngineClient, Evaluation, EvaluationOptions, Teacher, TrainedModel } from "./api";
 import { useTabActive } from "./tabActive";
 import { Icon } from "./Icon";
+import { BusySpinner, useBusy } from "./Busy";
 
 const STATE_LABELS: Record<Evaluation["state"], string> = {
   running: "Running",
@@ -21,19 +22,22 @@ export function EvaluationScreen({ client }: { client: EngineClient }) {
 
   const report = (e: unknown) => setError(e instanceof Error ? e.message : String(e));
   const refresh = useCallback(async () => setRuns((await client.evaluations()).reverse()), [client]);
+  const loading = useBusy();
+  const { run: load } = loading;
 
   const active = useTabActive();
   useEffect(() => {
     if (!active) return;
-    refresh().catch(report);
+    load("Loading evaluations…", refresh).catch(report);
     const timer = setInterval(() => refresh().catch(() => {}), 3000);
     return () => clearInterval(timer);
-  }, [refresh, active]);
+  }, [refresh, active, load]);
 
   return (
     <div className="data">
       <aside>
         <strong>Evaluations</strong>
+        <BusySpinner busy={loading} />
         <button className={selected === "new" ? "active" : ""} onClick={() => setSelected("new")}>
           <Icon name="plus" />New evaluation
         </button>

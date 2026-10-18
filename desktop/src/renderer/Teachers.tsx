@@ -3,6 +3,7 @@ import { EngineClient, Teacher, TeacherInput, TeacherModel, ThinkingMode } from 
 import { servedBy } from "./Generate";
 import { useTabActive } from "./tabActive";
 import { Icon } from "./Icon";
+import { BusySpinner, useBusy } from "./Busy";
 
 /** Ready-made settings for common providers; every field stays editable. */
 const PROVIDERS = [
@@ -42,7 +43,9 @@ export function Teachers({ client }: { client: EngineClient }) {
   const [error, setError] = useState<string | null>(null);
 
   const report = (e: unknown) => setError(e instanceof Error ? e.message : String(e));
-  const refresh = useCallback(() => client.teachers().then(setTeachers, report), [client]);
+  const loading = useBusy();
+  const { run: load } = loading;
+  const refresh = useCallback(() => load("Loading teachers…", () => client.teachers()).then(setTeachers, report), [client, load]);
 
   const active = useTabActive();
   useEffect(() => {
@@ -122,6 +125,7 @@ export function Teachers({ client }: { client: EngineClient }) {
         {local.length > 0 ? `: ${local.map((t) => t.name).join(", ")}` : ""}; they are free and private but slow on a CPU.
       </p>
       {error && <p className="error">{error}</p>}
+      <BusySpinner busy={loading} block />
       {editing && (
         <form className="teacher-form" onSubmit={save}>
           <label>
