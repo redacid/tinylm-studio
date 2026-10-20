@@ -1,5 +1,10 @@
 # <img src="desktop/assets/icon.svg" width="40" alt=""> tinylm-studio
 
+![From crawling a website to chatting with the model trained on it](docs/images/walkthrough-en.gif)
+
+From a website to a trained model in one walkthrough ([in Ukrainian](docs/images/walkthrough-uk.gif);
+recorded by `make demo-gif`, see [docs/demo.md](docs/demo.md)).
+
 A desktop studio for building small, narrowly specialized language models that run without a powerful GPU.
 
 ![Fine-tuning a model on the Training screen](docs/images/training.png)
