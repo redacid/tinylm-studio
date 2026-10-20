@@ -1,0 +1,64 @@
+# Tests and validation: engine lint and tests, the desktop app's type check and build, version
+# numbers and generated API types. Runs on pushes to main, on pull requests, and as the first
+# step of the Release workflow.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  engine:
+    name: Engine (lint, tests, API types)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: engine/pyproject.toml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Check version numbers
+        run: make version-check
+      - name: Install the engine (CPU PyTorch and llama.cpp) with dev tools
+        run: bash scripts/setup-engine.sh --dev
+      - name: Lint
+        run: make lint-engine
+      - name: Test
+        run: make test
+      - name: Check the desktop app's engine API types are up to date
+        run: |
+          make api-types
+          git diff --exit-code -- desktop/src/renderer/engine-api.ts \
+            || { echo "::error::Run 'make api-types' and commit the result."; exit 1; }
+
+  desktop:
+    name: Desktop app (type check, build)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Type check
+        run: make lint-desktop
+      - name: Build
+        run: make build-desktop

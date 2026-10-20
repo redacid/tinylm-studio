@@ -88,6 +88,7 @@ The engine image comes in two variants, each in two layers:
 ```bash
 make image                                   # tinylm-engine:0.1.0-5a0d901-cpu and :cpu
 make image VARIANT=cuda                      # tinylm-engine:0.1.0-5a0d901-cuda and :cuda
+                                             # at the release tag 0.1.0: tinylm-engine:0.1.0-cuda
 make image-push VARIANT=cuda IMAGE=docker.io/<you>/tinylm-engine   # after docker login
 make base VARIANT=cuda                       # tinylm-engine-base:cuda-0f7b45363f9b and :cuda
 make base-push VARIANT=cuda IMAGE=docker.io/<you>/tinylm-engine    # docker.io/<you>/tinylm-engine-base
@@ -107,10 +108,16 @@ use, and points the engine at them by name (`http://tinylm-chrome:9222`,
   base lacks one. `make base-push` pushes the base, so that another computer builds the engine
   image without building the base; `make image-push` pushes the engine image with the base's
   layers, which a registry that has them already skips.
-- **Version and commit.** Every build is tagged `<engine version>-<commit>-<variant>`, e.g.
-  `0.1.0-5a0d901-cuda`, a tag that always means the same code, and `<variant>`, which moves to
-  the latest build. With uncommitted changes the commit gets `-dirty` (`0.1.0-5a0d901-dirty-cpu`),
-  and `make image-push` refuses to push until they are committed (`ALLOW_DIRTY=1` pushes anyway).
+- **Version and commit.** A build from a branch is tagged `<engine version>-<commit>-<variant>`,
+  e.g. `0.1.0-5a0d901-cuda`, a tag that always means the same code, and `<variant>`, which moves
+  to the latest build. A build from a release tag (`git checkout 0.1.0`, see
+  [releasing.md](releasing.md)) is tagged `<tag>-<variant>`, e.g. `0.1.0-cuda`, and fails if the
+  tag is not the version in the code. With uncommitted changes the commit gets `-dirty`
+  (`0.1.0-5a0d901-dirty-cpu`, never the tag), and `make image-push` refuses to push until they
+  are committed (`ALLOW_DIRTY=1` pushes anyway).
+- **On GitHub.** The *Engine image* workflow builds and pushes the image to
+  `ghcr.io/<owner>/tinylm-engine` when started by hand (Actions › Engine image › Run workflow),
+  named by the same rule; see [releasing.md](releasing.md#github-actions).
   Use the fixed tag on RunPod and in a cluster, so you know what runs and a restart does not pick
   up another build.
 - The version and commit are also in the image's labels (`org.opencontainers.image.version`,

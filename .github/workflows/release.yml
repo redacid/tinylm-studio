@@ -1,0 +1,47 @@
+# Publishes a release when a release tag (e.g. 0.1.0, made by `make release VERSION=0.1.0`) is
+# pushed: runs CI, checks that the tag is the version in the code, builds the .deb and .rpm
+# packages and creates the GitHub release with the tag's notes from CHANGELOG.md.
+# Engine images are built separately, on demand (images.yml).
+name: Release
+
+on:
+  push:
+    tags: ["[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    name: Packages and GitHub release
+    needs: ci
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - name: Check the tag is the version in the code
+        run: bash scripts/release.sh check "$GITHUB_REF_NAME"
+      - name: Install rpmbuild
+        run: sudo apt-get update && sudo apt-get install -y rpm
+      - name: Build the .deb and .rpm packages
+        run: make package PACKAGES="deb rpm"
+      - name: Release notes
+        run: bash scripts/release.sh notes "$GITHUB_REF_NAME" | tee release-notes.md
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --verify-tag \
+            --title "tinylm-studio $GITHUB_REF_NAME" --notes-file release-notes.md \
+            desktop/out/tinylm-studio-*.deb desktop/out/tinylm-studio-*.rpm

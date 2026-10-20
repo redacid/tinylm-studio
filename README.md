@@ -44,12 +44,13 @@ make run     # start the desktop app (it starts the engine)
 make desktop-entry   # optional, Linux: add the app with its icon to the system menu
 ```
 
-Or build an installable package and install it like any other app
-([Installing the app](docs/user-guide.md#installing-the-app)):
+Or install a package: download the `.deb` or `.rpm` of a release from
+[GitHub releases](https://github.com/redacid/tinylm-studio/releases), or build one and install it
+like any other app ([Installing the app](docs/user-guide.md#installing-the-app)):
 
 ```bash
 make deb       # or: make rpm, make appimage, make tarball, make package (all of them)
-sudo apt install ./desktop/out/tinylm-studio-0.1.0-amd64.deb
+sudo apt install ./desktop/out/tinylm-studio-0.1.0-5a0d901-amd64.deb   # named by the tag at a release tag
 ```
 
 Download a model (Models tab in the app, which also searches all GGUF and PyTorch models on
@@ -160,11 +161,18 @@ make test        # engine tests only
 make lint        # ruff for the engine, TypeScript type check for the desktop app
 make format      # auto-format and fix engine code
 make build       # compile the desktop app into desktop/dist
-make image       # engine container image tagged <version>-<commit>-<variant> (VARIANT=cuda for RunPod)
+make image       # engine container image tagged <tag>-<variant> or <version>-<commit>-<variant> (VARIANT=cuda)
 make base        # its base image (llama.cpp, PyTorch); make image builds it when missing
 make clean       # remove build outputs and caches
 make distclean   # also remove node_modules and the managed engine environment
+make release VERSION=0.2.0   # set the version, write release notes, commit and tag
 ```
+
+Releases are git tags like `0.2.0`, made by `make release`; pushing the tag to GitHub runs the
+tests and publishes the `.deb` and `.rpm` packages as a GitHub release. Packages and images built
+at a release tag are named by the tag, anywhere else by the commit. GitHub Actions also run the
+checks on every push and pull request, and build engine images on demand. See
+[docs/releasing.md](docs/releasing.md) and [CHANGELOG.md](CHANGELOG.md).
 
 Training tests build a tiny random model on the spot, so they need no download.
 

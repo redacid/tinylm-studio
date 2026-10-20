@@ -270,6 +270,11 @@ qwen3-0.6b on ~1,000 examples on the target machine, and a GPU run.
   electron-builder by `make package`. A package carries the engine's source and setup script as
   resources and, on the first start, installs a copy of the engine into its own environment
   (`~/.local/share/tinylm-studio/app-venv`), again after an update (a stamp names the build).
+- **Done (2026-10-20):** releases. `make release VERSION=x.y.z` sets the version in the engine
+  and the app, adds the commits since the previous tag to CHANGELOG.md, commits and tags; pushing
+  the tag runs GitHub Actions, which test, build the deb and rpm and publish a GitHub release.
+  Engine images are built by a manual workflow. Builds at a release tag are named by the tag,
+  others by the commit ([releasing.md](releasing.md)).
 - Installers for macOS and Windows (dmg, exe), code signing, auto-update.
 - **Done (2026-10-15):** a container image for the engine (CPU and CUDA), the desktop app
   connecting to a remote engine, and RunPod pods managed from Settings > Engine.

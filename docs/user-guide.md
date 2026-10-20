@@ -51,10 +51,12 @@ the entry; run the target again after moving the repository.
 
 ### Installing the app
 
-Instead of running it from the repository, the app can be built into a package and installed:
+Instead of running it from the repository, the app can be installed from a package. Each
+release has a `.deb` and an `.rpm` on
+[GitHub releases](https://github.com/redacid/tinylm-studio/releases); or build one yourself:
 
 ```bash
-make deb        # Debian, Ubuntu, Mint: desktop/out/tinylm-studio-<version>-amd64.deb
+make deb        # Debian, Ubuntu, Mint: desktop/out/tinylm-studio-<version>[-<commit>]-amd64.deb
 make rpm        # Fedora, RHEL, openSUSE (needs rpmbuild: apt install rpm)
 make appimage   # one file that runs on most distributions without installing
 make tarball    # a .tar.gz to unpack anywhere
@@ -64,6 +66,10 @@ make package    # all of them; PACKAGES="deb AppImage" picks some
 ```bash
 sudo apt install ./desktop/out/tinylm-studio-0.1.0-amd64.deb   # or: sudo dnf install ./…rpm
 ```
+
+A package built from a release tag (`git checkout 0.1.0`) is named by the tag,
+`tinylm-studio-0.1.0-amd64.deb`; one built from a branch also names the commit,
+`tinylm-studio-0.1.0-5a0d901-amd64.deb` (see [releasing.md](releasing.md#what-builds-are-named-by)).
 
 The installed app is in the system menu with its icon and starts from there (or as
 `tinylm-studio`). It needs Python 3.11+ on the computer (the deb and rpm depend on it); on its

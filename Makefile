@@ -28,6 +28,15 @@ DESKTOP_DEPS := $(DESKTOP_DIR)/node_modules/.package-lock.json
 
 export TINYLM_VENV
 
+# What a build is named by. At a release tag (e.g. 0.1.0, made by `make release`) with no
+# uncommitted changes, packages and images are named by the tag; anywhere else (a branch, a
+# commit), by the commit, with "-dirty" when there are uncommitted changes.
+ENGINE_VERSION := $(shell sed -n 's/^version = "\(.*\)"/\1/p' $(ENGINE_DIR)/pyproject.toml)
+GIT_COMMIT     := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)$(if $(shell git status --porcelain 2>/dev/null),-dirty)
+GIT_TAG        := $(if $(findstring -dirty,$(GIT_COMMIT)),,$(shell git describe --tags --exact-match --match '[0-9]*.[0-9]*.[0-9]*' HEAD 2>/dev/null))
+# Fails a build at a release tag that is not the version in the code.
+CHECK_TAG = $(if $(GIT_TAG),@bash scripts/release.sh check $(GIT_TAG) >/dev/null)
+
 ##@ Setup
 
 .PHONY: setup
@@ -76,13 +85,16 @@ openapi: ## Print the engine's OpenAPI schema (also served at /openapi.json)
 
 # Installable packages of the app, written to desktop/out. A package carries the engine's source
 # and installs it into its own Python environment on the first start (python3 is a dependency).
-# An .rpm needs rpmbuild on this computer (apt install rpm).
+# An .rpm needs rpmbuild on this computer (apt install rpm). The files are named
+# tinylm-studio-<version>-<arch> at a release tag, tinylm-studio-<version>-<commit>-<arch> elsewhere.
 PACKAGES ?= deb rpm AppImage tar.gz
+PACKAGE_NAME = tinylm-studio-$${version}$(if $(GIT_TAG),,-$(GIT_COMMIT))-$${arch}.$${ext}
 
 .PHONY: package
 package: build-desktop ## Build installable packages of the app (PACKAGES="deb rpm AppImage tar.gz")
+	$(CHECK_TAG)
 	echo "$(GIT_COMMIT)" > $(DESKTOP_DIR)/dist/build-commit
-	cd $(DESKTOP_DIR) && npx electron-builder --linux $(PACKAGES)
+	cd $(DESKTOP_DIR) && npx electron-builder --linux $(PACKAGES) '-c.artifactName=$(PACKAGE_NAME)'
 	@ls -1 $(DESKTOP_DIR)/out/tinylm-studio-*
 
 .PHONY: deb rpm appimage tarball
@@ -236,14 +248,13 @@ chrome-stop: ## Stop the headless Chrome
 
 # The engine image: VARIANT=cpu or cuda (NVIDIA GPUs, for RunPod). IMAGE names it, e.g.
 # IMAGE=docker.io/<you>/tinylm-engine to push it to Docker Hub. Each build is tagged
-# <engine version>-<commit>-<variant> (e.g. 0.1.0-5a0d901-cuda), which never changes, and
-# <variant>, which moves to the latest build. Uncommitted changes add "-dirty" to the commit.
+# <release tag>-<variant> at a release tag (e.g. 0.1.0-cuda), <engine version>-<commit>-<variant>
+# elsewhere (e.g. 0.1.0-5a0d901-cuda), which never change, and <variant>, which moves to the
+# latest build. Uncommitted changes add "-dirty" to the commit.
 IMAGE   ?= tinylm-engine
 ## VARIANT cpu cuda
 VARIANT ?= cpu
-ENGINE_VERSION := $(shell sed -n 's/^version = "\(.*\)"/\1/p' $(ENGINE_DIR)/pyproject.toml)
-GIT_COMMIT     := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)$(if $(shell git status --porcelain 2>/dev/null),-dirty)
-IMAGE_TAG      := $(ENGINE_VERSION)-$(GIT_COMMIT)-$(VARIANT)
+IMAGE_TAG      := $(or $(GIT_TAG),$(ENGINE_VERSION)-$(GIT_COMMIT))-$(VARIANT)
 # Its base (engine/Dockerfile.base): llama.cpp, PyTorch and the dependencies, built once, then
 # only when they change. Tagged <variant>-<hash of Dockerfile.base and the dependency list>.
 BASE_IMAGE ?= $(IMAGE)-base
@@ -264,8 +275,9 @@ base-push: ## Push the base image, so that other computers build the engine imag
 	$(CONTAINER) push $(BASE_IMAGE):$(VARIANT)
 
 .PHONY: image
-image: ## Build the engine image IMAGE:<version>-<commit>-VARIANT and IMAGE:VARIANT [VARIANT=cuda]
+image: ## Build the engine image IMAGE:<tag or version-commit>-VARIANT and IMAGE:VARIANT [VARIANT=cuda]
 	@test -n "$(CONTAINER)" || { echo "Install Docker or Podman first."; exit 1; }
+	$(CHECK_TAG)
 	@$(CONTAINER) image inspect $(BASE_IMAGE):$(BASE_TAG) >/dev/null 2>&1 \
 		|| $(CONTAINER) pull $(BASE_IMAGE):$(BASE_TAG) >/dev/null 2>&1 \
 		|| { echo "No base image $(BASE_IMAGE):$(BASE_TAG) (new dependencies?): building it first, which takes long."; \
@@ -293,6 +305,27 @@ run-image: ## Run IMAGE:VARIANT on 127.0.0.1:PORT with the data in DATA_DIR/cont
 		-v $(DATA_DIR)/container:/workspace/tinylm-studio \
 		-e TINYLM_CDP_URL=http://tinylm-chrome:9222 -e TINYLM_SEARXNG_URL=http://tinylm-searxng:8080 \
 		-e TINYLM_API_KEY $(if $(HF_TOKEN),-e HF_TOKEN) $(if $(filter cuda,$(VARIANT)),--gpus all) $(IMAGE):$(VARIANT)
+
+##@ Release
+
+.PHONY: release
+release: ## Set VERSION everywhere, add its release notes to CHANGELOG.md, commit and tag: make release VERSION=0.2.0
+	@test -n "$(VERSION)" || { echo "Usage: make release VERSION=0.2.0"; exit 1; }
+	bash scripts/release.sh $(VERSION)
+
+.PHONY: version
+version: ## Show the version and what builds are named by (the release tag, or the commit)
+	@echo "Version:  $(ENGINE_VERSION)"
+	@echo "Build:    $(or $(GIT_TAG),$(GIT_COMMIT))$(if $(GIT_TAG), (release tag), (commit))"
+	@bash scripts/release.sh check >/dev/null && echo "Versions: all $(ENGINE_VERSION)"
+
+.PHONY: version-check
+version-check: ## Check that every version number agrees (and equals the release tag at HEAD, if any)
+	bash scripts/release.sh check $(GIT_TAG)
+
+.PHONY: release-notes
+release-notes: ## Print a release's notes from CHANGELOG.md [VERSION=0.1.0]
+	@bash scripts/release.sh notes $(or $(VERSION),$(ENGINE_VERSION))
 
 ##@ Docs
 

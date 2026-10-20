@@ -33,6 +33,8 @@ Documentation is part of every change, not a follow-up:
   - [.env.example](./.env.example): every setting a user is likely to change;
   - [docs/implementation-plan.md](./docs/implementation-plan.md) and [TODO.md](./TODO.md): what is
     done and what is left.
+  - [docs/releasing.md](./docs/releasing.md): releases, how builds are named and the GitHub
+    Actions workflows (`.github/workflows/`).
 - When a screen is added or changes visibly, add or retake its screenshot in `docs/images/` and
   show it in the user guide.
 - A new or changed endpoint also keeps the OpenAPI schema right: its response model in
@@ -54,6 +56,13 @@ one of its clients. Keep every engine change working there, as described in
 - one engine process per data folder; background jobs survive only as long as the pod;
 - update docs/deployment.md when a change adds a setting, a volume path, outgoing network
   access or a new long-running job.
+
+## Releases and versions
+
+The version number is written in several places; change it only with `make release VERSION=x.y.z`
+(see [docs/releasing.md](./docs/releasing.md)), never by hand, and never edit released sections
+of CHANGELOG.md. Keep CI green: `make check` and `make version-check` before committing, and
+`make api-types` after changing an endpoint (CI fails when the committed types are stale).
 
 ## Scope
 These rules apply to every agent, thread and session in the project, and to any sub-agents or workers they start. Pass them on when briefing another agent.

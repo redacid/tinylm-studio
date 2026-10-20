@@ -69,6 +69,13 @@ The engine runs in a container in a Kubernetes cluster or a RunPod pod; see
 - [x] Image tags name the engine version and git commit (`0.1.0-5a0d901-cuda`); the commit is in
       the image labels, `/health` and the app's header.
 - [ ] Optional build arguments to include the embedding model and the GGUF converter.
+- [x] Releases: `make release VERSION=x.y.z` sets the version, writes CHANGELOG.md and tags; a
+      pushed tag runs CI and publishes the deb and rpm as a GitHub release; builds at a release
+      tag are named by the tag, elsewhere by the commit ([docs/releasing.md](docs/releasing.md)).
+- [x] GitHub Actions: CI on pushes and pull requests, Release on tags, engine images on demand.
+- [ ] Run the workflows on github.com/redacid/tinylm-studio for the first time (first release).
+- [ ] Build the images on GitHub (manual workflow) and decide where they live (ghcr.io storage,
+      runner disk and time for the CUDA base).
 - [x] Build and push the `cuda` image and start it on a real RunPod GPU pod (RTX 2000 Ada).
 - [ ] Run a fine-tune on a real RunPod GPU pod.
 - [ ] Manifests or a Helm chart: Deployment (1 replica, `Recreate`), Service, PVC
