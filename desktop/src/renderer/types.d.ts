@@ -1,3 +1,5 @@
+import type { components } from "./engine-api";
+
 export type EngineState =
   | { phase: "setting-up" }
   | { phase: "starting"; where: string; detail?: string }
@@ -81,17 +83,7 @@ export type RunPodCatalog = {
 };
 
 /** A model file being received and installed by the engine. */
-export type ModelUpload = {
-  id: string;
-  name: string;
-  size: number;
-  state: "receiving" | "installing" | "done" | "error";
-  received: number;
-  model: string | null;
-  /** For a fine-tuned model: its base model, when the engine does not have it. */
-  missing_base: string | null;
-  error: string | null;
-};
+export type ModelUpload = components["schemas"]["ModelUpload"];
 
 export type ModelFileProgress = { model: string; action: "save" | "upload"; done: number; total: number };
 

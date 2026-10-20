@@ -1,14 +1,27 @@
 """Management API for web search: find pages and videos, and keep results as links."""
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from typing import Literal
+
+from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel, Field, ValidationError
 
 from engine.api.deps import knowledge, require_api_key
+from engine.api.schemas import (
+    UNAUTHORIZED,
+    PublicSearchSettings,
+    Router,
+    SearchOutcome,
+    UploadResult,
+    errors,
+    items,
+)
 from engine.rag.store import CollectionNotFound, KnowledgeStore
 from engine.web.search import SearchError, SearchKind, SearchResult, link_document, search
-from engine.web.search_settings import SearchSettings, validation_message
+from engine.web.search_settings import Provider, SearchSettings, validation_message
 
-router = APIRouter(prefix="/api", dependencies=[Depends(require_api_key)], tags=["search"])
+router = Router(
+    prefix="/api", dependencies=[Depends(require_api_key)], tags=["search"], responses=UNAUTHORIZED
+)
 
 
 class SearchRequest(BaseModel):
@@ -33,8 +46,29 @@ class LinksRequest(BaseModel):
     links: list[Link] = Field(min_length=1)
 
 
-@router.post("/search")
+class SearchSettingsChanges(BaseModel, extra="allow"):
+    """The settings to save; the others keep their value. API keys: a string sets it, ""
+    removes it."""
+
+    provider: Provider | None = None
+    # A list, or one string with domains separated by commas or new lines.
+    include_domains: list[str] | str | None = None
+    exclude_domains: list[str] | str | None = None
+    searxng_url: str | None = None
+    brave_api_key: str | None = None
+    tavily_api_key: str | None = None
+    tavily_depth: Literal["basic", "advanced"] | None = None
+    tavily_topic: Literal["general", "news"] | None = None
+    exa_api_key: str | None = None
+    exa_type: Literal["auto", "fast", "instant"] | None = None
+    perplexity_api_key: str | None = None
+    serper_api_key: str | None = None
+    serper_country: str | None = None
+
+
+@router.post("/search", response_model=SearchOutcome, responses=errors(422, 503))
 def find(body: SearchRequest, request: Request) -> dict:
+    """Finds pages or videos with the provider and domain filter of the search settings."""
     saved = request.app.state.search_settings.get()
     changes = body.model_dump(include={"include_domains", "exclude_domains"}, exclude_none=True)
     try:
@@ -70,14 +104,15 @@ def find(body: SearchRequest, request: Request) -> dict:
     }
 
 
-@router.get("/search/settings")
+@router.get("/search/settings", response_model=PublicSearchSettings)
 def get_settings(request: Request) -> dict:
     return request.app.state.search_settings.get().public()
 
 
-@router.put("/search/settings")
-def put_settings(changes: dict, request: Request) -> dict:
+@router.put("/search/settings", response_model=PublicSearchSettings, responses=errors(422))
+def put_settings(body: SearchSettingsChanges, request: Request) -> dict:
     """Saves the given fields only. API keys: a string sets it, "" removes it, left out keeps it."""
+    changes = body.model_dump(exclude_unset=True)
     unknown = set(changes) - set(SearchSettings.model_fields)
     if unknown:
         raise HTTPException(422, f"Unknown settings: {', '.join(sorted(unknown))}")
@@ -87,7 +122,7 @@ def put_settings(changes: dict, request: Request) -> dict:
         raise HTTPException(422, validation_message(e)) from None
 
 
-@router.post("/collections/{name}/links")
+@router.post("/collections/{name}/links", response_model=items(UploadResult), responses=errors(404))
 def add_links(name: str, body: LinksRequest, store: KnowledgeStore = Depends(knowledge)) -> dict:
     """Keeps search results as small documents (title, address, description), so answers can
     cite them, for example trailers. To index a page's full text, crawl it instead."""

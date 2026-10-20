@@ -58,6 +58,22 @@ build: build-desktop ## Build all components
 build-desktop: $(DESKTOP_DEPS) ## Compile the desktop app TypeScript into desktop/dist
 	cd $(DESKTOP_DIR) && npm run build
 
+# The engine's OpenAPI schema, as /openapi.json serves it, turned into TypeScript types for the
+# desktop app's client (desktop/src/renderer/api.ts). Run after changing an engine endpoint; the
+# generated file is committed, so building the app needs no Python.
+API_TYPES := $(DESKTOP_DIR)/src/renderer/engine-api.ts
+
+.PHONY: api-types
+api-types: $(DESKTOP_DEPS) ## Regenerate the desktop app's engine API types from the OpenAPI schema
+	@schema=$$(mktemp --suffix=.json) && \
+		$(PYTHON) -m engine openapi --output $$schema && \
+		(cd $(DESKTOP_DIR) && npx openapi-typescript $$schema --default-non-nullable false --output $(CURDIR)/$(API_TYPES)); \
+		status=$$?; rm -f $$schema; exit $$status
+
+.PHONY: openapi
+openapi: ## Print the engine's OpenAPI schema (also served at /openapi.json)
+	@$(PYTHON) -m engine openapi
+
 # Installable packages of the app, written to desktop/out. A package carries the engine's source
 # and installs it into its own Python environment on the first start (python3 is a dependency).
 # An .rpm needs rpmbuild on this computer (apt install rpm).

@@ -7,18 +7,27 @@ from collections.abc import Iterator
 from dataclasses import asdict
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from engine.api import anthropic as anthropic_api
 from engine.api.deps import grounded, is_anthropic, manager, require_api_key
+from engine.api.schemas import (
+    UNAUTHORIZED,
+    AnthropicModelList,
+    ChatCompletion,
+    OpenAIError,
+    OpenAIModelList,
+    Router,
+    event_stream,
+)
 from engine.chat import ChatRequest, Finish, Message, TextDelta, collect
 from engine.models.manager import ModelManager
 from engine.rag.store import CollectionNotFound
 from engine.timings import Timings
 
-router = APIRouter(dependencies=[Depends(require_api_key)], tags=["openai"])
+router = Router(dependencies=[Depends(require_api_key)], tags=["openai"], responses=UNAUTHORIZED)
 
 FINISH_REASONS = {"stop": "stop", "stop_sequence": "stop", "length": "length"}
 
@@ -92,8 +101,10 @@ def error(status: int, message: str, kind: str, code: str | None = None) -> JSON
     )
 
 
-@router.get("/v1/models")
+@router.get("/v1/models", response_model=OpenAIModelList | AnthropicModelList)
 def list_models(request: Request, models: ModelManager = Depends(manager)):
+    """The models to chat with: installed models, then saved teachers
+    ("tinylm/teacher/<name>"). In Anthropic's form when the request has anthropic-version."""
     if is_anthropic(request):
         return anthropic_api.list_models(models)
     return {
@@ -105,10 +116,18 @@ def list_models(request: Request, models: ModelManager = Depends(manager)):
     }
 
 
-@router.post("/v1/chat/completions")
+@router.post(
+    "/v1/chat/completions",
+    response_model=ChatCompletion,
+    responses={
+        **event_stream("With stream: chat.completion.chunk objects, then [DONE]"),
+        404: {"model": OpenAIError, "description": "Unknown model or collection"},
+    },
+)
 def chat_completions(
     body: ChatCompletionRequest, http: Request, models: ModelManager = Depends(manager)
 ):
+    """OpenAI's chat completions, with tinylm's extensions (collection, sources, timings)."""
     if not models.can_chat(body.model):
         return error(
             404,

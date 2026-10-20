@@ -4,7 +4,22 @@ import { useTabActive } from "./tabActive";
 import { Icon } from "./Icon";
 import { Spinner, useBusy } from "./Busy";
 
-const DEFAULTS: Omit<TrainingSettings, "name" | "base" | "dataset"> = {
+/** The settings the form sets; the engine's defaults for the others. */
+type Form = Pick<
+  TrainingSettings,
+  | "name"
+  | "base"
+  | "dataset"
+  | "epochs"
+  | "learning_rate"
+  | "lora_rank"
+  | "max_length"
+  | "batch_size"
+  | "gradient_accumulation"
+  | "device"
+>;
+
+const DEFAULTS: Omit<Form, "name" | "base" | "dataset"> = {
   epochs: 3,
   learning_rate: 2e-4,
   lora_rank: 16,
@@ -28,11 +43,11 @@ export function Training({ client, onNeedModel }: { client: EngineClient; onNeed
   const [bases, setBases] = useState<string[]>([]);
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [jobs, setJobs] = useState<TrainingJob[]>([]);
-  const [settings, setSettings] = useState<TrainingSettings>({ name: "", base: "", dataset: "", ...DEFAULTS });
+  const [settings, setSettings] = useState<Form>({ name: "", base: "", dataset: "", ...DEFAULTS });
   const [error, setError] = useState<string | null>(null);
 
   const report = (e: unknown) => setError(e instanceof Error ? e.message : String(e));
-  const set = (patch: Partial<TrainingSettings>) => setSettings((s) => ({ ...s, ...patch }));
+  const set = (patch: Partial<Form>) => setSettings((s) => ({ ...s, ...patch }));
 
   const refreshJobs = useCallback(async () => setJobs((await client.trainingJobs()).reverse()), [client]);
   const loading = useBusy();
@@ -125,7 +140,7 @@ export function Training({ client, onNeedModel }: { client: EngineClient; onNeed
           </label>
           <label>
             Device{" "}
-            <select value={settings.device} onChange={(e) => set({ device: e.target.value as TrainingSettings["device"] })}>
+            <select value={settings.device} onChange={(e) => set({ device: e.target.value as Form["device"] })}>
               <option value="auto">Auto (GPU if available)</option>
               <option value="cpu">CPU</option>
               <option value="cuda">NVIDIA GPU (CUDA)</option>

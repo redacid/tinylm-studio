@@ -5,17 +5,18 @@ import uuid
 from collections.abc import Iterator
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from engine.api.deps import grounded, manager, require_api_key
+from engine.api.schemas import UNAUTHORIZED, AnthropicError, AnthropicMessage, Router, event_stream
 from engine.chat import ChatRequest, Finish, Message, TextDelta, collect
 from engine.models.manager import ModelManager
 from engine.rag.store import CollectionNotFound
 from engine.timings import Timings
 
-router = APIRouter(dependencies=[Depends(require_api_key)], tags=["anthropic"])
+router = Router(dependencies=[Depends(require_api_key)], tags=["anthropic"], responses=UNAUTHORIZED)
 
 STOP_REASONS = {"stop": "end_turn", "stop_sequence": "stop_sequence", "length": "max_tokens"}
 
@@ -99,8 +100,16 @@ def sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps({'type': event, **data}, ensure_ascii=False)}\n\n"
 
 
-@router.post("/v1/messages")
+@router.post(
+    "/v1/messages",
+    response_model=AnthropicMessage,
+    responses={
+        **event_stream("With stream: Anthropic's message events"),
+        404: {"model": AnthropicError, "description": "Unknown model or collection"},
+    },
+)
 def create_message(body: MessagesRequest, http: Request, models: ModelManager = Depends(manager)):
+    """Anthropic's Messages API, with tinylm's extensions (collection, sources, timings)."""
     if not models.can_chat(body.model):
         return error(404, f"model: {body.model}", "not_found_error")
     timings = Timings()

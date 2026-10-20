@@ -2,13 +2,14 @@
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from engine.api.deps import require_api_key
+from engine.api.schemas import UNAUTHORIZED, ExportJob, Router, errors, items
 from engine.export.jobs import ExportError, ExportManager, ExportNotFound
 
-router = APIRouter(dependencies=[Depends(require_api_key)], tags=["export"])
+router = Router(dependencies=[Depends(require_api_key)], tags=["export"], responses=UNAUTHORIZED)
 
 
 class ExportRequest(BaseModel):
@@ -22,7 +23,12 @@ def exports(request: Request) -> ExportManager:
     return request.app.state.exports
 
 
-@router.post("/api/models/{model_id}/export", status_code=202)
+@router.post(
+    "/api/models/{model_id}/export",
+    status_code=202,
+    response_model=ExportJob,
+    responses=errors(409, 422),
+)
 def export_model(
     model_id: str, body: ExportRequest, manager: ExportManager = Depends(exports)
 ) -> dict:
@@ -33,12 +39,12 @@ def export_model(
         raise HTTPException(409 if "running" in str(e) else 422, str(e)) from None
 
 
-@router.get("/api/exports")
+@router.get("/api/exports", response_model=items(ExportJob))
 def list_exports(manager: ExportManager = Depends(exports)) -> dict:
     return {"data": [e.to_dict() for e in manager.exports()]}
 
 
-@router.get("/api/exports/{export_id}")
+@router.get("/api/exports/{export_id}", response_model=ExportJob, responses=errors(404))
 def get_export(export_id: str, manager: ExportManager = Depends(exports)) -> dict:
     try:
         return manager.get(export_id).to_dict()

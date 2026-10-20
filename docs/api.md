@@ -12,6 +12,40 @@ set, only `GET /health` answers without it. The [container image](deployment.md#
 does not start without a key. The desktop app sends the key when it uses a remote engine or a
 RunPod pod (Settings > Engine).
 
+## OpenAPI schema
+
+The engine describes every endpoint in an OpenAPI 3.1 schema: the request fields, the response
+bodies, the errors and the API key. A running engine serves it at `/openapi.json`, with Swagger
+UI at `/docs` and ReDoc at `/redoc`; these three answer without the key. Without a running
+engine, write it to a file:
+
+```bash
+make openapi > openapi.json                        # or:
+python -m engine openapi --output openapi.json     # the engine's environment
+```
+
+Import the file (or the `/openapi.json` address) into Postman, Insomnia, Bruno or any OpenAPI
+client generator. The schema names both ways of sending the key, `HTTPBearer`
+(`Authorization: Bearer <key>`) and `APIKeyHeader` (`x-api-key`); fill in either one, for
+example with **Authorize** in Swagger UI.
+
+![Swagger UI at /docs](images/openapi-docs.png)
+
+Errors of the management API (`/api/...`) are `{"detail": "..."}` with the status the tables
+below name; a 422 for fields that fail validation has a list of the bad fields as `detail`
+instead. `/v1/...` and a refused key answer in OpenAI's form (`{"error": {"message", "type",
+"code"}}`), or Anthropic's for `/v1/messages` and requests with `anthropic-version`. Streams
+(`stream: true`, training events) and files (exports, model archives) are described by their
+media type only.
+
+For developers: the response bodies are the models in `engine/src/engine/api/schemas.py`.
+Handlers return plain dicts, which FastAPI checks against these models; a response carries
+exactly the fields its handler returned. The tests make a field that a handler sends but its
+model lacks an error, so the schema cannot fall behind the code. The desktop app's types for
+the engine (`desktop/src/renderer/engine-api.ts`) are generated from the schema with
+[openapi-typescript](https://openapi-ts.dev): after changing an endpoint, run `make api-types`
+and `make lint-desktop`, and commit the regenerated file.
+
 ## OpenAI-compatible
 
 | Method | Path | Notes |

@@ -2,7 +2,8 @@
 
 import secrets
 
-from fastapi import Request
+from fastapi import Depends, Request
+from fastapi.security import APIKeyHeader, HTTPBearer
 
 from engine.chat import ChatRequest
 from engine.models.manager import ModelManager
@@ -14,7 +15,17 @@ class AuthError(Exception):
     pass
 
 
-def require_api_key(request: Request) -> None:
+# Either header carries the key; declared so that the OpenAPI schema shows them (Swagger's
+# Authorize button). The check itself is below, so a missing key gets the OpenAI-style error.
+bearer = HTTPBearer(auto_error=False, description="The engine's TINYLM_API_KEY")
+api_key_header = APIKeyHeader(
+    name="x-api-key", auto_error=False, description="The engine's TINYLM_API_KEY"
+)
+
+
+def require_api_key(
+    request: Request, _bearer=Depends(bearer), _header=Depends(api_key_header)
+) -> None:
     expected = request.app.state.settings.api_key
     if not expected:
         return

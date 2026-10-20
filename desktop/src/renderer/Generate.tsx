@@ -9,7 +9,10 @@ const LANGUAGES = [
   ["en", "English"],
 ] as const;
 
-const DEFAULTS: GenerationOptions = {
+/** The options the form sets; the engine's defaults for the others. */
+type Form = Omit<GenerationOptions, "sources" | "min_answer_chars" | "max_answer_chars">;
+
+const DEFAULTS: Form = {
   collection: "",
   teacher: "",
   chunks: 20,
@@ -23,7 +26,7 @@ const DEFAULTS: GenerationOptions = {
 };
 const SETTINGS_KEY = "generate-options";
 
-function savedOptions(): GenerationOptions {
+function savedOptions(): Form {
   try {
     return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? "{}") };
   } catch {
@@ -45,13 +48,13 @@ export function GeneratePanel({
 }) {
   const [collections, setCollections] = useState<Collection[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
-  const [options, setOptions] = useState<GenerationOptions>(savedOptions);
+  const [options, setOptions] = useState<Form>(savedOptions);
   const [unused, setUnused] = useState<number | null>(null);
   const [job, setJob] = useState<GenerationJob | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const report = (e: unknown) => setError(e instanceof Error ? e.message : String(e));
-  const set = (patch: Partial<GenerationOptions>) => setOptions((o) => ({ ...o, ...patch }));
+  const set = (patch: Partial<Form>) => setOptions((o) => ({ ...o, ...patch }));
 
   const active = useTabActive();
   useEffect(() => {

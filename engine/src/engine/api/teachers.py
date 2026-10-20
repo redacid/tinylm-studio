@@ -2,15 +2,27 @@
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from engine.api.deps import require_api_key
+from engine.api.schemas import (
+    UNAUTHORIZED,
+    Router,
+    Teacher,
+    TeacherModel,
+    TeacherTest,
+    errors,
+    items,
+)
 from engine.teachers.providers import TeacherError, cli_tool
 from engine.teachers.store import TeacherConfig, TeacherNameTaken, TeacherNotFound, TeacherStore
 
-router = APIRouter(
-    prefix="/api/teachers", dependencies=[Depends(require_api_key)], tags=["teachers"]
+router = Router(
+    prefix="/api/teachers",
+    dependencies=[Depends(require_api_key)],
+    tags=["teachers"],
+    responses=UNAUTHORIZED,
 )
 
 
@@ -63,14 +75,14 @@ def config(body: TeacherRequest, store: TeacherStore) -> TeacherConfig:
     )
 
 
-@router.get("")
+@router.get("", response_model=items(Teacher))
 def list_teachers(store: TeacherStore = Depends(teachers)) -> dict:
     """Saved teachers (without their keys) and installed models as local teachers; use "ref"
     to pick one for generation."""
     return {"data": store.all()}
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, response_model=Teacher, responses=errors(404, 409, 422))
 def add_teacher(body: TeacherRequest, store: TeacherStore = Depends(teachers)) -> dict:
     if not body.model.strip() and body.kind != "cli":
         raise HTTPException(422, "Choose a model.")
@@ -84,7 +96,7 @@ def name_taken(error: TeacherNameTaken) -> str:
     return f"A teacher named {error} already exists; choose another name."
 
 
-@router.put("/{teacher_id}")
+@router.put("/{teacher_id}", response_model=Teacher, responses=errors(404, 409, 422))
 def change_teacher(
     teacher_id: int, body: TeacherRequest, store: TeacherStore = Depends(teachers)
 ) -> dict:
@@ -96,7 +108,7 @@ def change_teacher(
         raise HTTPException(409, name_taken(e)) from None
 
 
-@router.delete("/{teacher_id}", status_code=204)
+@router.delete("/{teacher_id}", status_code=204, responses=errors(404))
 def delete_teacher(teacher_id: int, store: TeacherStore = Depends(teachers)) -> None:
     try:
         store.delete(teacher_id)
@@ -104,7 +116,7 @@ def delete_teacher(teacher_id: int, store: TeacherStore = Depends(teachers)) -> 
         raise HTTPException(404, f"Unknown teacher {teacher_id}") from None
 
 
-@router.post("/models")
+@router.post("/models", response_model=items(TeacherModel), responses=errors(404, 502))
 def provider_models(body: TeacherRequest, store: TeacherStore = Depends(teachers)) -> dict:
     """The provider's models, free ones first (OpenRouter marks them)."""
     try:
@@ -113,7 +125,7 @@ def provider_models(body: TeacherRequest, store: TeacherStore = Depends(teachers
         raise HTTPException(502, str(e)) from None
 
 
-@router.post("/test")
+@router.post("/test", response_model=TeacherTest, responses=errors(404, 502))
 def test_teacher(body: TeacherRequest, store: TeacherStore = Depends(teachers)) -> dict:
     """Sends a tiny request to check the address, key and model."""
     teacher = store.client(config(body, store))

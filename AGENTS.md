@@ -35,6 +35,9 @@ Documentation is part of every change, not a follow-up:
     done and what is left.
 - When a screen is added or changes visibly, add or retake its screenshot in `docs/images/` and
   show it in the user guide.
+- A new or changed endpoint also keeps the OpenAPI schema right: its response model in
+  `engine/src/engine/api/schemas.py`, and the desktop app's generated types (`make api-types`,
+  committed with the change); see [docs/api.md](./docs/api.md#openapi-schema).
 - Before finishing a task, check that nothing the user can now do or configure is missing from
   the docs.
 

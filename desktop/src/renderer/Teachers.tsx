@@ -126,7 +126,7 @@ export function Teachers({ client }: { client: EngineClient }) {
   const local = teachers.filter((t) => t.kind === "local");
   const provider = PROVIDERS.find((p) => p.base_url === editing?.base_url && p.kind === editing?.kind)?.label ?? "";
   const cli = editing?.kind === "cli";
-  const ready = cli || !!editing?.model.trim();
+  const ready = cli || !!editing?.model?.trim();
   const shown = freeOnly && models.some((m) => m.free) ? models.filter((m) => m.free) : models;
 
   return (

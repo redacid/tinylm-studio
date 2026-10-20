@@ -2,17 +2,21 @@
 
 from urllib.parse import urlsplit
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
+from engine.api import schemas
 from engine.api.deps import knowledge, require_api_key
+from engine.api.schemas import UNAUTHORIZED, Router, errors, items
 from engine.rag.store import CollectionNotFound, KnowledgeStore
 from engine.web.crawl_settings import CrawlSettings, CrawlSettingsStore
 from engine.web.crawler import CrawlJob, CrawlManager, CrawlOptions
 from engine.web.search_settings import validation_message
 from engine.web.sites import Website, WebsiteStore
 
-router = APIRouter(prefix="/api", dependencies=[Depends(require_api_key)], tags=["web"])
+router = Router(
+    prefix="/api", dependencies=[Depends(require_api_key)], tags=["web"], responses=UNAUTHORIZED
+)
 
 
 class CrawlRequest(BaseModel):
@@ -119,7 +123,12 @@ def require_job(manager: CrawlManager, job_id: str) -> CrawlJob:
     return manager.jobs[job_id]
 
 
-@router.post("/collections/{name}/crawl", status_code=202)
+@router.post(
+    "/collections/{name}/crawl",
+    status_code=202,
+    response_model=schemas.CrawlJob,
+    responses=errors(404),
+)
 def start_crawl(
     name: str,
     body: CrawlRequest,
@@ -132,7 +141,9 @@ def start_crawl(
     return manager.start(name, CrawlOptions(**with_defaults(body, request))).to_dict()
 
 
-@router.get("/collections/{name}/websites")
+@router.get(
+    "/collections/{name}/websites", response_model=items(schemas.Website), responses=errors(404)
+)
 def list_websites(
     name: str, store: KnowledgeStore = Depends(knowledge), sites: WebsiteStore = Depends(websites)
 ) -> dict:
@@ -140,7 +151,12 @@ def list_websites(
     return {"data": [w.to_dict() for w in sites.websites(name)]}
 
 
-@router.post("/collections/{name}/websites", status_code=201)
+@router.post(
+    "/collections/{name}/websites",
+    status_code=201,
+    response_model=schemas.Website,
+    responses=errors(404),
+)
 def add_website(
     name: str,
     body: WebsiteRequest,
@@ -152,7 +168,7 @@ def add_website(
     return sites.add_website(name, to_website(body, request)).to_dict()
 
 
-@router.put("/websites/{website_id}")
+@router.put("/websites/{website_id}", response_model=schemas.Website, responses=errors(404))
 def update_website(
     website_id: int,
     body: WebsiteRequest,
@@ -163,13 +179,18 @@ def update_website(
     return sites.update_website(website_id, to_website(body, request)).to_dict()
 
 
-@router.delete("/websites/{website_id}", status_code=204)
+@router.delete("/websites/{website_id}", status_code=204, responses=errors(404))
 def delete_website(website_id: int, sites: WebsiteStore = Depends(websites)) -> None:
     if not sites.delete_website(website_id):
         raise HTTPException(404, f"No website {website_id}")
 
 
-@router.post("/websites/{website_id}/crawl", status_code=202)
+@router.post(
+    "/websites/{website_id}/crawl",
+    status_code=202,
+    response_model=schemas.CrawlJob,
+    responses=errors(404, 409),
+)
 def crawl_website(
     website_id: int,
     sites: WebsiteStore = Depends(websites),
@@ -185,17 +206,17 @@ def crawl_website(
     return manager.start(website.collection, options(website), website_id).to_dict()
 
 
-@router.get("/crawls")
+@router.get("/crawls", response_model=items(schemas.CrawlJob))
 def list_crawls(manager: CrawlManager = Depends(crawls)) -> dict:
     return {"data": [job.to_dict() for job in manager.jobs.values()]}
 
 
-@router.get("/crawls/{job_id}")
+@router.get("/crawls/{job_id}", response_model=schemas.CrawlJob, responses=errors(404))
 def get_crawl(job_id: str, manager: CrawlManager = Depends(crawls)) -> dict:
     return require_job(manager, job_id).to_dict()
 
 
-@router.post("/crawls/{job_id}/cancel")
+@router.post("/crawls/{job_id}/cancel", response_model=schemas.CrawlJob, responses=errors(404))
 def cancel_crawl(job_id: str, manager: CrawlManager = Depends(crawls)) -> dict:
     job = require_job(manager, job_id)
     job.cancelled.set()
@@ -217,7 +238,7 @@ def get_crawl_settings(store: CrawlSettingsStore = Depends(crawl_settings)) -> C
     return store.get()
 
 
-@router.put("/crawl/settings")
+@router.put("/crawl/settings", responses=errors(422))
 def put_crawl_settings(
     body: CrawlSettingsChanges, store: CrawlSettingsStore = Depends(crawl_settings)
 ) -> CrawlSettings:

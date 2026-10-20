@@ -4,28 +4,41 @@ hardware)."""
 
 import sys
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import Depends, Query, Request
 
 from engine import __version__, commit, hardware, logs
 from engine.api.deps import require_api_key
+from engine.api.schemas import UNAUTHORIZED, EngineLog, Health, Router, SystemInfo
 
-router = APIRouter(tags=["system"])
+router = Router(tags=["system"])
 
 
-@router.get("/health")
+@router.get("/health", response_model=Health)
 def health() -> dict:
+    """Answers without the API key."""
     return {"status": "ok", "version": __version__, "commit": commit()}
 
 
-@router.get("/api/logs", dependencies=[Depends(require_api_key)])
+@router.get(
+    "/api/logs",
+    dependencies=[Depends(require_api_key)],
+    response_model=EngineLog,
+    responses=UNAUTHORIZED,
+)
 def engine_log(request: Request, lines: int = Query(500, ge=1, le=5000)) -> dict:
     """The end of the engine's log, oldest first; a traceback is part of its entry."""
     path = logs.log_file(request.app.state.settings.data_dir)
     return {"file": str(path), "lines": logs.tail(path, lines)}
 
 
-@router.get("/api/system", dependencies=[Depends(require_api_key)])
+@router.get(
+    "/api/system",
+    dependencies=[Depends(require_api_key)],
+    response_model=SystemInfo,
+    responses=UNAUTHORIZED,
+)
 def system_info() -> dict:
+    """The engine's version, Python and hardware."""
     return {
         "version": __version__,
         "commit": commit(),

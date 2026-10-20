@@ -288,10 +288,12 @@ export function Models({ client }: { client: EngineClient }) {
                     {settingsForm(m.id)}
                   </td>
                   <td className="nowrap">
-                    {new Date(m.created_at).toLocaleString()}
-                    <div className="muted">
-                      {m.settings.epochs} epochs · lr {m.settings.learning_rate} · rank {m.settings.lora_rank}
-                    </div>
+                    {m.created_at && new Date(m.created_at).toLocaleString()}
+                    {m.settings && (
+                      <div className="muted">
+                        {m.settings.epochs} epochs · lr {m.settings.learning_rate} · rank {m.settings.lora_rank}
+                      </div>
+                    )}
                   </td>
                   <td className="nowrap">
                     {m.loss != null && `training ${m.loss.toFixed(3)}`}

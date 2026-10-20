@@ -1,9 +1,10 @@
 """Management API for evaluations: compare models on the held-out examples of a dataset."""
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from engine.api.deps import require_api_key
+from engine.api.schemas import UNAUTHORIZED, Evaluation, Router, errors, items
 from engine.datasets.store import DatasetNotFound
 from engine.evaluation.evaluate import (
     EvaluationError,
@@ -13,8 +14,11 @@ from engine.evaluation.evaluate import (
 )
 from engine.teachers.store import TeacherNotFound
 
-router = APIRouter(
-    prefix="/api/evaluations", dependencies=[Depends(require_api_key)], tags=["evaluation"]
+router = Router(
+    prefix="/api/evaluations",
+    dependencies=[Depends(require_api_key)],
+    tags=["evaluation"],
+    responses=UNAUTHORIZED,
 )
 
 
@@ -37,13 +41,13 @@ def find(manager: EvaluationManager, evaluation_id: str):
         raise HTTPException(404, f"Unknown evaluation '{evaluation_id}'") from None
 
 
-@router.get("")
+@router.get("", response_model=items(Evaluation))
 def list_evaluations(manager: EvaluationManager = Depends(evaluations)) -> dict:
     """Runs with their summaries, oldest first, without the per-example answers."""
     return {"data": [e.to_dict(examples=False) for e in manager.all()]}
 
 
-@router.post("", status_code=202)
+@router.post("", status_code=202, response_model=Evaluation, responses=errors(404, 409, 422))
 def start_evaluation(
     body: EvaluationRequest, manager: EvaluationManager = Depends(evaluations)
 ) -> dict:
@@ -58,19 +62,20 @@ def start_evaluation(
         raise HTTPException(status, str(e)) from None
 
 
-@router.get("/{evaluation_id}")
+@router.get("/{evaluation_id}", response_model=Evaluation, responses=errors(404))
 def get_evaluation(evaluation_id: str, manager: EvaluationManager = Depends(evaluations)):
+    """The report with every example's answers."""
     return find(manager, evaluation_id).to_dict()
 
 
-@router.post("/{evaluation_id}/stop")
+@router.post("/{evaluation_id}/stop", response_model=Evaluation, responses=errors(404))
 def stop_evaluation(evaluation_id: str, manager: EvaluationManager = Depends(evaluations)):
     """Stops after the answer in progress; the report keeps what was done."""
     find(manager, evaluation_id)
     return manager.stop(evaluation_id).to_dict(examples=False)
 
 
-@router.delete("/{evaluation_id}", status_code=204)
+@router.delete("/{evaluation_id}", status_code=204, responses=errors(404, 409))
 def delete_evaluation(evaluation_id: str, manager: EvaluationManager = Depends(evaluations)):
     find(manager, evaluation_id)
     try:

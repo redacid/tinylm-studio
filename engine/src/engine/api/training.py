@@ -5,16 +5,20 @@ import json
 from collections.abc import AsyncIterator
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from engine.api.deps import require_api_key
+from engine.api.schemas import UNAUTHORIZED, Router, TrainingJob, errors, event_stream, items
 from engine.datasets.store import DatasetNotFound
 from engine.training.jobs import Busy, JobNotFound, TrainingError, TrainingManager, TrainingSettings
 
-router = APIRouter(
-    prefix="/api/training", dependencies=[Depends(require_api_key)], tags=["training"]
+router = Router(
+    prefix="/api/training",
+    dependencies=[Depends(require_api_key)],
+    tags=["training"],
+    responses=UNAUTHORIZED,
 )
 # How often the event stream looks for new progress, in seconds.
 POLL = 1.0
@@ -45,12 +49,12 @@ def not_found(job_id: str) -> HTTPException:
     return HTTPException(404, f"Unknown training run '{job_id}'")
 
 
-@router.get("/jobs")
+@router.get("/jobs", response_model=items(TrainingJob))
 def list_jobs(manager: TrainingManager = Depends(training)) -> dict:
     return {"data": [job.to_dict(history=False) for job in manager.jobs()]}
 
 
-@router.post("/jobs", status_code=201)
+@router.post("/jobs", status_code=201, response_model=TrainingJob, responses=errors(404, 409, 422))
 def start_job(body: TrainingRequest, manager: TrainingManager = Depends(training)) -> dict:
     fields = body.model_dump()
     fields["lora_alpha"] = body.lora_alpha or body.lora_rank * 2
@@ -64,8 +68,9 @@ def start_job(body: TrainingRequest, manager: TrainingManager = Depends(training
         raise HTTPException(422, str(e)) from None
 
 
-@router.get("/jobs/{job_id}")
+@router.get("/jobs/{job_id}", response_model=TrainingJob, responses=errors(404))
 def get_job(job_id: str, manager: TrainingManager = Depends(training)) -> dict:
+    """The run with its loss history, and the worker's log when it failed."""
     try:
         job = manager.job(job_id)
     except JobNotFound:
@@ -73,7 +78,7 @@ def get_job(job_id: str, manager: TrainingManager = Depends(training)) -> dict:
     return {**job.to_dict(), "log": manager.log(job_id) if job.state == "error" else ""}
 
 
-@router.post("/jobs/{job_id}/stop")
+@router.post("/jobs/{job_id}/stop", response_model=TrainingJob, responses=errors(404))
 def stop_job(job_id: str, manager: TrainingManager = Depends(training)) -> dict:
     try:
         return manager.stop(job_id).to_dict()
@@ -81,7 +86,7 @@ def stop_job(job_id: str, manager: TrainingManager = Depends(training)) -> dict:
         raise not_found(job_id) from None
 
 
-@router.post("/jobs/{job_id}/resume")
+@router.post("/jobs/{job_id}/resume", response_model=TrainingJob, responses=errors(404, 409, 422))
 def resume_job(job_id: str, manager: TrainingManager = Depends(training)) -> dict:
     try:
         return manager.resume(job_id).to_dict()
@@ -93,7 +98,7 @@ def resume_job(job_id: str, manager: TrainingManager = Depends(training)) -> dic
         raise HTTPException(422, str(e)) from None
 
 
-@router.delete("/jobs/{job_id}", status_code=204)
+@router.delete("/jobs/{job_id}", status_code=204, responses=errors(404, 409))
 def delete_job(job_id: str, manager: TrainingManager = Depends(training)) -> None:
     try:
         manager.delete(job_id)
@@ -103,7 +108,11 @@ def delete_job(job_id: str, manager: TrainingManager = Depends(training)) -> Non
         raise HTTPException(409, str(e)) from None
 
 
-@router.get("/jobs/{job_id}/events")
+@router.get(
+    "/jobs/{job_id}/events",
+    response_class=StreamingResponse,
+    responses={**event_stream("One JSON object per `data:` line"), **errors(404)},
+)
 async def job_events(job_id: str, request: Request, manager: TrainingManager = Depends(training)):
     """Server-sent events: every worker event so far (start, step, eval, checkpoint, done,
     stopped, error), then new ones as they come, and a "state" event whenever the run's state

@@ -7,11 +7,24 @@ import uuid
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, UploadFile
+from fastapi import Depends, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from engine.api.deps import knowledge, require_api_key
+from engine.api.schemas import (
+    UNAUTHORIZED,
+    Collection,
+    DocumentInfo,
+    Hit,
+    ImportJob,
+    Router,
+    UploadResult,
+    errors,
+    file_response,
+    items,
+    page,
+)
 from engine.rag.convert import UnsupportedFile, convert
 from engine.rag.store import (
     CollectionNotFound,
@@ -24,8 +37,11 @@ from engine.rag.transfer import ImportManager, export_lines, read_header
 
 log = logging.getLogger(__name__)
 
-router = APIRouter(
-    prefix="/api/collections", dependencies=[Depends(require_api_key)], tags=["knowledge"]
+router = Router(
+    prefix="/api/collections",
+    dependencies=[Depends(require_api_key)],
+    tags=["knowledge"],
+    responses=UNAUTHORIZED,
 )
 
 
@@ -33,7 +49,7 @@ class NewCollection(BaseModel):
     name: str
 
 
-class SearchRequest(BaseModel):
+class CollectionSearch(BaseModel):
     query: str
     k: int = 4
 
@@ -42,12 +58,12 @@ def not_found(name: str) -> HTTPException:
     return HTTPException(404, f"Unknown collection '{name}'")
 
 
-@router.get("")
+@router.get("", response_model=items(Collection))
 def list_collections(store: KnowledgeStore = Depends(knowledge)) -> dict:
     return {"data": store.collections()}
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, response_model=Collection, responses=errors(422))
 def create_collection(body: NewCollection, store: KnowledgeStore = Depends(knowledge)) -> dict:
     try:
         collection = store.create_collection(body.name)
@@ -57,7 +73,7 @@ def create_collection(body: NewCollection, store: KnowledgeStore = Depends(knowl
         raise HTTPException(422, str(e)) from None
 
 
-@router.delete("/{name}", status_code=204)
+@router.delete("/{name}", status_code=204, responses=errors(404))
 def delete_collection(name: str, store: KnowledgeStore = Depends(knowledge)) -> None:
     try:
         store.delete_collection(name)
@@ -66,7 +82,7 @@ def delete_collection(name: str, store: KnowledgeStore = Depends(knowledge)) -> 
         raise not_found(name) from None
 
 
-@router.get("/{name}/documents")
+@router.get("/{name}/documents", response_model=page(DocumentInfo), responses=errors(404))
 def list_documents(
     name: str,
     query: str = "",
@@ -86,7 +102,7 @@ def list_documents(
         raise not_found(name) from None
 
 
-@router.post("/{name}/documents")
+@router.post("/{name}/documents", response_model=items(UploadResult), responses=errors(404))
 def upload_documents(
     name: str, files: list[UploadFile], store: KnowledgeStore = Depends(knowledge)
 ) -> dict:
@@ -120,14 +136,18 @@ def upload_documents(
     return {"data": results}
 
 
-@router.delete("/{name}/documents/{document_id}", status_code=204)
+@router.delete("/{name}/documents/{document_id}", status_code=204, responses=errors(404))
 def delete_document(name: str, document_id: int, store: KnowledgeStore = Depends(knowledge)):
     if not store.delete_document(name, document_id):
         raise HTTPException(404, f"No document {document_id} in '{name}'")
     log.info("Document %d deleted from %s", document_id, name)
 
 
-@router.get("/{name}/export")
+@router.get(
+    "/{name}/export",
+    response_class=StreamingResponse,
+    responses={**file_response("application/x-ndjson", "JSON lines"), **errors(404)},
+)
 def export_collection(name: str, store: KnowledgeStore = Depends(knowledge)) -> StreamingResponse:
     """The collection's documents and chunks as JSON lines, for POST /api/collections/import."""
     try:
@@ -146,7 +166,7 @@ def imports(request: Request) -> ImportManager:
     return request.app.state.imports
 
 
-@router.post("/import", status_code=202)
+@router.post("/import", status_code=202, response_model=ImportJob, responses=errors(422))
 def import_collection(
     request: Request,
     file: UploadFile,
@@ -177,15 +197,15 @@ def import_collection(
     return manager.start(name, path).to_dict()
 
 
-@router.get("/imports/{job_id}")
+@router.get("/imports/{job_id}", response_model=ImportJob, responses=errors(404))
 def import_status(job_id: str, manager: ImportManager = Depends(imports)) -> dict:
     if job_id not in manager.jobs:
         raise HTTPException(404, f"No import {job_id}")
     return manager.jobs[job_id].to_dict()
 
 
-@router.post("/{name}/search")
-def search(name: str, body: SearchRequest, store: KnowledgeStore = Depends(knowledge)) -> dict:
+@router.post("/{name}/search", response_model=items(Hit), responses=errors(404))
+def search(name: str, body: CollectionSearch, store: KnowledgeStore = Depends(knowledge)) -> dict:
     try:
         return {"data": [hit.to_dict() for hit in store.search(name, body.query, body.k)]}
     except CollectionNotFound:

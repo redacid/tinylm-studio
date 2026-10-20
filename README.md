@@ -110,7 +110,9 @@ make health
 ```
 
 The engine serves OpenAI-compatible (`/v1/chat/completions`) and Anthropic-compatible
-(`/v1/messages`) APIs.
+(`/v1/messages`) APIs. Its OpenAPI schema is at `/openapi.json` (Swagger UI at `/docs`), and
+`make openapi` prints it without a running engine, for importing into Postman, Insomnia or a
+client generator ([docs/api.md](docs/api.md#openapi-schema)).
 
 Run `make help` for all targets.
 

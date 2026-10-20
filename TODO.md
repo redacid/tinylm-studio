@@ -91,11 +91,16 @@ The engine runs in a container in a Kubernetes cluster or a RunPod pod; see
 
 ## API description (OpenAPI)
 
-FastAPI already serves the engine's OpenAPI schema at `/openapi.json` and Swagger UI at `/docs`.
+The engine serves its OpenAPI schema at `/openapi.json`, Swagger UI at `/docs`;
+`make openapi` prints it. See [docs/api.md](docs/api.md#openapi-schema).
 
-- [ ] Make the schema complete: response models (`response_model` or typed returns) instead of
-      `-> dict`, so responses are described; summaries and descriptions from docstrings; error
-      responses (`responses={404: ...}`); an `APIKeyHeader`/Bearer security scheme, so Swagger's
-      **Authorize** and tools that import the schema (Postman, Insomnia, Bruno) send the key.
-- [ ] Generate TypeScript types for `desktop/src/renderer/api.ts` from the schema
-      (`openapi-typescript`) instead of writing them by hand, so the app and the engine cannot drift.
+- [x] Complete schema: response models for every JSON endpoint (`engine/api/schemas.py`,
+      checked against what handlers send in the tests), error responses, the media types of
+      streams and files, and the `HTTPBearer`/`APIKeyHeader` security schemes for **Authorize**
+      and tools that import the schema (Postman, Insomnia, Bruno).
+- [x] TypeScript types for `desktop/src/renderer/api.ts` generated from the schema
+      (`make api-types`, openapi-typescript) instead of written by hand.
+- [ ] Optional: field descriptions in the schema (Swagger and the generated types show only
+      field names; the meaning is in code comments).
+- [ ] Optional: the events of streams (chat chunks, training events) in the schema; the app
+      keeps their TypeScript types by hand.

@@ -17,7 +17,7 @@ on a [RunPod](#runpod) GPU or CPU pod, which the desktop app can create, start a
 | Configuration | Only `TINYLM_*` environment variables (see [api.md](api.md#settings)): a ConfigMap for settings, a Secret for `TINYLM_API_KEY`, `HF_TOKEN` and the search providers' `TINYLM_*_API_KEY`. No config files to mount; search and crawler settings changed in the app are saved in the data folder and win over the variables. |
 | Listening outside the pod | `TINYLM_HOST=0.0.0.0` (the default `127.0.0.1` only serves the pod itself); `TINYLM_PORT`, 8765 by default. |
 | Authentication | `TINYLM_API_KEY`: every API call then needs `Authorization: Bearer <key>` or `x-api-key: <key>`. Always set it in a cluster. |
-| Probes | `GET /health` answers without an API key; use it for liveness and readiness. Every other path, `/api/system` included, needs the key when one is set. |
+| Probes | `GET /health` answers without an API key; use it for liveness and readiness. Every other path, `/api/system` included, needs the key when one is set, except the API's description (`/openapi.json`, `/docs`, `/redoc`), which holds no data. |
 | State | Everything the engine keeps is under `TINYLM_DATA_DIR` (see the table in the [user guide](user-guide.md#where-data-is-stored)): mount a PersistentVolume there. |
 | Logs | The engine logs to stdout and to `<data dir>/logs/engine.log` (4 files of 5 MB; `TINYLM_LOG_LEVEL`), whose end `GET /api/logs` serves to the app. Background jobs also write `worker.log` in their folder under `workspace/`. |
 | Lifecycle | Leave `TINYLM_EXIT_WITH_PARENT` unset: it only makes sense when the desktop app starts the engine. |

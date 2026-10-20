@@ -41,6 +41,14 @@ from engine.web.crawl_settings import CrawlSettingsStore
 from engine.web.crawler import Crawler, CrawlManager
 from engine.web.search_settings import SearchSettingsStore
 
+DESCRIPTION = """\
+Chat with local models through OpenAI- and Anthropic-compatible endpoints (`/v1/...`), and
+manage models, data, datasets, training and evaluation (`/api/...`).
+
+When the engine has `TINYLM_API_KEY`, every endpoint but `/health` needs it, as
+`Authorization: Bearer <key>` or `x-api-key: <key>`. See docs/api.md for more.
+"""
+
 
 def open_knowledge(settings: Settings) -> KnowledgeStore:
     if settings.embedding_model == "hash":
@@ -72,7 +80,11 @@ def create_app(
     settings = settings or Settings()
     settings.workspace_dir.mkdir(parents=True, exist_ok=True)
 
-    app = FastAPI(title="tinylm-studio engine", version=__version__)
+    app = FastAPI(
+        title="tinylm-studio engine",
+        version=__version__,
+        description=DESCRIPTION,
+    )
     app.state.settings = settings
     app.state.models = models or ModelManager(
         settings.models_dir,

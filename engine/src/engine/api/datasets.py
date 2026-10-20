@@ -2,19 +2,36 @@
 
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
+from fastapi import Depends, HTTPException, Query, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from engine.api.deps import require_api_key
+from engine.api.schemas import (
+    UNAUTHORIZED,
+    AddedExample,
+    Dataset,
+    Example,
+    GenerationJob,
+    ImportResult,
+    Router,
+    UnusedChunks,
+    errors,
+    file_response,
+    items,
+    page,
+)
 from engine.datasets.formats import InvalidExample
 from engine.datasets.generate import LANGUAGE_NAMES, GenerationManager, GenerationOptions
 from engine.datasets.store import DatasetNotFound, DatasetStore, InvalidDataset, Origin, Split
 from engine.rag.store import CollectionNotFound
 from engine.teachers.store import TeacherNotFound
 
-router = APIRouter(
-    prefix="/api/datasets", dependencies=[Depends(require_api_key)], tags=["datasets"]
+router = Router(
+    prefix="/api/datasets",
+    dependencies=[Depends(require_api_key)],
+    tags=["datasets"],
+    responses=UNAUTHORIZED,
 )
 
 
@@ -33,7 +50,7 @@ class Message(BaseModel):
     content: str
 
 
-class Example(BaseModel):
+class ExampleMessages(BaseModel):
     messages: list[Message]
 
 
@@ -67,16 +84,16 @@ def not_found(name: str) -> HTTPException:
     return HTTPException(404, f"Unknown dataset '{name}'")
 
 
-def messages(body: Example) -> list[dict]:
+def messages(body: ExampleMessages) -> list[dict]:
     return [m.model_dump() for m in body.messages]
 
 
-@router.get("")
+@router.get("", response_model=items(Dataset))
 def list_datasets(store: DatasetStore = Depends(datasets)) -> dict:
     return {"data": store.datasets()}
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, response_model=Dataset, responses=errors(422))
 def create_dataset(body: NewDataset, store: DatasetStore = Depends(datasets)) -> dict:
     try:
         return store.create(body.name, body.eval_percent)
@@ -84,7 +101,7 @@ def create_dataset(body: NewDataset, store: DatasetStore = Depends(datasets)) ->
         raise HTTPException(422, str(e)) from None
 
 
-@router.patch("/{name}")
+@router.patch("/{name}", response_model=Dataset, responses=errors(404))
 def change_dataset(name: str, body: DatasetChange, store: DatasetStore = Depends(datasets)):
     try:
         return store.update(name, body.eval_percent)
@@ -92,7 +109,7 @@ def change_dataset(name: str, body: DatasetChange, store: DatasetStore = Depends
         raise not_found(name) from None
 
 
-@router.delete("/{name}", status_code=204)
+@router.delete("/{name}", status_code=204, responses=errors(404))
 def delete_dataset(name: str, store: DatasetStore = Depends(datasets)) -> None:
     try:
         store.delete(name)
@@ -100,7 +117,7 @@ def delete_dataset(name: str, store: DatasetStore = Depends(datasets)) -> None:
         raise not_found(name) from None
 
 
-@router.post("/{name}/import")
+@router.post("/{name}/import", response_model=items(ImportResult), responses=errors(404))
 def import_files(name: str, files: list[UploadFile], store: DatasetStore = Depends(datasets)):
     """Adds the examples of JSONL, JSON or CSV files; bad records are reported by line."""
     results = []
@@ -115,7 +132,11 @@ def import_files(name: str, files: list[UploadFile], store: DatasetStore = Depen
     return {"data": results}
 
 
-@router.get("/{name}/export")
+@router.get(
+    "/{name}/export",
+    response_class=StreamingResponse,
+    responses={**file_response("application/x-ndjson", "JSON lines"), **errors(404)},
+)
 def export_dataset(
     name: str, split: Split = "all", store: DatasetStore = Depends(datasets)
 ) -> StreamingResponse:
@@ -133,7 +154,7 @@ def export_dataset(
     )
 
 
-@router.get("/{name}/examples")
+@router.get("/{name}/examples", response_model=page(Example), responses=errors(404))
 def list_examples(
     name: str,
     query: str = "",
@@ -152,8 +173,10 @@ def list_examples(
         raise not_found(name) from None
 
 
-@router.post("/{name}/examples", status_code=201)
-def add_example(name: str, body: Example, store: DatasetStore = Depends(datasets)) -> dict:
+@router.post(
+    "/{name}/examples", status_code=201, response_model=AddedExample, responses=errors(404, 422)
+)
+def add_example(name: str, body: ExampleMessages, store: DatasetStore = Depends(datasets)) -> dict:
     try:
         return store.add(name, messages(body))
     except DatasetNotFound:
@@ -162,8 +185,10 @@ def add_example(name: str, body: Example, store: DatasetStore = Depends(datasets
         raise HTTPException(422, str(e)) from None
 
 
-@router.put("/{name}/examples/{example_id}", status_code=204)
-def edit_example(name: str, example_id: int, body: Example, store=Depends(datasets)) -> None:
+@router.put("/{name}/examples/{example_id}", status_code=204, responses=errors(404, 422))
+def edit_example(
+    name: str, example_id: int, body: ExampleMessages, store=Depends(datasets)
+) -> None:
     try:
         if not store.edit(name, example_id, messages(body)):
             raise HTTPException(404, f"No example {example_id} in '{name}'")
@@ -171,13 +196,18 @@ def edit_example(name: str, example_id: int, body: Example, store=Depends(datase
         raise HTTPException(422, str(e)) from None
 
 
-@router.delete("/{name}/examples/{example_id}", status_code=204)
+@router.delete("/{name}/examples/{example_id}", status_code=204, responses=errors(404))
 def delete_example(name: str, example_id: int, store: DatasetStore = Depends(datasets)) -> None:
     if not store.remove(name, example_id):
         raise HTTPException(404, f"No example {example_id} in '{name}'")
 
 
-@router.post("/{name}/generate", status_code=202)
+@router.post(
+    "/{name}/generate",
+    status_code=202,
+    response_model=GenerationJob,
+    responses=errors(404, 409, 422),
+)
 def generate(
     name: str,
     body: GenerateRequest,
@@ -204,7 +234,7 @@ def generate(
     return manager.start(name, GenerationOptions(**body.model_dump())).to_dict()
 
 
-@router.get("/{name}/generate")
+@router.get("/{name}/generate", response_model=UnusedChunks, responses=errors(404))
 def generation_source(
     name: str, collection: str, manager: GenerationManager = Depends(generations)
 ) -> dict:

@@ -8,6 +8,7 @@ python -m engine ingest COLLECTION PATH ...      add files or folders to a colle
 python -m engine crawl COLLECTION URL ...        add pages of websites to a collection
 python -m engine search QUERY [--add COLLECTION] find pages or videos (and add them);
                  [--include a.com,b.com] [--exclude c.com]   only / never these sites
+python -m engine openapi [--output FILE]         write the API's OpenAPI schema (JSON)
 """
 
 import argparse
@@ -252,6 +253,24 @@ def search(settings: Settings, args: argparse.Namespace) -> None:
         run_crawl(settings, args.add, options)
 
 
+def openapi(_: Settings, args: argparse.Namespace) -> None:
+    """The schema /openapi.json serves, without starting a server or touching the data folder:
+    the app is made on an empty temporary one."""
+    import json
+    import tempfile
+    from pathlib import Path
+
+    from engine.main import create_app
+
+    with tempfile.TemporaryDirectory(prefix="tinylm-openapi-") as folder:
+        app = create_app(Settings(data_dir=Path(folder), embedding_model="hash"))
+        schema = json.dumps(app.openapi(), indent=2, ensure_ascii=False) + "\n"
+    if args.output:
+        Path(args.output).write_text(schema)
+    else:
+        sys.stdout.write(schema)
+
+
 def main() -> None:
     settings = Settings()
     parser = argparse.ArgumentParser(prog="python -m engine", description="tinylm-studio engine")
@@ -315,6 +334,10 @@ def main() -> None:
         "--add", metavar="COLLECTION", help="add the found pages (or video links) to a collection"
     )
     p.set_defaults(func=search)
+
+    p = sub.add_parser("openapi", help="write the API's OpenAPI schema (JSON)")
+    p.add_argument("--output", help="the file to write (default: standard output)")
+    p.set_defaults(func=openapi)
 
     args = parser.parse_args()
     getattr(args, "func", serve)(settings, args)

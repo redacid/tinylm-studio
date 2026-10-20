@@ -8,12 +8,15 @@ import json
 import threading
 from pathlib import Path
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from engine.config import Settings
 
 
 class CrawlSettings(BaseModel):
+    # Sent whole by the API: its schema lists every field as present.
+    model_config = ConfigDict(json_schema_serialization_defaults_required=True)
+
     # Off: robots.txt is not read at all, for every crawl. Only for sites you may crawl anyway.
     respect_robots: bool = True
     # Requests per minute to each site, for crawls that do not set their own.

@@ -4,12 +4,25 @@ searching Hugging Face and downloads."""
 from typing import Literal
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import Depends, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from engine.api.deps import knowledge, manager, require_api_key
+from engine.api.schemas import (
+    UNAUTHORIZED,
+    Download,
+    HubFiles,
+    HubModel,
+    ModelInfo,
+    ModelUpload,
+    Router,
+    TrainedModel,
+    errors,
+    file_response,
+    items,
+)
 from engine.models import hub
 from engine.models.catalog import DEFAULT_MODEL
 from engine.models.manager import ModelExists, ModelManager, ModelNotFound
@@ -17,11 +30,15 @@ from engine.models.settings import ModelSettings
 from engine.models.transfer import ModelUploads, Upload, UploadError, archive
 from engine.rag.store import KnowledgeStore
 
-router = APIRouter(prefix="/api", dependencies=[Depends(require_api_key)], tags=["admin"])
+router = Router(
+    prefix="/api", dependencies=[Depends(require_api_key)], tags=["admin"], responses=UNAUTHORIZED
+)
 
 
-@router.get("/models")
+@router.get("/models", response_model=ModelInfo)
 def model_catalog(models: ModelManager = Depends(manager)) -> dict:
+    """Installed models, downloads, the catalog and whether downloads send a Hugging Face
+    token."""
     return {
         "installed": models.installed(),
         "models": models.details(),
@@ -33,21 +50,24 @@ def model_catalog(models: ModelManager = Depends(manager)) -> dict:
     }
 
 
-@router.post("/models/{model_id}/download", status_code=202)
+@router.post(
+    "/models/{model_id}/download", status_code=202, response_model=Download, responses=errors(404)
+)
 def download_model(model_id: str, models: ModelManager = Depends(manager)) -> dict:
+    """Downloads a model of the catalog."""
     try:
         return models.download(model_id).to_dict()
     except ModelNotFound:
         raise HTTPException(404, f"Unknown model '{model_id}'") from None
 
 
-@router.get("/models/trained")
+@router.get("/models/trained", response_model=items(TrainedModel))
 def trained_models(models: ModelManager = Depends(manager)) -> dict:
     """Fine-tuned models with their base model, dataset, final loss and training settings."""
     return {"data": models.trained()}
 
 
-@router.delete("/models/{model_id}", status_code=204)
+@router.delete("/models/{model_id}", status_code=204, responses=errors(404))
 def delete_model(model_id: str, models: ModelManager = Depends(manager)) -> None:
     try:
         models.delete(model_id)
@@ -55,7 +75,11 @@ def delete_model(model_id: str, models: ModelManager = Depends(manager)) -> None
         raise HTTPException(404, f"Unknown model '{model_id}'") from None
 
 
-@router.get("/models/{model_id}/archive")
+@router.get(
+    "/models/{model_id}/archive",
+    response_class=StreamingResponse,
+    responses={**file_response("application/x-tar", "A tar of the model folder"), **errors(404)},
+)
 def model_archive(model_id: str, models: ModelManager = Depends(manager)) -> StreamingResponse:
     """The model's folder and settings as a tar, to install on another engine with
     POST /api/models/uploads."""
@@ -89,7 +113,7 @@ def find_upload(upload_id: str, store: ModelUploads = Depends(uploads)) -> Uploa
         raise HTTPException(404, f"Unknown upload '{upload_id}'") from None
 
 
-@router.post("/models/uploads", status_code=201)
+@router.post("/models/uploads", status_code=201, response_model=ModelUpload, responses=errors(422))
 def start_upload(body: NewUpload, store: ModelUploads = Depends(uploads)) -> dict:
     """Starts receiving a model file (a model archive or a .gguf file), sent in parts with PUT."""
     try:
@@ -98,7 +122,19 @@ def start_upload(body: NewUpload, store: ModelUploads = Depends(uploads)) -> dic
         raise HTTPException(422, str(e)) from None
 
 
-@router.put("/models/uploads/{upload_id}")
+@router.put(
+    "/models/uploads/{upload_id}",
+    response_model=ModelUpload,
+    responses=errors(404, 409),
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {
+                "application/octet-stream": {"schema": {"type": "string", "format": "binary"}}
+            },
+        }
+    },
+)
 async def upload_part(
     request: Request,
     offset: int = Query(ge=0),
@@ -114,7 +150,12 @@ async def upload_part(
         raise HTTPException(409, str(e)) from None
 
 
-@router.post("/models/uploads/{upload_id}/finish", status_code=202)
+@router.post(
+    "/models/uploads/{upload_id}/finish",
+    status_code=202,
+    response_model=ModelUpload,
+    responses=errors(404, 409),
+)
 def finish_upload(upload: Upload = Depends(find_upload), store=Depends(uploads)) -> dict:
     """Installs the received model in the background; poll GET /api/models/uploads/{id}."""
     try:
@@ -123,12 +164,12 @@ def finish_upload(upload: Upload = Depends(find_upload), store=Depends(uploads))
         raise HTTPException(409, str(e)) from None
 
 
-@router.get("/models/uploads/{upload_id}")
+@router.get("/models/uploads/{upload_id}", response_model=ModelUpload, responses=errors(404))
 def upload_state(upload: Upload = Depends(find_upload)) -> dict:
     return upload.to_dict()
 
 
-@router.get("/models/{model_id}/settings")
+@router.get("/models/{model_id}/settings", response_model=ModelSettings, responses=errors(404))
 def model_settings(model_id: str, models: ModelManager = Depends(manager)) -> dict:
     try:
         return models.model_settings(model_id)
@@ -136,7 +177,7 @@ def model_settings(model_id: str, models: ModelManager = Depends(manager)) -> di
         raise HTTPException(404, f"Unknown model '{model_id}'") from None
 
 
-@router.put("/models/{model_id}/settings")
+@router.put("/models/{model_id}/settings", response_model=ModelSettings, responses=errors(404, 422))
 def save_model_settings(
     model_id: str,
     body: ModelSettings,
@@ -152,10 +193,11 @@ def save_model_settings(
         raise HTTPException(404, f"Unknown model '{model_id}'") from None
 
 
-@router.get("/hub/models")
+@router.get("/hub/models", response_model=items(HubModel), responses=errors(502))
 async def search_hub(
     q: str = "", format: Literal["gguf", "hf"] = "gguf", models: ModelManager = Depends(manager)
 ) -> dict:
+    """The most downloaded models on Hugging Face that match."""
     try:
         found = await run_in_threadpool(hub.search, q, format, models.hf_token)
     except hub.HubError as error:
@@ -163,8 +205,9 @@ async def search_hub(
     return {"data": found}
 
 
-@router.get("/hub/files")
+@router.get("/hub/files", response_model=HubFiles, responses=errors(502))
 async def hub_files(repo: str, models: ModelManager = Depends(manager)) -> dict:
+    """What can be downloaded from a repo: its GGUF files and the Hugging Face-format weights."""
     try:
         return await run_in_threadpool(hub.files, repo, models.hf_token)
     except hub.HubError as error:
@@ -177,8 +220,9 @@ class HubDownload(BaseModel):
     file: str | None = None
 
 
-@router.post("/hub/download", status_code=202)
+@router.post("/hub/download", status_code=202, response_model=Download, responses=errors(400, 409))
 def download_from_hub(body: HubDownload, models: ModelManager = Depends(manager)) -> dict:
+    """Downloads one GGUF file of a repo or, without a file, its Hugging Face-format weights."""
     try:
         return models.download_from_hub(body.repo, body.file).to_dict()
     except ModelExists as error:
