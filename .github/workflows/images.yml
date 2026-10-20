@@ -54,10 +54,10 @@ jobs:
             /opt/hostedtoolcache/CodeQL /usr/local/share/boost
           docker system prune -af
           df -h /
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
