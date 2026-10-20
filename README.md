@@ -16,8 +16,9 @@ any llama.cpp model. The
 - **desktop/** – Electron app that starts the engine and drives it over HTTP, or connects to an
   engine running elsewhere: a server, a cluster, or a RunPod GPU or CPU pod it starts and stops itself
   ([deployment.md](docs/deployment.md)).
-- **docs/** – the [user guide](docs/user-guide.md), the [API reference](docs/api.md) and the
-  [implementation plan](docs/implementation-plan.md).
+- **docs/** – the [user guide](docs/user-guide.md), the [API reference](docs/api.md), the
+  [implementation plan](docs/implementation-plan.md) and how the
+  [walkthrough GIF](docs/demo.md) is made.
 
 ## Requirements
 
@@ -158,4 +159,6 @@ make distclean   # also remove node_modules and the managed engine environment
 Training tests build a tiny random model on the spot, so they need no download.
 
 Documentation screenshots in `docs/images/` are taken from the running app with the test model
-and sample data; retake them when a screen changes.
+and sample data; retake them when a screen changes. `make demo-gif` records the walkthrough GIFs
+(`docs/images/walkthrough-en.gif`, `walkthrough-uk.gif`) from a scenario, from crawling a website
+to chatting with the model trained on it; see [docs/demo.md](docs/demo.md).

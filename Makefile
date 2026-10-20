@@ -294,6 +294,23 @@ run-image: ## Run IMAGE:VARIANT on 127.0.0.1:PORT with the data in DATA_DIR/cont
 		-e TINYLM_CDP_URL=http://tinylm-chrome:9222 -e TINYLM_SEARXNG_URL=http://tinylm-searxng:8080 \
 		-e TINYLM_API_KEY $(if $(HF_TOKEN),-e HF_TOKEN) $(if $(filter cuda,$(VARIANT)),--gpus all) $(IMAGE):$(VARIANT)
 
+##@ Docs
+
+# The walkthrough GIFs: scripts/demo/scenario.yaml, recorded by scripts/demo/record.mjs (see
+# docs/demo.md). VARS="name=value …" overrides scenario variables; without a display it runs in
+# xvfb-run.
+DEMO_SCENARIO ?= scripts/demo/scenario.yaml
+DEMO_OUT      ?= docs/images
+
+.PHONY: demo-gif
+demo-gif: build-desktop ## Record the walkthrough GIFs, site to trained model, with en/uk captions [SITE=https://...] [TEACHER=model] [VARS="pages=4 ..."]
+	$(if $(or $(DISPLAY),$(WAYLAND_DISPLAY)),,xvfb-run -a -s "-screen 0 1920x1080x24") \
+		node scripts/demo/record.mjs --scenario $(DEMO_SCENARIO) --out $(DEMO_OUT) \
+		--data-dir "$(or $(TINYLM_DATA_DIR),$(DATA_DIR))" \
+		$(if $(SITE),--var site=$(SITE)) \
+		$(if $(filter command line,$(origin TEACHER)),--var teacher=$(TEACHER)) \
+		$(foreach v,$(VARS),--var $(v))
+
 ##@ Cleanup
 
 .PHONY: clean

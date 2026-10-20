@@ -997,6 +997,7 @@ targets):
 | `make chrome [CDP_PROXY=...]` / `make chrome-stop` | Start or stop a headless Chrome in Docker for websites with Browser (CDP) |
 | `make run-engine [PORT=8765] [ECHO=1]` | Run only the engine, for API clients |
 | `make health` / `make info` | Check a running engine / show the paths and Python in use |
+| `make demo-gif [SITE=https://...]` | Record the walkthrough GIFs, from crawling a website to chatting with the trained model, with English and Ukrainian captions ([how](demo.md)) |
 
 More options are available directly, e.g. `python -m engine crawl --help`
 (`--max-depth`, `--per-minute`, `--browser`, `--ignore-robots`; options left out come from

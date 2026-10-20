@@ -1,0 +1,146 @@
+# The walkthrough that `make demo-gif` records: from crawling a website to chatting with the model
+# trained on it. See docs/demo.md for the format.
+#
+# ${name} is replaced by a variable from `vars`; `make demo-gif VARS="site=https://… pages=4"`
+# (or --var name=value) overrides them.
+
+vars:
+  # The website to crawl, and how much of it.
+  site: https://docs.python.org/3/tutorial/
+  pages: 6
+  depth: 1
+  per_minute: 30
+  collection: python-tutorial
+  dataset: python-qa
+  # The model to train and the base it starts from (needs PyTorch weights: make download MODEL=qwen3-0.6b).
+  model: python-helper
+  base: qwen3-0.6b
+  epochs: 1
+  max_tokens: 256
+  # Who writes the examples: "auto" picks the smallest installed GGUF model as the teacher, a model
+  # id picks that one, "" imports examples.jsonl instead. TEACHER_URL, TEACHER_MODEL and
+  # TEACHER_KEY in the environment add an OpenAI-compatible API teacher (OpenRouter, say), which
+  # is then used instead.
+  teacher: auto
+  chunks: 3
+  pairs: 3
+  examples: examples.jsonl
+  question: How do I create a list in Python?
+
+# Models linked from the engine's models folder into the demo's own; they must be installed.
+models:
+  - ${base}
+
+# Labels drawn on the frames, per language.
+labels:
+  fast_forward:
+    en: "Fast-forward ×{speed}"
+    uk: "Прискорено ×{speed}"
+
+steps:
+  - caption:
+      en: "tinylm-studio: from a website to your own small language model"
+      uk: "tinylm-studio: від вебсайту до власної маленької мовної моделі"
+    actions:
+      - pause: 1
+
+  - caption:
+      en: "1. Create a collection for the website's pages"
+      uk: "1. Створюємо колекцію для сторінок вебсайту"
+    actions:
+      - click: { tab: Data }
+      - fill: { placeholder: New collection, text: "${collection}" }
+      - click: { button: Add, within: .data aside }
+      - wait: { for: { text: "${collection}", within: .data aside } }
+
+  - caption:
+      en: "2. Add the website: start address, pages to download and link depth"
+      uk: "2. Додаємо вебсайт: початкова адреса, кількість сторінок і глибина посилань"
+    actions:
+      - click: { button: Add website }
+      - fill: { placeholder: Name (optional), text: Python tutorial }
+      - fill: { css: ".websites form > textarea", text: "${site}" }
+      - fill: { label: Pages, text: "${pages}" }
+      - fill: { label: Depth, text: "${depth}" }
+      - fill: { label: Per minute, text: "${per_minute}" }
+      - check: { label: Only under these addresses }
+
+  - caption:
+      en: "3. The crawler downloads the pages and indexes them for search"
+      uk: "3. Краулер завантажує сторінки й індексує їх для пошуку"
+    actions:
+      - click: { button: Save and crawl }
+      - wait: { for: { text: Finished, within: .websites .crawl }, timeout: 900, timelapse: true }
+      - pause: 1
+
+  - caption:
+      en: "The pages are now documents of the collection, split into chunks"
+      uk: "Тепер сторінки стали документами колекції, розбитими на фрагменти"
+    actions:
+      - scroll: { css: .documents }
+      - pause: 2
+
+  - caption:
+      en: "4. Create a dataset: the examples the model will learn from"
+      uk: "4. Створюємо датасет: приклади, на яких вчитиметься модель"
+    actions:
+      - click: { tab: Datasets }
+      - fill: { placeholder: New dataset, text: "${dataset}" }
+      - click: { button: Add, within: .data aside }
+      - wait: { for: { button: Generate } }
+
+  - when: teacher
+    caption:
+      en: "5. A larger teacher model writes questions and answers from the pages"
+      uk: "5. Більша модель-вчитель пише питання й відповіді за сторінками"
+    actions:
+      - click: { button: Generate }
+      - select: { label: From collection, option: "${collection}" }
+      - select: { label: Teacher, option: "${teacher_name}" }
+      - fill: { label: Chunks, text: "${chunks}" }
+      - fill: { label: Pairs per chunk, text: "${pairs}" }
+      - click: { button: Generate, within: .generate form .buttons }
+      - scroll: { css: .generate .job }
+      - wait: { for: { css: ".generate .badge.done, .generate .badge.error" }, timeout: 3600, timelapse: true }
+      - pause: 2
+      - click: { button: Close, within: .generate }
+
+  - unless: teacher
+    caption:
+      en: "5. Import ready-made question and answer pairs"
+      uk: "5. Імпортуємо готові пари питань і відповідей"
+    actions:
+      - upload: { css: ".data input[type=file][accept='.jsonl,.json,.csv']", file: "${examples}" }
+      - wait: { for: { text: added, within: .data } }
+      - pause: 2
+
+  - caption:
+      en: "6. Fine-tune the base model on the dataset (LoRA)"
+      uk: "6. Донавчаємо базову модель на датасеті (LoRA)"
+    actions:
+      - click: { tab: Training }
+      - fill: { label: Name, text: "${model}" }
+      - select: { label: Base model, option: "${base}" }
+      - select: { label: Dataset, option: "${dataset}", partial: true }
+      - fill: { label: Epochs, text: "${epochs}" }
+      - fill: { label: Max tokens, text: "${max_tokens}" }
+
+  - caption:
+      en: "Training runs in the background; the loss should go down"
+      uk: "Тренування йде у фоні; loss має знижуватися"
+    actions:
+      - click: { button: Start training }
+      - wait: { for: { css: ".training .job .badge.done" }, timeout: 7200, timelapse: true }
+      - pause: 2
+
+  - caption:
+      en: "7. The new model is ready: ask it in the chat, with the website as its data"
+      uk: "7. Нова модель готова: питаємо її в чаті, з вебсайтом як джерелом даних"
+    actions:
+      - click: { tab: Chat }
+      - select: { css: ".chat .toolbar select", option: "${model}" }
+      - select: { css: ".chat .toolbar select", nth: 1, option: "Data: ${collection}" }
+      - fill: { placeholder: Ask something…, text: "${question}" }
+      - click: { button: Send }
+      - wait: { gone: { button: Stop, within: .composer }, timeout: 600, timelapse: true }
+      - pause: 4
