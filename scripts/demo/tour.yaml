@@ -1,0 +1,304 @@
+# A tour of every tab: what can be added where and what each option is for. Recorded by
+# `make demo-tour` (see docs/demo.md for the format). It adds a small collection and dataset of
+# its own, opens forms to show them and closes them without saving.
+
+# The GIFs are tour-<lang>.gif.
+name: tour
+
+vars:
+  collection: tea-notes
+  notes: sample-notes.md
+  dataset: tea-qa
+  examples: examples.jsonl
+  base: qwen3-0.6b
+  question: How hot should the water be for green tea?
+
+models:
+  - ${base}
+
+labels:
+  fast_forward:
+    en: "Fast-forward ×{speed}"
+    uk: "Прискорено ×{speed}"
+
+steps:
+  - caption:
+      en: "A tour of tinylm-studio: what each tab is for"
+      uk: "Екскурсія по tinylm-studio: для чого кожна вкладка"
+    actions:
+      - point: { css: header nav }
+      - pause: 1
+
+  - caption:
+      en: "The engine runs the models, data and training; its state and version are shown here"
+      uk: "Рушій виконує моделі, дані й тренування; його стан і версія показані тут"
+    actions:
+      - point: { css: header .status }
+
+  # ---- Data
+  - caption:
+      en: "Data: collections of documents that the chat answers from, with sources"
+      uk: "Data: колекції документів, з яких чат відповідає з посиланнями на джерела"
+    actions:
+      - click: { tab: Data }
+      - point: { css: .data aside }
+
+  - caption:
+      en: "Create a collection: one per topic, e.g. a game, a product or your notes"
+      uk: "Створюємо колекцію: одну на тему, наприклад гру, продукт чи свої нотатки"
+    actions:
+      - fill: { placeholder: New collection, text: "${collection}" }
+      - click: { button: Add, within: .data aside }
+      - wait: { for: { text: "${collection}", within: .data aside } }
+
+  - caption:
+      en: "Add files or a whole folder: PDF, Word, Excel, PowerPoint, HTML, Markdown, text and JSON"
+      uk: "Додаємо файли чи цілу папку: PDF, Word, Excel, PowerPoint, HTML, Markdown, текст і JSON"
+    actions:
+      - upload: { css: ".data .actions input[type=file][multiple]:not([webkitdirectory])", file: "${notes}" }
+      - wait: { for: { text: chunks, within: .data .actions ~ pre } }
+
+  - caption:
+      en: "Export saves a collection to a file; Import collection loads it on another engine"
+      uk: "Export зберігає колекцію у файл; Import collection відкриває її на іншому рушії"
+    actions:
+      - point: { button: Export, within: .data .actions }
+      - point: { css: ".data aside label", hold: 0.5 }
+
+  - caption:
+      en: "Find on the web: search pages or videos and add the ones you tick (needs a search provider)"
+      uk: "Пошук в інтернеті: шукаємо сторінки чи відео й додаємо позначені (потрібен пошуковий сервіс)"
+    actions:
+      - point: { css: .data .search }
+
+  - caption:
+      en: "Websites: save a site once and crawl it again later; each run downloads only new pages"
+      uk: "Websites: зберігаємо сайт один раз і краулимо знову; кожен прогін бере лише нові сторінки"
+    actions:
+      - click: { button: Add website }
+      - point: { css: ".websites form > textarea" }
+
+  - caption:
+      en: "Pages per run, link depth and requests per minute: keep it polite so the site does not ban you"
+      uk: "Сторінок за прогін, глибина посилань і запитів за хвилину: краулимо чемно, щоб сайт не забанив"
+    actions:
+      - point: { css: .websites .crawl-options }
+
+  - caption:
+      en: "Browser (CDP) loads pages that need JavaScript; skip patterns leave out tags, sorting or forums"
+      uk: "Browser (CDP) відкриває сторінки, яким потрібен JavaScript; шаблони пропускають теги, сортування чи форуми"
+    actions:
+      - point: { label: Browser (CDP), within: .websites }
+      - point: { css: ".websites .exclude" }
+      - click: { button: Cancel, within: .websites }
+
+  - caption:
+      en: "Every document with its size and chunks: the pieces the chat finds and quotes"
+      uk: "Кожен документ із розміром і кількістю фрагментів: шматків, які чат знаходить і цитує"
+    actions:
+      - point: { css: .documents }
+
+  # ---- SQL
+  - caption:
+      en: "SQL: look into the data with queries: documents, chunks, websites and crawled pages"
+      uk: "SQL: досліджуємо дані запитами: документи, фрагменти, сайти й скачані сторінки"
+    actions:
+      - click: { tab: SQL }
+      - point: { css: .sql aside }
+
+  - caption:
+      en: "Pick a ready example and run it; a DELETE first shows what it would remove and asks"
+      uk: "Беремо готовий приклад і запускаємо; DELETE спершу показує, що видалить, і питає"
+    actions:
+      - click: { button: Documents per collection }
+      - click: { button: Run }
+      - pause: 1
+
+  # ---- Datasets
+  - caption:
+      en: "Datasets: question and answer examples that a model is fine-tuned on"
+      uk: "Datasets: приклади питань і відповідей, на яких донавчається модель"
+    actions:
+      - click: { tab: Datasets }
+      - fill: { placeholder: New dataset, text: "${dataset}" }
+      - click: { button: Add, within: .data aside }
+      - wait: { for: { button: Generate } }
+
+  - caption:
+      en: "Import examples from JSONL or CSV (chat messages or question and answer pairs)"
+      uk: "Імпортуємо приклади з JSONL чи CSV (повідомлення чату або пари питання-відповідь)"
+    actions:
+      - upload: { css: ".data input[type=file][accept='.jsonl,.json,.csv']", file: "${examples}" }
+      - wait: { for: { text: added, within: .data } }
+
+  - caption:
+      en: "Add example writes one by hand; Generate lets a larger teacher model write them from a collection"
+      uk: "Add example — додати приклад вручну; Generate — їх пише більша модель-вчитель за колекцією"
+    actions:
+      - point: { button: Add example }
+      - click: { button: Generate }
+      - point: { css: .generate form }
+
+  - caption:
+      en: "Check pairs drops answers the text does not support; with sources, the model learns to cite"
+      uk: "Check pairs відкидає відповіді, яких немає в тексті; з джерелами модель вчиться їх цитувати"
+    actions:
+      - point: { label: Check pairs against the text }
+      - point: { label: With sources in the prompt }
+      - click: { button: Close, within: .generate }
+
+  - caption:
+      en: "Evaluation % keeps some examples out of training, to test the model on questions it has not seen"
+      uk: "Evaluation % відкладає частину прикладів, щоб перевірити модель на питаннях, яких вона не бачила"
+    actions:
+      - point: { label: Evaluation }
+
+  # ---- Training
+  - caption:
+      en: "Training: fine-tune a base model with PyTorch weights on a dataset (LoRA)"
+      uk: "Training: донавчаємо базову модель з вагами PyTorch на датасеті (LoRA)"
+    actions:
+      - click: { tab: Training }
+      - point: { css: .training-form }
+
+  - caption:
+      en: "Epochs: passes over the examples. Too many and the model memorizes them instead of learning"
+      uk: "Epochs: проходи по прикладах. Забагато, і модель їх запам'ятовує замість того, щоб вчитися"
+    actions:
+      - point: { label: Epochs }
+
+  - caption:
+      en: "Learning rate: how fast it changes; LoRA rank: how much it can learn (higher is slower)"
+      uk: "Learning rate: як швидко модель змінюється; LoRA rank: скільки вона може вивчити (більше — повільніше)"
+    actions:
+      - point: { label: Learning rate }
+      - point: { label: LoRA rank }
+
+  - caption:
+      en: "Max tokens cuts long examples; batch and accumulate trade memory for speed; GPU when there is one"
+      uk: "Max tokens обрізає довгі приклади; batch і accumulate — пам'ять проти швидкості; GPU, якщо є"
+    actions:
+      - point: { label: Max tokens }
+      - point: { label: Batch }
+      - point: { label: Device }
+
+  # ---- Evaluation
+  - caption:
+      en: "Evaluation: did fine-tuning help? Models answer the held-out questions side by side"
+      uk: "Evaluation: чи допомогло донавчання? Моделі відповідають на відкладені питання поруч"
+    actions:
+      - click: { tab: Evaluation }
+      - click: { button: New evaluation }
+      - point: { css: .training-form }
+
+  - caption:
+      en: "A judge model scores each answer from 1 to 5; without one, answers are compared by similarity"
+      uk: "Модель-суддя оцінює кожну відповідь від 1 до 5; без неї відповіді порівнюються за схожістю"
+    actions:
+      - point: { label: Judge }
+
+  # ---- Models
+  - caption:
+      en: "Models: installed models, fine-tuned ones and their own settings"
+      uk: "Models: встановлені моделі, донавчені й їхні власні налаштування"
+    actions:
+      - click: { tab: Models }
+      - point: { text: Installed models, exact: true }
+
+  - caption:
+      en: "Find models on Hugging Face: GGUF for fast answers, PyTorch for models you can fine-tune"
+      uk: "Пошук моделей на Hugging Face: GGUF для швидких відповідей, PyTorch для тих, що можна донавчати"
+    actions:
+      - point: { css: .hub-search }
+
+  - caption:
+      en: "Or one click on a recommended, tested model"
+      uk: "Або один клік по рекомендованій, перевіреній моделі"
+    actions:
+      - point: { text: Recommended models, exact: true }
+
+  - caption:
+      en: "Teachers: larger models (OpenRouter, any OpenAI-compatible API, Claude, a subscription) that write examples"
+      uk: "Teachers: більші моделі (OpenRouter, будь-який OpenAI-сумісний API, Claude, підписка), що пишуть приклади"
+    actions:
+      - click: { button: Add teacher }
+      - point: { css: .teacher-form }
+      - click: { button: Cancel, within: .teacher-form }
+
+  # ---- Chat
+  - caption:
+      en: "Chat: pick a model and the data to answer from"
+      uk: "Chat: обираємо модель і дані, з яких вона відповідатиме"
+    actions:
+      - click: { tab: Chat }
+      - select: { css: ".chat .toolbar select", option: "${base}" }
+      - select: { css: ".chat .toolbar select", nth: 1, option: "Data: ${collection}" }
+
+  - caption:
+      en: "The system prompt sets the assistant's role and tone for the conversation"
+      uk: "Системний промпт задає роль і тон асистента в розмові"
+    actions:
+      - point: { placeholder: System prompt (optional) }
+
+  - caption:
+      en: "The answer lists its sources and how long each part took"
+      uk: "Відповідь показує джерела і скільки часу зайняла кожна частина"
+    actions:
+      - fill: { placeholder: Ask something…, text: "${question}" }
+      - click: { button: Send }
+      - wait: { gone: { button: Stop, within: .composer }, timeout: 600, timelapse: true }
+      - point: { css: ".chat .message.assistant", nth: 0 }
+
+  - caption:
+      en: "{ } shows the JSON sent to the engine and received from it"
+      uk: "{ } показує JSON, надісланий рушію і отриманий від нього"
+    actions:
+      - click: { css: ".chat .message.assistant .trace-button" }
+      - pause: 1.5
+      - click: { button: Close, within: .trace-dialog }
+
+  # ---- Settings
+  - caption:
+      en: "Settings › Engine: on this computer, on your own server, or in a RunPod GPU pod"
+      uk: "Settings › Engine: на цьому комп'ютері, на власному сервері чи в GPU-поді RunPod"
+    actions:
+      - click: { tab: Settings }
+      - click: { button: Engine }
+      - point: { css: .settings-page }
+
+  - caption:
+      en: "Chat settings: default system prompt, answer length, temperature, sources per answer"
+      uk: "Chat settings: системний промпт за замовчуванням, довжина відповіді, температура, кількість джерел"
+    actions:
+      - click: { button: Chat settings }
+      - point: { label: Default system prompt }
+      - point: { label: Temperature }
+
+  - caption:
+      en: "Search settings: SearXNG for free, or Brave, Tavily, Exa, Perplexity, Serper with a key"
+      uk: "Search settings: SearXNG безкоштовно або Brave, Tavily, Exa, Perplexity, Serper з ключем"
+    actions:
+      - click: { button: Search settings }
+      - point: { css: "label:has-text('SearXNG')", nth: 0 }
+
+  - caption:
+      en: "Crawler settings: robots.txt, requests per minute, pages and depth for new websites"
+      uk: "Crawler settings: robots.txt, запитів за хвилину, сторінки й глибина для нових сайтів"
+    actions:
+      - click: { button: Crawler settings }
+      - point: { css: "label:has-text('Follow robots.txt')" }
+      - point: { label: Requests per minute }
+
+  - caption:
+      en: "Subscriptions: log in to Claude Code, Codex or Gemini CLI to use a subscription as a teacher"
+      uk: "Subscriptions: входимо в Claude Code, Codex чи Gemini CLI, щоб підписка працювала як вчитель"
+    actions:
+      - click: { button: Subscriptions }
+      - pause: 1
+
+  - caption:
+      en: "Logs: what the app and the engine did, with a filter, to see what went wrong"
+      uk: "Logs: що робили додаток і рушій, з фільтром, щоб знайти, що пішло не так"
+    actions:
+      - click: { button: Logs }
+      - pause: 1.5

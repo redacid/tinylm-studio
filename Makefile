@@ -296,8 +296,8 @@ run-image: ## Run IMAGE:VARIANT on 127.0.0.1:PORT with the data in DATA_DIR/cont
 
 ##@ Docs
 
-# The walkthrough GIFs: scripts/demo/scenario.yaml, recorded by scripts/demo/record.mjs (see
-# docs/demo.md). VARS="name=value …" overrides scenario variables; without a display it runs in
+# The walkthrough GIFs: scripts/demo/scenario.yaml (demo-tour: tour.yaml), recorded by
+# scripts/demo/record.mjs (see docs/demo.md). VARS="name=value …" overrides scenario variables; without a display it runs in
 # xvfb-run.
 DEMO_SCENARIO ?= scripts/demo/scenario.yaml
 DEMO_OUT      ?= docs/images
@@ -310,6 +310,10 @@ demo-gif: build-desktop ## Record the walkthrough GIFs, site to trained model, w
 		$(if $(SITE),--var site=$(SITE)) \
 		$(if $(filter command line,$(origin TEACHER)),--var teacher=$(TEACHER)) \
 		$(foreach v,$(VARS),--var $(v))
+
+.PHONY: demo-tour
+demo-tour: ## Record the tour GIFs: every tab, what can be added where and what the options are for
+	$(MAKE) demo-gif DEMO_SCENARIO=scripts/demo/tour.yaml
 
 ##@ Cleanup
 

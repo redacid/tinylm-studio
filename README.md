@@ -23,7 +23,7 @@ any llama.cpp model. The
   ([deployment.md](docs/deployment.md)).
 - **docs/** – the [user guide](docs/user-guide.md), the [API reference](docs/api.md), the
   [implementation plan](docs/implementation-plan.md) and how the
-  [walkthrough GIF](docs/demo.md) is made.
+  [walkthrough and tour GIFs](docs/demo.md) are made.
 
 ## Requirements
 
@@ -166,4 +166,5 @@ Training tests build a tiny random model on the spot, so they need no download.
 Documentation screenshots in `docs/images/` are taken from the running app with the test model
 and sample data; retake them when a screen changes. `make demo-gif` records the walkthrough GIFs
 (`docs/images/walkthrough-en.gif`, `walkthrough-uk.gif`) from a scenario, from crawling a website
-to chatting with the model trained on it; see [docs/demo.md](docs/demo.md).
+to chatting with the model trained on it, and `make demo-tour` the tour of every tab
+(`tour-en.gif`, `tour-uk.gif`); see [docs/demo.md](docs/demo.md).

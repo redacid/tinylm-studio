@@ -4,6 +4,9 @@
 # ${name} is replaced by a variable from `vars`; `make demo-gif VARS="site=https://… pages=4"`
 # (or --var name=value) overrides them.
 
+# The GIFs are walkthrough-<lang>.gif.
+name: walkthrough
+
 vars:
   # The website to crawl, and how much of it.
   site: https://docs.python.org/3/tutorial/

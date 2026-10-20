@@ -1,4 +1,15 @@
-# Walkthrough GIF
+# Walkthrough and tour GIFs
+
+Two animated GIFs show the app, each recorded by a script from a scenario, with one GIF per
+caption language (English and Ukrainian):
+
+- **Walkthrough** (`make demo-gif`): from a website to a trained model.
+- **Tour** (`make demo-tour`): every tab, what can be added where and what the options are for.
+
+Nobody has to click through the app: the script drives the real desktop app, so the GIFs are
+remade whenever the screens change.
+
+## The walkthrough
 
 `make demo-gif` records an animated walkthrough of the app: it crawls a website into a
 collection, makes a dataset of questions and answers from it, fine-tunes a model on the dataset
@@ -8,8 +19,20 @@ per caption language:
 - `docs/images/walkthrough-en.gif` (English)
 - `docs/images/walkthrough-uk.gif` (Ukrainian)
 
-Nobody has to click through the app: the script drives the real desktop app, so the GIF is
-remade whenever the screens change.
+## The tour
+
+`make demo-tour` goes through every tab: Data (collections, files, web search, websites and
+their crawl options), SQL, Datasets (import, examples written by hand or by a teacher, the
+held-out share), Training and what each of its options does, Evaluation, Models (Hugging Face,
+recommended models, teachers), Chat (model, data, system prompt, sources, the JSON of an
+exchange) and each part of Settings. A frame and the pointer show what each caption is about.
+
+It adds a small collection (`scripts/demo/sample-notes.md`) and a dataset
+(`scripts/demo/examples.jsonl`) of its own, opens the forms to show them and closes them without
+saving. It needs only the base model (`make download MODEL=qwen3-0.6b`), which answers one
+question in the chat, and takes a few minutes. The GIFs (about four minutes long) are
+`docs/images/tour-en.gif` and `tour-uk.gif`; the scenario is
+[scripts/demo/tour.yaml](../scripts/demo/tour.yaml).
 
 ## Running it
 
@@ -17,6 +40,7 @@ remade whenever the screens change.
 make setup                       # once: the app and its engine
 make download MODEL=qwen3-0.6b   # once: the base model the scenario trains
 make demo-gif                    # minutes to half an hour on a CPU, mostly the teacher and training
+make demo-tour                   # a few minutes
 ```
 
 Requirements: `ffmpeg` (it makes the GIFs). On a computer without a display (a server, a
@@ -35,7 +59,7 @@ Options:
 | `TEACHER=<model id>` | the smallest installed GGUF model | The model that writes the examples; `TEACHER=` (empty) imports `scripts/demo/examples.jsonl` instead |
 | `VARS="pages=4 epochs=2"` | | Any other [scenario variable](#variables) |
 | `DEMO_OUT=dir` | `docs/images` | Where the GIFs go |
-| `DEMO_SCENARIO=file` | `scripts/demo/scenario.yaml` | Another scenario |
+| `DEMO_SCENARIO=file` | `scripts/demo/scenario.yaml` | Another scenario (`make demo-tour` is `DEMO_SCENARIO=scripts/demo/tour.yaml`) |
 
 An API teacher such as OpenRouter writes examples much faster than a local model on a CPU. Give
 it in the environment; it is then used instead of an installed model:
@@ -71,6 +95,7 @@ download) and runs the steps of [scripts/demo/scenario.yaml](../scripts/demo/sce
 ## The scenario
 
 ```yaml
+name: walkthrough  # the GIFs are walkthrough-<lang>.gif
 vars:
   site: https://docs.python.org/3/tutorial/
   pages: 6
@@ -118,6 +143,7 @@ label on a hidden tab does not get in the way.
 | Action | Example | What it does |
 |---|---|---|
 | `click` | `click: { button: Save and crawl }` | Moves the pointer there and clicks |
+| `point` | `point: { label: Epochs, hold: 1 }` | Moves the pointer there and frames it, to explain it; `hold` keeps it longer |
 | `fill` | `fill: { label: Epochs, text: "1" }` | Types the text over what the field holds |
 | `check` | `check: { label: Only under these addresses }` | Ticks a checkbox |
 | `select` | `select: { label: Dataset, option: python-qa, partial: true }` | Picks an option by its text (`partial`: one that contains it), waiting for the list to have it |

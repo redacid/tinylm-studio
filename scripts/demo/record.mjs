@@ -25,7 +25,7 @@ const electronPath = require("electron");
 const USAGE = `Usage: node scripts/demo/record.mjs [options]
   --scenario FILE    the scenario (default scripts/demo/scenario.yaml)
   --out DIR          where the GIFs go (default docs/images)
-  --name NAME        GIF file name: NAME-<lang>.gif (default walkthrough)
+  --name NAME        GIF file name: NAME-<lang>.gif (default: the scenario's name, else walkthrough)
   --lang LIST        caption languages, comma-separated (default: all in the scenario)
   --width PX         GIF width (default 960)
   --data-dir DIR     the engine's data folder whose models are used (default as the app's)
@@ -38,6 +38,7 @@ const CURSOR_FRAME_MS = 45;
 const TYPE_FRAMES = 8;
 const TYPE_FRAME_MS = 70;
 const AFTER_ACTION_MS = 500;
+const POINT_MS = 1200;
 const TIMELAPSE_FRAME_MS = 150;
 const TIMELAPSE_MAX_FRAMES = 40;
 
@@ -178,14 +179,18 @@ class Recorder {
         style.textContent =
           "#demo-cursor{position:fixed;z-index:2147483647;pointer-events:none;width:22px;height:22px}" +
           "#demo-cursor.click::before{content:'';position:absolute;left:-11px;top:-11px;width:22px;height:22px;" +
-          "border-radius:50%;background:rgba(250,180,40,.55)}";
+          "border-radius:50%;background:rgba(250,180,40,.55)}" +
+          "#demo-highlight{position:fixed;z-index:2147483646;pointer-events:none;display:none;border-radius:8px;" +
+          "border:3px solid rgb(245,158,11);box-shadow:0 0 0 5px rgba(245,158,11,.25)}";
         document.head.append(style);
         const cursor = document.createElement("div");
         cursor.id = "demo-cursor";
         cursor.innerHTML = svg;
         cursor.style.left = `${x}px`;
         cursor.style.top = `${y}px`;
-        document.body.append(cursor);
+        const highlight = document.createElement("div");
+        highlight.id = "demo-highlight";
+        document.body.append(cursor, highlight);
       },
       { svg: CURSOR_SVG, ...this.cursor },
     );
@@ -254,6 +259,29 @@ class Recorder {
       },
       { x, y, clicking },
     );
+  }
+
+  /** Draws a frame around a part of the screen (box: null removes it). */
+  async highlight(box) {
+    await this.page.evaluate((box) => {
+      const highlight = document.getElementById("demo-highlight");
+      if (!highlight) return;
+      highlight.style.display = box ? "block" : "none";
+      if (!box) return;
+      const pad = 5;
+      highlight.style.left = `${box.x - pad}px`;
+      highlight.style.top = `${box.y - pad}px`;
+      highlight.style.width = `${box.width + 2 * pad}px`;
+      highlight.style.height = `${box.height + 2 * pad}px`;
+    }, box);
+  }
+
+  /** Points at a part of the screen and frames it, without clicking: for explaining it. */
+  async point({ hold = 0, ...spec }) {
+    const locator = this.locate(spec);
+    await this.moveTo(locator, false);
+    await this.highlight(await locator.boundingBox());
+    await this.shot(POINT_MS + Number(hold) * 1000);
   }
 
   async click(spec) {
@@ -371,7 +399,11 @@ class Recorder {
 
   async run(action, baseDir) {
     const [kind, arg] = Object.entries(action)[0];
+    // A frame drawn by point stays until the next action.
+    if (kind !== "pause") await this.highlight(null);
     switch (kind) {
+      case "point":
+        return this.point(arg);
       case "click":
         return this.click(arg);
       case "fill":
@@ -503,7 +535,7 @@ async function main() {
   const scenario = YAML.parse(fs.readFileSync(scenarioFile, "utf8"));
   const baseDir = path.dirname(scenarioFile);
   const outDir = path.resolve(opts.out ?? path.join(repo, "docs", "images"));
-  const name = opts.name ?? "walkthrough";
+  const name = opts.name ?? scenario.name ?? "walkthrough";
   const width = opts.width ?? 960;
   const steps = scenario.steps ?? [];
   const languages = opts.lang
@@ -575,6 +607,7 @@ async function main() {
       captions.push(step.caption ?? {});
       console.log(`${captions.length}. ${step.caption?.en ?? Object.values(step.caption ?? {})[0] ?? ""}`);
       const first = recorder.frames.length;
+      await recorder.highlight(null);
       await recorder.shot(300);
       for (const action of step.actions ?? []) await recorder.run(action, baseDir);
       const shown = recorder.frames.slice(first).reduce((sum, f) => sum + f.ms, 0);
