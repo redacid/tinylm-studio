@@ -5,6 +5,11 @@
 From a website to a trained model in one walkthrough ([in Ukrainian](docs/images/walkthrough-uk.gif);
 see [docs/demo.md](docs/demo.md)).
 
+![A tour of every tab: what can be added where and what the options are for](docs/images/tour-en.gif)
+
+A tour of every tab: what can be added where and what each option is for
+([in Ukrainian](docs/images/tour-uk.gif)).
+
 A desktop studio for building small, narrowly specialized language models that run without a powerful GPU.
 
 ![Fine-tuning a model on the Training screen](docs/images/training.png)
