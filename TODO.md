@@ -88,6 +88,7 @@ The engine runs in a container in a Kubernetes cluster or a RunPod pod; see
       queries; `DELETE` asks first and removes the rows with their chunks and index.
 - [x] Icons on tabs, buttons, run states, the engine status and log levels, colored by what
       they do (the bundled Tabler Icons font).
+- [x] The app logo next to the tinylm-studio name in the window header.
 
 ## API description (OpenAPI)
 

@@ -12,6 +12,7 @@ import { Training } from "./Training";
 import { TabActive } from "./tabActive";
 import type { EngineState } from "./types";
 import { Icon, type IconName } from "./Icon";
+import logo from "../../assets/icon.svg";
 
 const PHASE_LABELS: Record<EngineState["phase"], string> = {
   "setting-up": "Setting up the Python environment…",
@@ -80,7 +81,10 @@ export function App() {
   return (
     <div className="app">
       <header>
-        <strong>tinylm-studio</strong>
+        <strong className="brand">
+          <img src={logo} alt="" />
+          tinylm-studio
+        </strong>
         <nav>
           {(Object.keys(TAB_LABELS) as Tab[]).map((t) => (
             <button key={t} className={t === tab ? "active" : ""} onClick={() => setTab(t)}>

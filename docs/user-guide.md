@@ -40,7 +40,11 @@ make run     # start the app; it starts the engine and shows "Engine ready" in t
 ```
 
 The window and the taskbar show the app's icon (`desktop/assets/icon.svg`; on macOS in the
-Dock). On Linux, `make desktop-entry` adds tinylm-studio to the system's application menu: it
+Dock), and the same logo stands next to the tinylm-studio name at the left of the window header:
+
+![The window header: logo, tabs and engine status](images/header.png)
+
+On Linux, `make desktop-entry` adds tinylm-studio to the system's application menu: it
 writes `~/.local/share/applications/tinylm-studio.desktop`, which starts the app with `make run`
 from this folder and groups its window under the icon in the taskbar. Delete that file to remove
 the entry; run the target again after moving the repository.

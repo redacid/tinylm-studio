@@ -6,5 +6,10 @@ export default defineConfig({
   root: "src/renderer",
   base: "./",
   plugins: [react()],
-  build: { outDir: "../../dist/renderer", emptyOutDir: true },
+  build: {
+    outDir: "../../dist/renderer",
+    emptyOutDir: true,
+    // The CSP allows images only from the app itself, so SVGs (the logo) stay files, not data: URLs.
+    assetsInlineLimit: (file) => (file.endsWith(".svg") ? false : undefined),
+  },
 });

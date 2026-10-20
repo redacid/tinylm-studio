@@ -255,6 +255,8 @@ th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border);
 /* Visual design: colored titles, table headers and cards so sections stand apart */
 header { background: var(--surface); }
 header > strong { color: var(--accent); font-size: 15px; letter-spacing: 0.01em; }
+header > .brand { display: flex; align-items: center; gap: 8px; flex-shrink: 0; white-space: nowrap; }
+header > .brand img { width: 24px; height: 24px; }
 nav button { border-color: transparent; background: transparent; }
 nav button:hover { background: var(--accent-soft); }
 nav button.active { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--on-accent); }
