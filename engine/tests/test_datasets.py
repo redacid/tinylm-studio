@@ -126,6 +126,12 @@ def test_datasets_api(client):
         for e in client.get("/api/datasets/hints/examples").json()["data"]
     ]
     assert "Знак Аард." in texts
+    ids = [e["id"] for e in client.get("/api/datasets/hints/examples").json()["data"]]
+    newest = client.get("/api/datasets/hints/examples", params={"sort": "newest"}).json()
+    assert [e["id"] for e in newest["data"]] == ids[::-1]
+    longest = client.get("/api/datasets/hints/examples", params={"sort": "longest"}).json()
+    assert longest["data"][0]["messages"][0]["content"] == "Підказка для Відьмака?"
+    assert all(e["created_at"] for e in longest["data"])
     invalid = client.put(path, json={"messages": changed[:1]})
     assert invalid.status_code == 422 and "last message" in invalid.json()["detail"]
 

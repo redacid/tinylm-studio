@@ -23,7 +23,14 @@ from engine.api.schemas import (
 )
 from engine.datasets.formats import InvalidExample
 from engine.datasets.generate import LANGUAGE_NAMES, GenerationManager, GenerationOptions
-from engine.datasets.store import DatasetNotFound, DatasetStore, InvalidDataset, Origin, Split
+from engine.datasets.store import (
+    DatasetNotFound,
+    DatasetStore,
+    ExampleSort,
+    InvalidDataset,
+    Origin,
+    Split,
+)
 from engine.rag.store import CollectionNotFound
 from engine.teachers.store import TeacherNotFound
 
@@ -160,13 +167,14 @@ def list_examples(
     query: str = "",
     split: Split = "all",
     origin: Origin | None = None,
+    sort: ExampleSort = "oldest",
     offset: int = Query(0, ge=0),
     limit: int | None = Query(None, ge=1, le=1000),
     store: DatasetStore = Depends(datasets),
 ) -> dict:
     try:
         return {
-            "data": store.examples(name, query, split, offset, limit, origin),
+            "data": store.examples(name, query, split, offset, limit, origin, sort),
             "total": store.count(name, query, split, origin),
         }
     except DatasetNotFound:

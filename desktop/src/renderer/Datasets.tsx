@@ -106,6 +106,7 @@ function DatasetView({
   const [search, setSearch] = useState("");
   const [split, setSplit] = useState<ExampleFilter["split"]>("all");
   const [origin, setOrigin] = useState<ExampleFilter["origin"]>(undefined);
+  const [sort, setSort] = useState<ExampleFilter["sort"]>("newest");
   const [generating, setGenerating] = useState(false);
   const [offset, setOffset] = useState(0);
   const [examples, setExamples] = useState<Example[]>([]);
@@ -134,7 +135,7 @@ function DatasetView({
 
   useEffect(() => {
     let stale = false;
-    load("Loading examples…", () => client.examples(dataset.name, { query: search, split, origin, offset, limit: PAGE_SIZE }))
+    load("Loading examples…", () => client.examples(dataset.name, { query: search, split, origin, sort, offset, limit: PAGE_SIZE }))
       .then((page) => {
         if (stale) return;
         setExamples(page.data);
@@ -145,7 +146,7 @@ function DatasetView({
     return () => {
       stale = true;
     };
-  }, [client, dataset.name, search, split, origin, offset, version, load]);
+  }, [client, dataset.name, search, split, origin, sort, offset, version, load]);
 
   async function importFiles(files: FileList | null) {
     if (!files) return;
@@ -338,6 +339,18 @@ function DatasetView({
             <option value="imported">Imported</option>
             <option value="generated">Generated</option>
           </select>
+          <select
+            value={sort}
+            onChange={(e) => {
+              setSort(e.target.value as ExampleFilter["sort"]);
+              setOffset(0);
+            }}
+          >
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="longest">Longest first</option>
+            <option value="shortest">Shortest first</option>
+          </select>
           <span className="pager">
             <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}><Icon name="chevron-left" />Previous</button>
             <span className="muted">{total === 0 ? "0" : `${offset + 1}–${last}`} of {total}</span>
@@ -350,6 +363,9 @@ function DatasetView({
               <span className={`badge ${example.split}`}>{example.split === "eval" ? "held out" : "training"}</span>
               {example.origin !== "manual" && <span className="badge">{example.origin}</span>}
               <span className="muted">#{example.id}</span>
+              <span className="muted nowrap" title="Added">
+                {new Date(example.created_at).toLocaleString()}
+              </span>
               {example.source && (
                 <span className="muted source" title={example.source}>
                   from {example.source}

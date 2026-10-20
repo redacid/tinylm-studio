@@ -425,7 +425,7 @@ write. Examples live in `knowledge.db` next to the collections.
 | DELETE | `/api/datasets/{name}` | Deletes the dataset and its examples |
 | POST | `/api/datasets/{name}/import` | Multipart upload, field `files`: `added`, `duplicates`, `invalid` and the first `errors` (`line`, `error`) per file. Records with an `origin` (and `source`), as written by export, keep it; others are `imported` |
 | GET | `/api/datasets/{name}/export` | `?split=all\|train\|eval`: the examples as JSONL (`{"messages": [...], "origin": ..., "source": ...}` per line), downloaded as `<name>.jsonl`; import reads it back |
-| GET | `/api/datasets/{name}/examples` | `?query=&split=all\|train\|eval&origin=manual\|imported\|generated&offset=0&limit=20`: one page of examples (each with `split`, `origin` and, for generated ones, `source`) and the matching `total` |
+| GET | `/api/datasets/{name}/examples` | `?query=&split=all\|train\|eval&origin=manual\|imported\|generated&sort=oldest\|newest\|longest\|shortest&offset=0&limit=20`: one page of examples (each with `split`, `origin`, `created_at` and, for generated ones, `source`) and the matching `total`; `longest` and `shortest` go by the length of the conversation |
 | POST | `/api/datasets/{name}/examples` | `{"messages": [...]}` |
 | PUT | `/api/datasets/{name}/examples/{id}` | `{"messages": [...]}` |
 | DELETE | `/api/datasets/{name}/examples/{id}` | Deletes one example |

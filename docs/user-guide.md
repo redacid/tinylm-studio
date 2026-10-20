@@ -350,6 +350,10 @@ language); facts are better left to collections and chat with data.
 - Each example shows where it came from: **imported**, **generated** (with the document it was
   written from) or written by hand. The origin filter shows one kind at a time, for example to
   review generated examples before training.
+- Each example also shows when it was added. The list is sorted newest first; the sort menu
+  also offers oldest first, longest first and shortest first (by the length of the
+  conversation), for example to find the longest examples before training with a short
+  `max_length`.
 
 ### Generating examples
 

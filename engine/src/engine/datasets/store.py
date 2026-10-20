@@ -17,6 +17,14 @@ from engine.rag.store import KnowledgeStore, now
 DATASET_NAME = re.compile(r"^[\w-]{1,64}$")
 Split = Literal["all", "train", "eval"]
 Origin = Literal["manual", "imported", "generated"]
+ExampleSort = Literal["oldest", "newest", "longest", "shortest"]
+EXAMPLE_ORDER = {
+    "oldest": "e.id",
+    "newest": "e.id DESC",
+    # The length of the conversation's text (as stored, JSON).
+    "longest": "length(e.messages) DESC, e.id",
+    "shortest": "length(e.messages), e.id",
+}
 # A well-mixed 0-99 bucket per example id (Knuth's multiplicative hash).
 BUCKET = "((e.id * 2654435761) % 4294967296 % 100)"
 # Errors reported per import; a broken file would otherwise send thousands of lines.
@@ -131,13 +139,14 @@ class DatasetStore:
         offset: int = 0,
         limit: int | None = None,
         origin: Origin | None = None,
+        sort: ExampleSort = "oldest",
     ) -> list[dict]:
         where, params = self._filter(dataset, query, split, origin)
         rows = self.db.execute(
             "SELECT e.id, e.messages, e.created_at, e.origin, e.source, "
             f"{BUCKET} < d.eval_percent AS held_out "
             f"FROM examples e JOIN datasets d ON d.name = e.dataset WHERE {where} "
-            "ORDER BY e.id LIMIT ? OFFSET ?",
+            f"ORDER BY {EXAMPLE_ORDER[sort]} LIMIT ? OFFSET ?",
             (*params, -1 if limit is None else limit, offset),
         )
         return [
