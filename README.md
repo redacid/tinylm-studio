@@ -173,3 +173,15 @@ and sample data; retake them when a screen changes. `make demo-gif` records the 
 (`docs/images/walkthrough-en.gif`, `walkthrough-uk.gif`) from a scenario, from crawling a website
 to chatting with the model trained on it, and `make demo-tour` the tour of every tab
 (`tour-en.gif`, `tour-uk.gif`); see [docs/demo.md](docs/demo.md).
+
+## License
+
+tinylm-studio is licensed under the [Apache License 2.0](LICENSE); see also [NOTICE](NOTICE).
+Its dependencies use permissive licenses (MIT, BSD, ISC, Apache-2.0).
+
+Models are not part of the project: the app downloads them from Hugging Face, and each one comes
+with its own license, which also covers the models you fine-tune from it. Qwen3 and SmolLM2 are
+Apache-2.0 and multilingual-e5-small is MIT, while Llama 3.2 (Llama 3.2 Community License) and
+Gemma (Gemma Terms of Use) restrict how they may be used and shared. Check the model card before
+publishing or selling a fine-tuned model. The CUDA engine image is built on NVIDIA's CUDA images,
+which are covered by the NVIDIA CUDA EULA.

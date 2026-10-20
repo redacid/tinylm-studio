@@ -170,6 +170,10 @@ can use them (see [api.md](api.md)).
   `.env` as `HF_TOKEN=...`. A token also makes downloads faster. `.env` is read by `make`, so
   start the app with `make run` (or export `HF_TOKEN` yourself). If the token is missing,
   the gated models are marked in red.
+- Every model has its own license, shown on its Hugging Face page, and it also applies to the
+  models you fine-tune from it: Qwen3 and SmolLM2 are Apache-2.0, while Llama and Gemma come with
+  terms that restrict use and redistribution. Check it before sharing or selling a fine-tuned
+  model; see [License](../README.md#license).
 - If a gated model does not download, see
   [Troubleshooting](#a-gated-model-does-not-download).
 - **Fine-tuned models** show the base model, the dataset and the final loss. Deleting one

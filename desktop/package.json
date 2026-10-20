@@ -27,6 +27,7 @@
     "yaml": "^2.9.1"
   },
   "author": "Serhii <sr@ios.in.ua>",
+  "license": "Apache-2.0",
   "homepage": "https://dev.ios.in.ua/redacid/tinylm-studio",
   "build": {
     "appId": "ua.in.ios.tinylm-studio",
@@ -56,6 +57,14 @@
           "lib.sh",
           "setup-engine.sh"
         ]
+      },
+      {
+        "from": "../LICENSE",
+        "to": "LICENSE"
+      },
+      {
+        "from": "../NOTICE",
+        "to": "NOTICE"
       },
       {
         "from": "dist/build-commit",

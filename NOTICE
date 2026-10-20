@@ -1,0 +1,9 @@
+tinylm-studio
+Copyright 2026 Serhii <sr@ios.in.ua>
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Language models are not part of this product. The app downloads them from Hugging Face at the
+user's request, and each model is covered by its own license (for example Apache-2.0 for Qwen3
+and SmolLM2, MIT for multilingual-e5-small, the Llama 3.2 Community License for Llama and the
+Gemma Terms of Use for Gemma). Those terms also apply to models fine-tuned from them.

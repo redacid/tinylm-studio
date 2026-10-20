@@ -3,6 +3,8 @@ name = "tinylm-engine"
 version = "0.1.0"
 description = "Local engine for tinylm-studio: ingestion, retrieval, training and inference."
 requires-python = ">=3.11"
+license = "Apache-2.0"
+authors = [{ name = "Serhii", email = "sr@ios.in.ua" }]
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
