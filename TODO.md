@@ -72,9 +72,10 @@ The engine runs in a container in a Kubernetes cluster or a RunPod pod; see
 - [x] Releases: `make release VERSION=x.y.z` sets the version, writes CHANGELOG.md and tags; a
       pushed tag runs CI and publishes the deb and rpm as a GitHub release; builds at a release
       tag are named by the tag, elsewhere by the commit ([docs/releasing.md](docs/releasing.md)).
-- [x] GitHub Actions: CI on pushes and pull requests, Release on tags, engine images on demand.
+- [x] GitHub Actions: CI on pushes and pull requests, Release and engine images on tags (images
+      also by hand).
 - [ ] Run the workflows on github.com/redacid/tinylm-studio for the first time (first release).
-- [ ] Build the images on GitHub (manual workflow) and decide where they live (ghcr.io storage,
+- [ ] Build the images on GitHub (on each tag) and decide where they live (ghcr.io storage,
       runner disk and time for the CUDA base).
 - [x] Build and push the `cuda` image and start it on a real RunPod GPU pod (RTX 2000 Ada).
 - [ ] Run a fine-tune on a real RunPod GPU pod.

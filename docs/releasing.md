@@ -2,7 +2,7 @@
 
 A release is a git tag named by the version, e.g. `0.1.0` (no `v`). Pushing the tag to GitHub
 (`github.com/redacid/tinylm-studio`) runs the checks, builds the `.deb` and `.rpm` packages and
-publishes them as a GitHub release. Engine container images are built on demand.
+publishes them as a GitHub release. Engine container images (cpu and cuda) are built and pushed for the tag as well.
 
 ## Making a release
 
@@ -60,9 +60,10 @@ Three workflows in `.github/workflows/`:
   version in the code, builds the `.deb` and `.rpm` (`make package PACKAGES="deb rpm"`) and
   creates the GitHub release `tinylm-studio 0.2.0` with the tag's notes from CHANGELOG.md and
   both packages attached.
-- **Engine image** (`images.yml`): manual only. In GitHub, Actions › Engine image › Run workflow,
-  pick the release tag (or a branch) under *Use workflow from* and the variant (`cpu`, `cuda` or
-  both). It runs `make image-push` and `make base-push` with
+- **Engine image** (`images.yml`): on a pushed tag like `0.2.0`, both variants; also by hand:
+  in GitHub, Actions › Engine image › Run workflow, pick the release tag (or a branch) under *Use
+  workflow from* and the variant (`cpu`, `cuda` or both). To build images only by hand, remove
+  the `push: tags:` trigger at the top of the file (a comment there says so). It runs `make image-push` and `make base-push` with
   `IMAGE=ghcr.io/<owner>/tinylm-engine`, so the image is named as in the table above. The base
   image (llama.cpp, PyTorch) is pulled from the registry when it exists for the current
   dependencies, otherwise built first; the CUDA base takes hours on a GitHub runner (the job may

@@ -171,7 +171,7 @@ make release VERSION=0.2.0   # set the version, write release notes, commit and 
 Releases are git tags like `0.2.0`, made by `make release`; pushing the tag to GitHub runs the
 tests and publishes the `.deb` and `.rpm` packages as a GitHub release. Packages and images built
 at a release tag are named by the tag, anywhere else by the commit. GitHub Actions also run the
-checks on every push and pull request, and build engine images on demand. See
+checks on every push and pull request, and build engine images for each release tag. See
 [docs/releasing.md](docs/releasing.md) and [CHANGELOG.md](CHANGELOG.md).
 
 Training tests build a tiny random model on the spot, so they need no download.

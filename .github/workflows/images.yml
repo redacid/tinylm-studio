@@ -1,5 +1,6 @@
-# Builds and pushes the engine container image, on demand only: Actions > Engine image > Run
-# workflow, choosing the release tag (or branch) under "Use workflow from". At a release tag the
+# Builds and pushes the engine container image: both variants (cpu, cuda) on every pushed
+# release tag (e.g. 0.1.0), and on demand: Actions > Engine image > Run workflow, choosing the
+# release tag (or branch) under "Use workflow from" and the variant. At a release tag the
 # image is tagged <tag>-<variant> (e.g. 0.1.0-cuda), on a branch <version>-<commit>-<variant>,
 # plus <variant>; see `make image`. Images go to ghcr.io/<owner>/tinylm-engine. The base image
 # (llama.cpp, PyTorch) is pulled when the registry has it for the current dependencies, otherwise
@@ -7,6 +8,10 @@
 name: Engine image
 
 on:
+  # Automatic build on a pushed release tag. To build images only by hand, delete or comment out
+  # these two lines ("push:" and "tags:") and keep workflow_dispatch below.
+  push:
+    tags: ["[0-9]+.[0-9]+.[0-9]+"]
   workflow_dispatch:
     inputs:
       variant:
@@ -27,7 +32,8 @@ jobs:
     steps:
       - id: list
         env:
-          VARIANT: ${{ inputs.variant }}
+          # A tag push has no inputs: build both variants.
+          VARIANT: ${{ inputs.variant || 'both' }}
         run: |
           if [ "$VARIANT" = both ]; then echo 'list=["cpu","cuda"]'; else echo "list=[\"$VARIANT\"]"; fi >> "$GITHUB_OUTPUT"
 

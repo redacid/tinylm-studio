@@ -1,7 +1,7 @@
 # Publishes a release when a release tag (e.g. 0.1.0, made by `make release VERSION=0.1.0`) is
 # pushed: runs CI, checks that the tag is the version in the code, builds the .deb and .rpm
 # packages and creates the GitHub release with the tag's notes from CHANGELOG.md.
-# Engine images are built separately, on demand (images.yml).
+# Engine images are built by images.yml, which also runs on the tag.
 name: Release
 
 on:

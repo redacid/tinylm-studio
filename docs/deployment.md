@@ -116,8 +116,8 @@ use, and points the engine at them by name (`http://tinylm-chrome:9222`,
   (`0.1.0-5a0d901-dirty-cpu`, never the tag), and `make image-push` refuses to push until they
   are committed (`ALLOW_DIRTY=1` pushes anyway).
 - **On GitHub.** The *Engine image* workflow builds and pushes the image to
-  `ghcr.io/<owner>/tinylm-engine` when started by hand (Actions › Engine image › Run workflow),
-  named by the same rule; see [releasing.md](releasing.md#github-actions).
+  `ghcr.io/<owner>/tinylm-engine` for every pushed release tag (both variants) and when started
+  by hand (Actions › Engine image › Run workflow), named by the same rule; see [releasing.md](releasing.md#github-actions).
   Use the fixed tag on RunPod and in a cluster, so you know what runs and a restart does not pick
   up another build.
 - The version and commit are also in the image's labels (`org.opencontainers.image.version`,

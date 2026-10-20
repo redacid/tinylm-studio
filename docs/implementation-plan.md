@@ -273,7 +273,7 @@ qwen3-0.6b on ~1,000 examples on the target machine, and a GPU run.
 - **Done (2026-10-20):** releases. `make release VERSION=x.y.z` sets the version in the engine
   and the app, adds the commits since the previous tag to CHANGELOG.md, commits and tags; pushing
   the tag runs GitHub Actions, which test, build the deb and rpm and publish a GitHub release.
-  Engine images are built by a manual workflow. Builds at a release tag are named by the tag,
+  Engine images are built for each tag too, and by hand. Builds at a release tag are named by the tag,
   others by the commit ([releasing.md](releasing.md)).
 - Installers for macOS and Windows (dmg, exe), code signing, auto-update.
 - **Done (2026-10-15):** a container image for the engine (CPU and CUDA), the desktop app
