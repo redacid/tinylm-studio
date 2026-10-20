@@ -27,8 +27,8 @@ from engine.models.settings import (
 log = logging.getLogger(__name__)
 
 ECHO_MODEL = "echo"
-# The chat can also answer with a saved teacher (an API model): "teacher:<id>".
-TEACHER_PREFIX = "teacher:"
+# The chat can also answer with a saved teacher (an API model): "tinylm/teacher/<name>".
+TEACHER_PREFIX = "tinylm/teacher/"
 # Written into a downloaded model's folder: the Hugging Face repo (and file) it came from.
 SOURCE_FILE = "tinylm-source.json"
 TRANSFORMERS_OPTIONS = ("threads", "repetition_penalty")
@@ -81,7 +81,7 @@ class ModelManager:
         self.downloads: dict[str, Download] = {}
         self._loaded: tuple[str, Runtime] | None = None
         self._lock = threading.Lock()
-        # The TeacherStore, set by the app: makes "teacher:<id>" models answer in the chat.
+        # The TeacherStore, set by the app: makes "tinylm/teacher/<name>" models answer in the chat.
         self.teachers = None
 
     def installed(self) -> list[str]:
@@ -186,11 +186,16 @@ class ModelManager:
             from engine.teachers.store import TeacherNotFound
 
             try:
-                self.teachers.get(int(model_id.removeprefix(TEACHER_PREFIX)))
+                self.teachers.by_name(model_id.removeprefix(TEACHER_PREFIX))
                 return True
-            except (TeacherNotFound, ValueError):
+            except TeacherNotFound:
                 return False
         return model_id in self.installed()
+
+    def chat_models(self) -> list[str]:
+        """Model ids the chat answers with: installed models, then saved teachers."""
+        names = [t.name for t in self.teachers.saved()] if self.teachers is not None else []
+        return self.installed() + [TEACHER_PREFIX + n for n in dict.fromkeys(names)]
 
     def runtime(self, model_id: str) -> Runtime:
         """Return a runtime for the model, unloading any other model first. A teacher answers

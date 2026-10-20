@@ -147,6 +147,6 @@ def test_saving_a_cli_teacher(client, tools, settings):
 
     answer = client.post(
         "/v1/chat/completions",
-        json={"model": f"teacher:{saved['ref']}", "messages": [{"role": "user", "content": "Hi"}]},
+        json={"model": saved["model_id"], "messages": [{"role": "user", "content": "Hi"}]},
     ).json()
     assert answer["choices"][0]["message"]["content"] == "Квен."

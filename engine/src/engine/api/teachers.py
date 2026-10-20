@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from engine.api.deps import require_api_key
 from engine.teachers.providers import TeacherError, cli_tool
-from engine.teachers.store import TeacherConfig, TeacherNotFound, TeacherStore
+from engine.teachers.store import TeacherConfig, TeacherNameTaken, TeacherNotFound, TeacherStore
 
 router = APIRouter(
     prefix="/api/teachers", dependencies=[Depends(require_api_key)], tags=["teachers"]
@@ -74,7 +74,14 @@ def list_teachers(store: TeacherStore = Depends(teachers)) -> dict:
 def add_teacher(body: TeacherRequest, store: TeacherStore = Depends(teachers)) -> dict:
     if not body.model.strip() and body.kind != "cli":
         raise HTTPException(422, "Choose a model.")
-    return store.add(config(body, store)).to_dict()
+    try:
+        return store.add(config(body, store)).to_dict()
+    except TeacherNameTaken as e:
+        raise HTTPException(409, name_taken(e)) from None
+
+
+def name_taken(error: TeacherNameTaken) -> str:
+    return f"A teacher named {error} already exists; choose another name."
 
 
 @router.put("/{teacher_id}")
@@ -85,6 +92,8 @@ def change_teacher(
         return store.update(teacher_id, config(body, store)).to_dict()
     except TeacherNotFound:
         raise HTTPException(404, f"Unknown teacher {teacher_id}") from None
+    except TeacherNameTaken as e:
+        raise HTTPException(409, name_taken(e)) from None
 
 
 @router.delete("/{teacher_id}", status_code=204)

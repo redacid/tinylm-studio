@@ -16,10 +16,11 @@ RunPod pod (Settings > Engine).
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/v1/models` | Installed models |
+| GET | `/v1/models` | Installed models, then saved teachers as `tinylm/teacher/<name>` |
 | POST | `/v1/chat/completions` | `stream`, `stream_options.include_usage`, `max_tokens` / `max_completion_tokens`, `temperature`, `top_p`, `stop` |
 
-`model` can also be `teacher:<id>`, a saved teacher (`id` from `GET /api/teachers`): the
+`model` can also be `tinylm/teacher/<name>`, a saved teacher (`model_id` from
+`GET /api/teachers`; the name may contain `/` or `:`, e.g. `tinylm/teacher/openai/gpt-4o`): the
 conversation goes to its API (OpenAI-compatible or Anthropic) and the answer streams back, with
 a collection's sources added as for any model; the loaded model stays loaded. An error from the
 provider comes back as the answer's text. `/v1/messages` takes it too.
@@ -478,9 +479,9 @@ out or `null`, each request uses its own:
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/api/teachers` | Saved teachers (`id`, `ref`, `name`, `kind`, `base_url`, `model`, `has_key`, `per_minute`, `max_tokens`, `temperature`, `thinking`), then installed models with `kind: "local"` and `ref: "local:<model id>"` |
-| POST | `/api/teachers` | Saves a teacher; 201 |
-| PUT | `/api/teachers/{id}` | The same body; an empty `api_key` keeps the saved key |
+| GET | `/api/teachers` | Saved teachers (`id`, `ref`, `name`, `model_id`, `kind`, `base_url`, `model`, `has_key`, `per_minute`, `max_tokens`, `temperature`, `thinking`), then installed models with `kind: "local"` and `ref: "local:<model id>"` |
+| POST | `/api/teachers` | Saves a teacher; 201. 409 when another teacher has that `name` (names are unique and case-sensitive; an empty name defaults to the model) |
+| PUT | `/api/teachers/{id}` | The same body; an empty `api_key` keeps the saved key; 409 when renamed to a name another teacher has |
 | DELETE | `/api/teachers/{id}` | 204 |
 | POST | `/api/teachers/models` | The same body (or with `id` to use a saved key): the provider's models as `id`, `name`, `free`, free ones first; 502 with the provider's error |
 | POST | `/api/teachers/test` | The same body: sends "Say OK." and returns `{"reply": "OK", "served": {"model": "...", "provider": "..."}}`; 502 with the reason (rejected key, not reachable, unknown model) |

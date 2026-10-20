@@ -98,7 +98,7 @@ def ask(client, model: str, stream: bool = False):
 
 
 def test_chat_with_an_openai_compatible_teacher(client, teachers):
-    response = ask(client, f"teacher:{teachers['big/model:free']}")
+    response = ask(client, "tinylm/teacher/big/model:free")
     assert response.status_code == 200, response.text
     assert response.json()["choices"][0]["message"]["content"] == "Знак Аард."
     sent = seen[-1]
@@ -106,7 +106,7 @@ def test_chat_with_an_openai_compatible_teacher(client, teachers):
     assert [m["role"] for m in sent["messages"]] == ["system", "user", "assistant", "user"]
     assert sent["max_tokens"] == 50
 
-    streamed = ask(client, f"teacher:{teachers['big/model:free']}", stream=True)
+    streamed = ask(client, "tinylm/teacher/big/model:free", stream=True)
     texts = [
         json.loads(line[6:])["choices"][0]["delta"].get("content", "")
         for line in streamed.text.splitlines()
@@ -116,7 +116,7 @@ def test_chat_with_an_openai_compatible_teacher(client, teachers):
 
 
 def test_chat_with_an_anthropic_teacher(client, teachers):
-    response = ask(client, f"teacher:{teachers['claude']}")
+    response = ask(client, "tinylm/teacher/claude")
     assert response.json()["choices"][0]["message"]["content"] == "Знак Ігні."
     assert response.json()["usage"]["completion_tokens"] == 3
     sent = seen[-1]
@@ -125,19 +125,19 @@ def test_chat_with_an_anthropic_teacher(client, teachers):
 
 
 def test_teacher_errors_in_the_chat(client, teachers):
-    answer = ask(client, f"teacher:{teachers['broken']}").json()
+    answer = ask(client, "tinylm/teacher/broken").json()
     assert "rejected the API key" in answer["choices"][0]["message"]["content"]
-    assert ask(client, "teacher:999").status_code == 404
-    assert ask(client, "teacher:x").status_code == 404
+    assert ask(client, "tinylm/teacher/missing").status_code == 404
+    assert ask(client, "teacher:1").status_code == 404
 
 
 def test_claude_models_that_refuse_a_temperature(client, teachers):
     """Newer Claude models answer HTTP 400 to temperature: asked again without, and remembered."""
-    response = ask(client, f"teacher:{teachers['claude-new']}")
+    response = ask(client, "tinylm/teacher/claude-new")
     assert response.json()["choices"][0]["message"]["content"] == "Знак Ігні."
     assert "temperature" in seen[-2] and "temperature" not in seen[-1]
     seen.clear()
-    ask(client, f"teacher:{teachers['claude-new']}", stream=True)
+    ask(client, "tinylm/teacher/claude-new", stream=True)
     assert len(seen) == 1 and "temperature" not in seen[0]
 
     teacher = AnthropicTeacher("https://anthropic.test", "k", "claude-new")
@@ -156,26 +156,26 @@ def test_answer_settings_of_a_teacher(client, teachers):
     settings = {"max_tokens": 4000, "temperature": 0.2, "thinking": "on"}
     saved = client.put(f"/api/teachers/{ref}", json={**body, **settings}).json()
     assert {k: saved[k] for k in settings} == settings
-    ask(client, f"teacher:{ref}")
+    ask(client, "tinylm/teacher/claude")
     sent = seen[-1]
     assert sent["max_tokens"] == 4000 and sent["temperature"] == 0.2
     assert sent["thinking"] == {"type": "adaptive"}
 
     client.put(f"/api/teachers/{ref}", json={**body, "thinking": "off"})
-    ask(client, f"teacher:{ref}")
+    ask(client, "tinylm/teacher/claude")
     assert seen[-1]["thinking"] == {"type": "disabled"} and seen[-1]["max_tokens"] == 50
     client.put(f"/api/teachers/{ref}", json=body)
-    ask(client, f"teacher:{ref}")
+    ask(client, "tinylm/teacher/claude")
     assert "thinking" not in seen[-1]
 
     openai = {"kind": "openai", "base_url": "https://openai.test", "model": "big/model:free"}
     client.put(f"/api/teachers/{teachers['big/model:free']}", json={**openai, "thinking": "off"})
-    ask(client, f"teacher:{teachers['big/model:free']}")
+    ask(client, "tinylm/teacher/big/model:free")
     assert seen[-1]["reasoning"] == {"enabled": False}
 
 
 def test_an_answer_spent_on_thinking(client, teachers):
-    answer = ask(client, f"teacher:{teachers['thinker']}").json()["choices"][0]
+    answer = ask(client, "tinylm/teacher/thinker").json()["choices"][0]
     assert "used all 50 tokens before answering" in answer["message"]["content"]
     assert answer["finish_reason"] == "length"
 
@@ -200,3 +200,16 @@ def test_older_database_gets_the_answer_settings(tmp_path):
     old.close()
     teacher = TeacherStore(KnowledgeStore(path, HashEmbedder()), models=None).get(1)
     assert teacher.thinking == "default" and teacher.max_tokens is None
+
+
+def test_teacher_names_are_unique_and_listed_as_models(client, teachers):
+    body = {"kind": "openai", "base_url": "https://openai.test", "model": "other", "api_key": "k"}
+    assert client.post("/api/teachers", json={**body, "name": "claude"}).status_code == 409
+    saved = client.post("/api/teachers", json={**body, "name": "Mentor"}).json()
+    assert saved["model_id"] == "tinylm/teacher/Mentor"
+    renamed = client.put(f"/api/teachers/{saved['ref']}", json={**body, "name": "claude"})
+    assert renamed.status_code == 409
+    ids = [m["id"] for m in client.get("/v1/models").json()["data"]]
+    assert {"tinylm/teacher/claude", "tinylm/teacher/big/model:free", saved["model_id"]} <= set(ids)
+    anthropic = client.get("/v1/models", headers={"anthropic-version": "2023-06-01"}).json()
+    assert saved["model_id"] in [m["id"] for m in anthropic["data"]]

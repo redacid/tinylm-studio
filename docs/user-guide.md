@@ -433,6 +433,11 @@ A teacher is the model that writes examples. Teachers are set up at the bottom o
 - **Installed models** are offered as teachers without any setup. They are free and private,
   but a 4B model on a CPU takes minutes per chunk; use them for small runs.
 
+Each teacher needs its own name (it defaults to the model); the chat and the API know it as
+`tinylm/teacher/<name>`. Teachers saved with the same name by an older version keep working
+for generation, but the chat answers with the oldest of them, and the engine log warns about
+them; rename the others.
+
 **Test** sends a tiny request and shows the answer, with the model and provider that answered,
 or the provider's error. **Requests per
 minute** keeps the studio under the provider's limit; leave it empty for no limit.

@@ -100,7 +100,7 @@ def list_models(request: Request, models: ModelManager = Depends(manager)):
         "object": "list",
         "data": [
             {"id": m, "object": "model", "created": 0, "owned_by": "tinylm"}
-            for m in models.installed()
+            for m in models.chat_models()
         ],
     }
 

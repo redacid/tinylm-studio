@@ -88,3 +88,14 @@ The engine runs in a container in a Kubernetes cluster or a RunPod pod; see
       queries; `DELETE` asks first and removes the rows with their chunks and index.
 - [x] Icons on tabs, buttons, run states, the engine status and log levels, colored by what
       they do (the bundled Tabler Icons font).
+
+## API description (OpenAPI)
+
+FastAPI already serves the engine's OpenAPI schema at `/openapi.json` and Swagger UI at `/docs`.
+
+- [ ] Make the schema complete: response models (`response_model` or typed returns) instead of
+      `-> dict`, so responses are described; summaries and descriptions from docstrings; error
+      responses (`responses={404: ...}`); an `APIKeyHeader`/Bearer security scheme, so Swagger's
+      **Authorize** and tools that import the schema (Postman, Insomnia, Bruno) send the key.
+- [ ] Generate TypeScript types for `desktop/src/renderer/api.ts` from the schema
+      (`openapi-typescript`) instead of writing them by hand, so the app and the engine cannot drift.

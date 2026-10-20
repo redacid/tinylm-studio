@@ -85,7 +85,7 @@ def error(status: int, message: str, kind: str) -> JSONResponse:
 def list_models(models: ModelManager) -> dict:
     data = [
         {"type": "model", "id": m, "display_name": m, "created_at": "1970-01-01T00:00:00Z"}
-        for m in models.installed()
+        for m in models.chat_models()
     ]
     return {
         "data": data,

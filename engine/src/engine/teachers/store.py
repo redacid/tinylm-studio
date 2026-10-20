@@ -5,6 +5,7 @@ Keys are stored in the workspace's SQLite file on this computer and never sent b
 Installed models are offered as local teachers without being saved.
 """
 
+import logging
 from dataclasses import dataclass
 
 from engine.rag.store import KnowledgeStore, now
@@ -39,10 +40,18 @@ ADDED_COLUMNS = {
     "temperature": "REAL",
     "thinking": "TEXT NOT NULL DEFAULT 'default'",
 }
+log = logging.getLogger(__name__)
+
+# A saved teacher's model id in the chat API and /v1/models: "tinylm/teacher/<name>".
+CHAT_PREFIX = "tinylm/teacher/"
 FIELDS = ("name", "kind", "base_url", "model", "api_key", "per_minute", *ADDED_COLUMNS)
 
 
 class TeacherNotFound(Exception):
+    pass
+
+
+class TeacherNameTaken(Exception):
     pass
 
 
@@ -71,6 +80,8 @@ class TeacherConfig:
             "id": self.id,
             "ref": str(self.id),
             "name": self.name,
+            # The model id to chat with it through /v1/chat/completions and /v1/messages.
+            "model_id": CHAT_PREFIX + self.name,
             "kind": self.kind,
             "base_url": self.base_url,
             "model": self.model,
@@ -108,6 +119,12 @@ class TeacherStore:
                 if name not in columns:
                     self.db.execute(f"ALTER TABLE teachers ADD COLUMN {name} {definition}")
             self.db.commit()
+        # Saved before names had to be unique: the chat answers with the oldest of them.
+        for row in self.db.execute(
+            "SELECT name, COUNT(*) AS n FROM teachers GROUP BY name HAVING n > 1"
+        ):
+            message = "%d teachers are named %r; rename all but one to chat with them"
+            log.warning(message, row["n"], row["name"])
 
     @property
     def db(self):
@@ -123,6 +140,21 @@ class TeacherStore:
             raise TeacherNotFound(str(teacher_id))
         return TeacherConfig(**dict(row))
 
+    def by_name(self, name: str) -> TeacherConfig:
+        row = self.db.execute(
+            "SELECT * FROM teachers WHERE name = ? ORDER BY id LIMIT 1", (name,)
+        ).fetchone()
+        if row is None:
+            raise TeacherNotFound(name)
+        return TeacherConfig(**dict(row))
+
+    def _check_name(self, name: str, teacher_id: int | None = None) -> None:
+        taken = self.db.execute(
+            "SELECT 1 FROM teachers WHERE name = ? AND id IS NOT ?", (name, teacher_id)
+        ).fetchone()
+        if taken:
+            raise TeacherNameTaken(name)
+
     def all(self) -> list[dict]:
         """Saved teachers, then installed models as local teachers ("local:<model id>")."""
         local = [
@@ -130,6 +162,7 @@ class TeacherStore:
                 "id": None,
                 "ref": f"local:{model_id}",
                 "name": model_id,
+                "model_id": model_id,
                 "kind": "local",
                 "base_url": "",
                 "model": model_id,
@@ -147,6 +180,7 @@ class TeacherStore:
 
     def add(self, config: TeacherConfig) -> TeacherConfig:
         with self._lock:
+            self._check_name(config.name)
             cursor = self.db.execute(
                 f"INSERT INTO teachers (created_at, {', '.join(FIELDS)}) "
                 f"VALUES (?, {', '.join('?' * len(FIELDS))})",
@@ -160,6 +194,9 @@ class TeacherStore:
         current = self.get(teacher_id)
         config.api_key = config.api_key or current.api_key
         with self._lock:
+            # Unchanged names pass, so teachers saved with a duplicate name stay editable.
+            if config.name != current.name:
+                self._check_name(config.name, teacher_id)
             self.db.execute(
                 f"UPDATE teachers SET {', '.join(f + ' = ?' for f in FIELDS)} WHERE id = ?",
                 (*(getattr(config, f) for f in FIELDS), teacher_id),
@@ -173,11 +210,9 @@ class TeacherStore:
                 raise TeacherNotFound(str(teacher_id))
             self.db.commit()
 
-    def chat_runtime(self, teacher_id: str) -> TeacherRuntime:
-        """A saved teacher as a runtime the chat answers with ("teacher:<id>" there)."""
-        if not teacher_id.isdigit():
-            raise TeacherNotFound(teacher_id)
-        return TeacherRuntime(self.client(self.get(int(teacher_id))))
+    def chat_runtime(self, name: str) -> TeacherRuntime:
+        """A saved teacher as a runtime the chat answers with ("tinylm/teacher/<name>" there)."""
+        return TeacherRuntime(self.client(self.by_name(name)))
 
     def teacher(self, ref: str) -> Paced:
         """A ready-to-use teacher for "local:<model id>" or a saved teacher's id."""

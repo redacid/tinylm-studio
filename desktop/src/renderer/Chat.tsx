@@ -23,7 +23,7 @@ export function Chat({
 }) {
   const [saved] = useState(loadChatSession);
   const [models, setModels] = useState<string[]>([]);
-  // Saved teachers (API models such as OpenRouter or Claude), chatted with as "teacher:<id>".
+  // Saved teachers (API models such as OpenRouter or Claude), chatted with as "tinylm/teacher/<name>".
   const [teachers, setTeachers] = useState<{ ref: string; name: string }[]>([]);
   const [model, setModel] = useState((settings.rememberChoice && saved.model) || "");
   const [system, setSystem] = useState(
@@ -80,7 +80,7 @@ export function Chat({
       ([ids, preferred, saved]) => {
         const remote = saved
           .filter((t) => t.kind !== "local" && t.id != null)
-          .map((t) => ({ ref: `teacher:${t.id}`, name: t.name }));
+          .map((t) => ({ ref: t.model_id, name: t.name }));
         setModels(ids);
         setTeachers(remote);
         const all = [...ids, ...remote.map((t) => t.ref)];

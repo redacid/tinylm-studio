@@ -256,7 +256,10 @@ export type Teacher = {
   id: number | null;
   /** What generation takes: a saved teacher's id or "local:<model id>". */
   ref: string;
+  /** Unique among saved teachers. */
   name: string;
+  /** The chat model id: "tinylm/teacher/<name>", or the model id of a local teacher. */
+  model_id: string;
   kind: TeacherKind;
   base_url: string;
   model: string;
