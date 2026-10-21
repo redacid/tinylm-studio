@@ -3,7 +3,7 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from engine import __version__
+from engine import __version__, logs
 from engine.api import (
     admin,
     anthropic,
@@ -25,6 +25,7 @@ from engine.api.deps import AuthError, is_anthropic
 from engine.config import Settings
 from engine.datasets.generate import GenerationManager, Generator
 from engine.datasets.store import DatasetStore
+from engine.engine_settings import EngineOptions, engine_settings, overlay
 from engine.evaluation.evaluate import EvaluationManager
 from engine.export.jobs import ExportManager
 from engine.models.bundles import bundled_collection, import_bundles_in_background
@@ -72,6 +73,31 @@ def search_settings(settings: Settings) -> SearchSettingsStore:
     return SearchSettingsStore(settings.workspace_dir / "search-settings.json", settings)
 
 
+def apply_engine_settings(app: FastAPI, options: EngineOptions) -> None:
+    """Puts changed engine settings into effect without a restart. Threads and the repetition
+    penalty apply from the next model loaded, so the loaded one is let go."""
+    settings = app.state.settings
+    before = settings.model_copy()
+    for name, value in overlay(options).items():
+        setattr(settings, name, value)
+    models = app.state.models
+    models.hf_token = settings.hf_token
+    runtime = {"threads": settings.threads, "repetition_penalty": settings.repetition_penalty}
+    if any(models.runtime_options.get(k) != v for k, v in runtime.items()):
+        models.runtime_options.update(runtime)
+        models.unload()
+    embedder = app.state.knowledge.embedder
+    if isinstance(embedder, SentenceTransformerEmbedder):
+        embedder.hf_token = settings.hf_token
+        if settings.embedding_device != before.embedding_device:
+            embedder.move_to(settings.embedding_device)
+    app.state.crawls.crawler.proxy = settings.proxy
+    app.state.exports.llama_cpp_dir = settings.llama_cpp_dir
+    app.state.exports.threads = settings.threads
+    if settings.log_level != before.log_level:
+        logs.set_level(settings.log_level)
+
+
 def create_app(
     settings: Settings | None = None,
     models: ModelManager | None = None,
@@ -79,6 +105,11 @@ def create_app(
 ) -> FastAPI:
     settings = settings or Settings()
     settings.workspace_dir.mkdir(parents=True, exist_ok=True)
+    # What was saved in the app's Settings > Engine options wins over the environment; the store
+    # keeps the environment's values as the defaults.
+    options = engine_settings(settings)
+    for name, value in overlay(options.get()).items():
+        setattr(settings, name, value)
 
     app = FastAPI(
         title="tinylm-studio engine",
@@ -86,6 +117,8 @@ def create_app(
         description=DESCRIPTION,
     )
     app.state.settings = settings
+    options.on_change = lambda changed: apply_engine_settings(app, changed)
+    app.state.engine_settings = options
     app.state.models = models or ModelManager(
         settings.models_dir,
         enable_echo=settings.enable_echo,

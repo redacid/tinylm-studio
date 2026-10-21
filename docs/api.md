@@ -180,6 +180,8 @@ Not supported yet: tool use / function calling, images, logprobs, `n > 1`, batch
 | GET | `/health` | Liveness, `version` and `commit`: the git commit the engine was built from (`TINYLM_BUILD_COMMIT` in the container image, else the checkout it runs from, with `-dirty` for uncommitted changes; `null` when unknown) |
 | GET | `/api/logs` | `?lines=500` (at most 5000): the end of the engine's log, `lines` oldest first (a traceback is part of its entry's line) and the `file`; needs the API key |
 | GET | `/api/system` | Python path and hardware; needs the API key when one is set (unlike `/health`) |
+| GET | `/api/settings` | The [engine options](user-guide.md#engine-options): `proxy` (its password as `****`), `llama_cpp_dir`, `threads`, `repetition_penalty`, `rag_top_k`, `embedding_device`, `log_level`; for the Hugging Face token only `hf_token_set`, `hf_token_hint` (`hf_…a1b2`) and `hf_token_source` (`app`, `environment`, `login` or `null`); `saved`: the fields saved in the engine; `defaults`: the environment's values |
+| PUT | `/api/settings` | Any of those fields and `hf_token`; left out keeps its value, `null` goes back to the environment's, `""` is none for `hf_token`, `proxy` and `llama_cpp_dir` (even when the environment sets one). In effect at once; 422 names a wrong value |
 | GET | `/api/models` | `models`: installed models with `format`, `size` in bytes, `source` (`repo`, `file`), `loaded`, `settings` and `used_by` (fine-tuned models that need it); `downloads` with `state`, `total` and `downloaded` bytes; the catalog with install and download state; `trainable`: installed models that can be fine-tuned |
 | POST | `/api/models/{id}/download` | Starts a background download of a catalog model from Hugging Face |
 | GET | `/api/models/{id}/settings` | The model's settings (only the ones set) |
@@ -257,7 +259,7 @@ PyPI (downloaded once into `<data dir>/tools/`) or from `TINYLM_LLAMA_CPP_DIR`.
 | POST | `/api/models/{id}/export` | `{"quantization": "Q8_0" \| "Q4_K_M" \| "F16", "name": "game-hints-0.6b-q8_0", "collection": "games"}` (all optional; the name defaults to `<id>-<quantization>`; with `collection` the model folder takes it along as `collection.jsonl` and answers from it, and an engine that finds such a folder at start imports the collection if it has none of that name); 202, 422 for a model that is not fine-tuned, a missing base model or a taken name, 409 while another export is running |
 | GET | `/api/exports` | Exports, oldest first |
 | GET | `/api/exports/{id}` | `state` (`running`, `done`, `error`, `interrupted`), `step` of `steps` (`tools`, `merge`, `convert`, `quantize`, `save`), `notes` (downloads, warnings), `size` of the file in bytes, `error` |
-- Gated models (Gemma, Llama) need a token (`TINYLM_HF_TOKEN` or `HF_TOKEN`) and an accepted license on Hugging Face. `GET /api/models` reports `hf_token`: whether downloads send a token (from the settings, `HF_TOKEN` or a saved `hf auth login`). A refused download explains the cause: no token (HTTP 401) or a token whose account has no access to the model yet (HTTP 403).
+- Gated models (Gemma, Llama) need a token (`PUT /api/settings` with `hf_token`, `TINYLM_HF_TOKEN` or `HF_TOKEN`) and an accepted license on Hugging Face. `GET /api/models` reports `hf_token`: whether downloads send a token (from the settings, `HF_TOKEN` or a saved `hf auth login`). A refused download explains the cause: no token (HTTP 401) or a token whose account has no access to the model yet (HTTP 403).
 - `TINYLM_ENABLE_ECHO=true` (or `make run-engine ECHO=1`) adds an `echo` model that needs no
   weights, for testing clients and the UI.
 
@@ -597,30 +599,35 @@ POST /api/evaluations
 
 ## Settings
 
+The engine is configured by these environment variables. Those marked *app* are only defaults:
+the [engine options](user-guide.md#engine-options), search and crawler settings saved through the API (the
+app's Settings tab) win over them.
+
 | Variable | Default | Meaning |
 |---|---|---|
 | `TINYLM_DATA_DIR` | `~/.local/share/tinylm-studio` | Models and workspace |
 | `TINYLM_HOST` / `TINYLM_PORT` | `127.0.0.1` / `8765` | Listen address; `0.0.0.0` in a container (see [deployment.md](deployment.md)) |
 | `TINYLM_API_KEY` | none | Require an API key |
 | `TINYLM_BUILD_COMMIT` | set by the container image | The git commit `/health` reports; outside the image the engine asks git |
-| `TINYLM_HF_TOKEN` | none | Hugging Face token: needed for gated models, gives faster downloads (`HF_TOKEN` works too) |
+| `TINYLM_HF_TOKEN` | none | *app*. Hugging Face token: needed for gated models, gives faster downloads (`HF_TOKEN` works too) |
 | `TINYLM_ENABLE_ECHO` | `false` | Offer the `echo` test model |
 | `TINYLM_CORS_ORIGINS` | `[]` | Allowed browser origins (JSON list) |
-| `TINYLM_THREADS` | physical cores, at most 8 | CPU threads for inference |
-| `TINYLM_REPETITION_PENALTY` | `1.1` | Discourages repeated tokens; small models loop without it |
+| `TINYLM_THREADS` | physical cores, at most 8 | *app*. CPU threads for inference and GGUF export |
+| `TINYLM_REPETITION_PENALTY` | `1.1` | *app*. Discourages repeated tokens; small models loop without it |
 | `TINYLM_EMBEDDING_MODEL` | `intfloat/multilingual-e5-small` | Embedding model for uploaded data; `hash` needs no download (tests, UI development) |
-| `TINYLM_EMBEDDING_DEVICE` | `auto` | Where the embedding model runs: `auto` (an NVIDIA GPU when there is one, else the CPU), `cuda`, `cpu` or `mps` |
-| `TINYLM_RAG_TOP_K` | `4` | Chunks added to the prompt per question |
-| `TINYLM_PROXY` | none | HTTP or SOCKS proxy for website crawling |
-| `TINYLM_CDP_URL` | `http://127.0.0.1:9222` | Browser DevTools endpoint for crawling with a browser |
-| `TINYLM_CRAWL_PER_MINUTE` | `20` | Default requests per minute to each site |
-| `TINYLM_CRAWL_RESPECT_ROBOTS` | `true` | `false`: robots.txt is not read for any crawl |
-| `TINYLM_CRAWL_MAX_PAGES` / `TINYLM_CRAWL_MAX_DEPTH` | `50` / `2` | Defaults for new crawls and websites |
-| `TINYLM_CRAWL_USE_BROWSER` | `false` | `true`: new crawls and websites load pages in the browser at `TINYLM_CDP_URL` |
-| `TINYLM_USER_AGENT` | `tinylm-studio/0.1 (local research crawler)` | User-Agent of plain HTTP requests |
-| `TINYLM_SEARCH_PROVIDER` | `searxng` | Web search: `searxng`, `brave`, `tavily`, `exa`, `perplexity` or `serper`. This and the search variables below are defaults; the saved search settings win |
-| `TINYLM_SEARXNG_URL` | `http://127.0.0.1:8888` | SearXNG address (`make searxng` starts one) |
-| `TINYLM_SEARCH_INCLUDE_DOMAINS` / `TINYLM_SEARCH_EXCLUDE_DOMAINS` | `[]` | Only / never these sites (JSON list of domains or patterns like `*.ua`) |
-| `TINYLM_BRAVE_API_KEY`, `TINYLM_TAVILY_API_KEY`, `TINYLM_EXA_API_KEY`, `TINYLM_PERPLEXITY_API_KEY`, `TINYLM_SERPER_API_KEY` | none | API keys of the hosted search providers |
+| `TINYLM_EMBEDDING_DEVICE` | `auto` | *app*. Where the embedding model runs: `auto` (an NVIDIA GPU when there is one, else the CPU), `cuda`, `cpu` or `mps` |
+| `TINYLM_RAG_TOP_K` | `4` | *app*. Chunks added to the prompt per question |
+| `TINYLM_PROXY` | none | *app*. HTTP or SOCKS proxy for website crawling and the hosted search providers |
+| `TINYLM_CDP_URL` | `http://127.0.0.1:9222` | *app*. Browser DevTools endpoint for crawling with a browser |
+| `TINYLM_CRAWL_PER_MINUTE` | `20` | *app*. Default requests per minute to each site |
+| `TINYLM_CRAWL_RESPECT_ROBOTS` | `true` | *app*. `false`: robots.txt is not read for any crawl |
+| `TINYLM_CRAWL_MAX_PAGES` / `TINYLM_CRAWL_MAX_DEPTH` | `50` / `2` | *app*. Defaults for new crawls and websites |
+| `TINYLM_CRAWL_USE_BROWSER` | `false` | *app*. `true`: new crawls and websites load pages in the browser at `TINYLM_CDP_URL` |
+| `TINYLM_USER_AGENT` | `tinylm-studio/0.1 (local research crawler)` | *app*. User-Agent of plain HTTP requests |
+| `TINYLM_SEARCH_PROVIDER` | `searxng` | *app*. Web search: `searxng`, `brave`, `tavily`, `exa`, `perplexity` or `serper`. This and the search variables below are defaults; the saved search settings win |
+| `TINYLM_SEARXNG_URL` | `http://127.0.0.1:8888` | *app*. SearXNG address (`make searxng` starts one) |
+| `TINYLM_SEARCH_INCLUDE_DOMAINS` / `TINYLM_SEARCH_EXCLUDE_DOMAINS` | `[]` | *app*. Only / never these sites (JSON list of domains or patterns like `*.ua`) |
+| `TINYLM_BRAVE_API_KEY`, `TINYLM_TAVILY_API_KEY`, `TINYLM_EXA_API_KEY`, `TINYLM_PERPLEXITY_API_KEY`, `TINYLM_SERPER_API_KEY` | none | *app*. API keys of the hosted search providers |
+| `TINYLM_LOG_LEVEL` | `INFO` | *app*. `DEBUG`, `INFO`, `WARNING` or `ERROR`: what goes to the console and `<data dir>/logs/engine.log` |
 | `TINYLM_CLI_HOME` | `<data dir>/cli-logins` | Where the subscription tools of `cli` teachers keep the logins made in the app |
-| `TINYLM_LLAMA_CPP_DIR` | none | A llama.cpp checkout whose `convert_hf_to_gguf.py` exports to GGUF; by default the converter is downloaded once from PyPI |
+| `TINYLM_LLAMA_CPP_DIR` | none | *app*. A llama.cpp checkout whose `convert_hf_to_gguf.py` exports to GGUF; by default the converter is downloaded once from PyPI |

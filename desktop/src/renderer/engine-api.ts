@@ -64,6 +64,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Engine Settings
+         * @description The engine settings the app can change (Settings > Engine options), with the
+         *     environment's values they replace.
+         */
+        get: operations["engine_settings_api_settings_get"];
+        /**
+         * Save Engine Settings
+         * @description Saves the given fields and puts them into effect at once: threads and the repetition
+         *     penalty from the next model loaded, the embedding device from the next search or upload.
+         */
+        put: operations["save_engine_settings_api_settings_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/models": {
         parameters: {
             query?: never;
@@ -1939,6 +1965,58 @@ export interface components {
             lines: string[];
         };
         /**
+         * EngineSettingDefaults
+         * @description The environment's values (TINYLM_*, HF_TOKEN), used for the settings not saved.
+         */
+        EngineSettingDefaults: {
+            /** Proxy */
+            proxy: string | null;
+            /** Llama Cpp Dir */
+            llama_cpp_dir: string | null;
+            /** Threads */
+            threads: number | null;
+            /** Repetition Penalty */
+            repetition_penalty: number;
+            /** Rag Top K */
+            rag_top_k: number;
+            /**
+             * Embedding Device
+             * @enum {string}
+             */
+            embedding_device: "auto" | "cuda" | "cpu" | "mps";
+            /**
+             * Log Level
+             * @enum {string}
+             */
+            log_level: "DEBUG" | "INFO" | "WARNING" | "ERROR";
+            /** Hf Token Hint */
+            hf_token_hint: string | null;
+        };
+        /**
+         * EngineSettingsChanges
+         * @description The settings to change; the others keep their value. null: back to the environment's
+         *     value (or the built-in default). hf_token, proxy and llama_cpp_dir: "" is none, even when the
+         *     environment sets one.
+         */
+        EngineSettingsChanges: {
+            /** Hf Token */
+            hf_token?: string | null;
+            /** Proxy */
+            proxy?: string | null;
+            /** Llama Cpp Dir */
+            llama_cpp_dir?: string | null;
+            /** Threads */
+            threads?: number | null;
+            /** Repetition Penalty */
+            repetition_penalty?: number | null;
+            /** Rag Top K */
+            rag_top_k?: number | null;
+            /** Embedding Device */
+            embedding_device?: ("auto" | "cuda" | "cpu" | "mps") | null;
+            /** Log Level */
+            log_level?: ("DEBUG" | "INFO" | "WARNING" | "ERROR") | null;
+        };
+        /**
          * Error
          * @description An error of the management API (/api/...).
          */
@@ -2749,6 +2827,42 @@ export interface components {
             object: "list";
             /** Data */
             data: components["schemas"]["OpenAIModel"][];
+        };
+        /**
+         * PublicEngineSettings
+         * @description The engine settings in use; the Hugging Face token is never sent back, only whether one
+         *     is used, where it comes from and its first and last characters.
+         */
+        PublicEngineSettings: {
+            /** Proxy */
+            proxy: string | null;
+            /** Llama Cpp Dir */
+            llama_cpp_dir: string | null;
+            /** Threads */
+            threads: number | null;
+            /** Repetition Penalty */
+            repetition_penalty: number;
+            /** Rag Top K */
+            rag_top_k: number;
+            /**
+             * Embedding Device
+             * @enum {string}
+             */
+            embedding_device: "auto" | "cuda" | "cpu" | "mps";
+            /**
+             * Log Level
+             * @enum {string}
+             */
+            log_level: "DEBUG" | "INFO" | "WARNING" | "ERROR";
+            /** Hf Token Set */
+            hf_token_set: boolean;
+            /** Hf Token Hint */
+            hf_token_hint: string | null;
+            /** Hf Token Source */
+            hf_token_source: ("app" | "environment" | "login") | null;
+            /** Saved */
+            saved: string[];
+            defaults: components["schemas"]["EngineSettingDefaults"];
         };
         /**
          * PublicSearchSettings
@@ -3570,6 +3684,75 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["OpenAIError"];
                 };
+            };
+        };
+    };
+    engine_settings_api_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicEngineSettings"];
+                };
+            };
+            /** @description Missing or wrong API key (TINYLM_API_KEY) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenAIError"];
+                };
+            };
+        };
+    };
+    save_engine_settings_api_settings_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EngineSettingsChanges"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicEngineSettings"];
+                };
+            };
+            /** @description Missing or wrong API key (TINYLM_API_KEY) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenAIError"];
+                };
+            };
+            /** @description Invalid request */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

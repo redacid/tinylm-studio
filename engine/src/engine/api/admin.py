@@ -199,7 +199,7 @@ async def search_hub(
 ) -> dict:
     """The most downloaded models on Hugging Face that match."""
     try:
-        found = await run_in_threadpool(hub.search, q, format, models.hf_token)
+        found = await run_in_threadpool(hub.search, q, format, models.token)
     except hub.HubError as error:
         raise HTTPException(502, str(error)) from None
     return {"data": found}
@@ -209,7 +209,7 @@ async def search_hub(
 async def hub_files(repo: str, models: ModelManager = Depends(manager)) -> dict:
     """What can be downloaded from a repo: its GGUF files and the Hugging Face-format weights."""
     try:
-        return await run_in_threadpool(hub.files, repo, models.hf_token)
+        return await run_in_threadpool(hub.files, repo, models.token)
     except hub.HubError as error:
         raise HTTPException(502, str(error)) from None
 

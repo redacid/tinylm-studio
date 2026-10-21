@@ -266,6 +266,11 @@ qwen3-0.6b on ~1,000 examples on the target machine, and a GPU run.
 ### Phase 5 – Performance and distribution
 - **Done (2026-10-12):** merge + GGUF export + quantization (Q8_0, Q4_K_M, F16) of fine-tuned models with llama.cpp's own converter (from the llama-cpp-python source package, so versions match) and quantizer; exported models are served through llama.cpp.
 - Hardware auto-tuning; optional GPU PyTorch download.
+- **Done (2026-10-21):** Settings › Engine options: the engine settings that only `.env` held
+  (Hugging Face token, proxy, threads, repetition penalty, sources per answer, embedding device,
+  llama.cpp folder, log level) are changed in the app, kept by the engine in
+  `workspace/engine-settings.json` and put into effect without a restart (`/api/settings`); the
+  token is never sent back and the proxy's password is masked.
 - **Done (2026-10-17):** Linux packages of the app (deb, rpm, AppImage, tar.gz) built with
   electron-builder by `make package`. A package carries the engine's source and setup script as
   resources and, on the first start, installs a copy of the engine into its own environment

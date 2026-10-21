@@ -65,8 +65,9 @@ Hugging Face, or):
 make download MODEL=gemma-3-4b-gguf
 ```
 
-For gated models and faster downloads, put a Hugging Face token into `.env`
-(`cp .env.example .env`); every `make` target passes it on. Also accept each gated model's
+For gated models and faster downloads, paste a Hugging Face token in the app under
+Settings > Engine options, or put it into `.env` (`cp .env.example .env`); every `make` target
+passes it on. Also accept each gated model's
 license on Hugging Face with the same account; if a download is refused, see
 [Troubleshooting](docs/user-guide.md#a-gated-model-does-not-download).
 
@@ -83,7 +84,7 @@ crawled pages) and deletes what a `DELETE` matches after asking, with the tables
 example queries; see
 [SQL](docs/user-guide.md#sql).
 
-Crawling can go through a proxy (`TINYLM_PROXY=socks5://127.0.0.1:1080` in `.env`) and, for
+Crawling can go through a proxy (Settings > Engine options, or `TINYLM_PROXY=socks5://127.0.0.1:1080` in `.env`) and, for
 sites that need JavaScript, through a real Chrome/Chromium controlled over CDP; see
 [Proxy](docs/user-guide.md#proxy) and [Browser (CDP)](docs/user-guide.md#browser-cdp).
 

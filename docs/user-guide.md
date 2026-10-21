@@ -79,9 +79,10 @@ other packages, and again after an update. `uv` makes that faster if it is insta
 keeps its settings where `make run` keeps them, so both see the same engine settings, RunPod pod
 and chat settings, and the models and collections in the engine's data folder.
 
-An installed app does not read the repository's `.env`: settings such as `HF_TOKEN`,
-`TINYLM_PYTHON` or `TINYLM_TORCH` (the PyTorch build to install, see `scripts/setup-engine.sh`)
-come from the environment it is started in, e.g. `~/.profile`.
+An installed app does not read the repository's `.env`: settings such as `TINYLM_PYTHON` or
+`TINYLM_TORCH` (the PyTorch build to install, see `scripts/setup-engine.sh`) come from the
+environment it is started in, e.g. `~/.profile`. The Hugging Face token, the proxy and the other
+[engine options](#engine-options) can be set in the app itself instead.
 
 After pulling changes that add Python packages (see `engine/pyproject.toml`), run
 `make setup-engine` again: the app installs the engine only on its very first start.
@@ -176,10 +177,10 @@ can use them (see [api.md](api.md)).
   run through llama.cpp and are the fast choice for chatting on a CPU; the default is
   `gemma-3-4b-gguf`. Models with PyTorch weights (e.g. `qwen3-0.6b`) are slower to chat with but
   are the ones that can be fine-tuned.
-- Gemma and Llama models are gated: accept their license on Hugging Face and put your token into
-  `.env` as `HF_TOKEN=...`. A token also makes downloads faster. `.env` is read by `make`, so
-  start the app with `make run` (or export `HF_TOKEN` yourself). If the token is missing,
-  the gated models are marked in red.
+- Gemma and Llama models are gated: accept their license on Hugging Face and paste your token
+  under Settings › [Engine options](#engine-options) (or put it into `.env` as `HF_TOKEN=...`
+  and start the app with `make run`). A token also makes downloads faster. If the token is
+  missing, the gated models are marked in red.
 - Every model has its own license, shown on its Hugging Face page, and it also applies to the
   models you fine-tune from it: Qwen3 and SmolLM2 are Apache-2.0, while Llama and Gemma come with
   terms that restrict use and redistribution. Check it before sharing or selling a fine-tuned
@@ -203,16 +204,16 @@ Each model keeps its own settings; an empty field uses the default shown in it.
 | Context size | 4096 | GGUF only. Tokens the model sees at once: prompt, sources and answer. More takes more memory. |
 | GPU layers | -1 (all) | GGUF only. Layers put on the GPU when llama.cpp was built with GPU support; 0 is CPU only. |
 | Batch size | 512 | GGUF only. Prompt tokens read in one step; larger reads long prompts faster. |
-| CPU threads | `TINYLM_THREADS` | Threads for this model. |
+| CPU threads | engine's ([Engine options](#engine-options)) | Threads for this model. |
 | Max answer length | 512 | Tokens an answer may take. |
 | Temperature | 0.7 | 0 always picks the most likely word; higher is more varied. |
 | Top P | 1 | Picks only from the most likely words that make up this share. |
 | Top K | runtime's (40 in llama.cpp) | Picks only from this many most likely words; 0 turns it off. |
 | Min P | runtime's (0.05 in llama.cpp) | Drops words less likely than this share of the most likely one. |
-| Repetition penalty | `TINYLM_REPETITION_PENALTY` (1.1) | Above 1 makes repeating words less likely. |
+| Repetition penalty | engine's, 1.1 ([Engine options](#engine-options)) | Above 1 makes repeating words less likely. |
 | Thinking | off | Lets models with a reasoning mode (Qwen3) think before they answer: better, but slower. |
 | Collection | none | Optional. Requests that name no data answer from this collection, with sources. |
-| Sources per answer | `TINYLM_RAG_TOP_K` (4) | How many pieces of the collection an answer gets. |
+| Sources per answer | engine's, 4 ([Engine options](#engine-options)) | How many pieces of the collection an answer gets. |
 
 The first four are used when the model is loaded, so saving a change to them unloads it and the
 next request loads it again. The answer settings apply at once, to every request that does not
@@ -573,7 +574,8 @@ in free memory and disk while it runs.
 - The converter is llama.cpp's own `convert_hf_to_gguf.py`, taken from the source package of the
   installed llama-cpp-python, so the file matches the llama.cpp that runs it. The first export
   downloads it from PyPI (about 75 MB, of which 2 MB are kept in `<data dir>/tools/`). Offline,
-  point `TINYLM_LLAMA_CPP_DIR` to a llama.cpp checkout instead.
+  point **llama.cpp folder** in [Engine options](#engine-options) (or `TINYLM_LLAMA_CPP_DIR`)
+  to a llama.cpp checkout instead.
 - Compare the exported model with the adapter on the [Evaluation](#evaluation) screen: Q8_0
   should score the same; Q4_K_M a little lower.
 - If the base model's tokenizer is unknown to llama.cpp, the export still finishes and says so;
@@ -651,9 +653,9 @@ reports are kept until you delete them.
 ## Settings
 
 The **Settings** tab holds the app's own settings, saved as you change them and kept after a
-restart, except the search and crawler settings and the subscriptions' logins, which the engine
-keeps. The engine's other
-settings (proxy, hardware, folders) go into `.env`; see below.
+restart, except the engine options, the search and crawler settings and the subscriptions'
+logins, which the engine keeps. Only where the engine keeps its data, its address, its API key and
+how it is installed stay in `.env`; see [below](#engine-settings-env).
 
 ### Engine
 
@@ -713,7 +715,8 @@ made only when the pod is created, and the Hugging Face token is not shown:
 ![The request Create pod sends](images/engine-runpod-request.png)
 
 **Create pod** creates it with a new engine API key (and the `HF_TOKEN` from `.env`, for gated
-models), waits until it runs (the first start pulls the image, which takes a few minutes) and
+models; a token pasted in [Engine options](#engine-options) stays with the engine it was saved
+in, so paste it again there once the app is connected to the pod), waits until it runs (the first start pulls the image, which takes a few minutes) and
 connects; the header shows **Pod provisioning…** until then. The pod's card shows its state, GPU or CPU,
 data center, price per hour, uptime and address:
 
@@ -732,6 +735,28 @@ Keys are never shown again once saved; typing replaces them. They are kept in
 `~/.config/tinylm-studio-desktop/engine-connection.json`, readable only by you and encrypted with
 the system keyring when there is one.
 
+### Engine options
+
+![Engine options](images/engine-options.png)
+
+The engine's own settings, which otherwise come from `.env`. Like the search and crawler
+settings they are kept by the engine the app is connected to (in
+`<data dir>/workspace/engine-settings.json`, readable only by its owner), so they apply to a
+remote engine or a RunPod pod too, and to `make download`, `make crawl` and the other commands.
+A value saved here wins over the variable in the table, which only gives the default; **Use the
+default** next to a saved value forgets it. Changes take effect at once, without a restart.
+
+| Setting | Default | What it does |
+|---|---|---|
+| Access token | `HF_TOKEN` or `TINYLM_HF_TOKEN`, then a `hf auth login` | Hugging Face token for gated models (Gemma, Llama) and faster downloads, also of the embedding model. Pasted once and never shown again: the badge shows its first and last characters and where it comes from (**saved here**, **from HF_TOKEN**, **from hf auth login**). **Remove** forgets the saved one; **Don't use it** makes the engine send no token even when the environment has one. |
+| Proxy | `TINYLM_PROXY` | HTTP or SOCKS proxy for crawling and the hosted search providers; see [Proxy](#proxy). Its password is shown as `****`; editing the rest keeps it. Empty: no proxy. |
+| CPU threads | `TINYLM_THREADS` (physical cores, at most 8) | Threads for answers and GGUF export. The loaded model is let go, so the next answer loads it with the new value. |
+| Repetition penalty | `TINYLM_REPETITION_PENALTY` (1.1) | For models without their own [setting](#model-settings); above 1 keeps small models from looping. |
+| Sources from data | `TINYLM_RAG_TOP_K` (4) | Chunks of the chosen data an answer gets when neither the request nor the model sets it. |
+| Embedding device | `TINYLM_EMBEDDING_DEVICE` (auto) | Where the embedding model runs: `auto` (an NVIDIA GPU when there is one), `cuda`, `cpu` or `mps`; it is loaded again there on the next search or upload. |
+| llama.cpp folder | `TINYLM_LLAMA_CPP_DIR` | A llama.cpp checkout on the engine's computer for [exporting to GGUF](#exporting-to-gguf) offline. Empty: the converter is downloaded from PyPI once. |
+| Log level | `TINYLM_LOG_LEVEL` (INFO) | What goes to the engine's console and [log](#logs). |
+
 ### Chat settings
 
 ![Chat settings](images/settings.png)
@@ -743,7 +768,7 @@ the system keyring when there is one.
 | Temperature | model's, 0.7 | 0 always picks the most likely word, so the same question gets the same answer; higher is more varied. |
 | Top P | model's, 1 | Picks only from the most likely words that together make up this share; 1 turns it off. |
 | Repetition penalty | model's, then engine's 1.1 | Above 1 makes repeated words less likely; raise it (1.2 to 1.3) when a small model loops. |
-| Sources from data | engine's, 4 | How many chunks of the chosen data an answer gets. More can answer more, but the prompt is longer and slower. Empty uses `TINYLM_RAG_TOP_K`. |
+| Sources from data | engine's, 4 | How many chunks of the chosen data an answer gets. More can answer more, but the prompt is longer and slower. Empty uses the engine's [Engine options](#engine-options). |
 | Stop sequences | none | One per line; the answer ends before any of them. |
 | Show the answer as it is written | on | Off: the chat asks for one complete response (`"stream": false`) and shows it at once. |
 | Show the { } button | on | The button with the JSON sent and received on each message. |
@@ -868,21 +893,28 @@ units. The list can be cut to warnings and errors, or filtered by text (a collec
 - the app's: `logs/app.log` in the app's settings folder (`~/.config/tinylm-studio-desktop` on
   Linux), kept to 2 files of 5 MB; **Open folder** opens it.
 
-`TINYLM_LOG_LEVEL` in `.env` sets how much the engine logs: `DEBUG` (everything, with each
-successful request and the app's RunPod status checks), `INFO` (the default), `WARNING` or
-`ERROR`.
+**Log level** in [Engine options](#engine-options) (default: `TINYLM_LOG_LEVEL` in `.env`) sets
+how much the engine logs: `DEBUG` (everything, with each successful request), `INFO` (the
+default), `WARNING` or `ERROR`; it changes at once. The app's own log shows its RunPod status
+checks only with `TINYLM_LOG_LEVEL=DEBUG` in its environment.
 
 ![Settings › Logs: the app's log](images/logs-app.png)
 
 ### Engine settings (.env)
 
 Put these into `.env` (see [.env.example](../.env.example)); the full list is in
-[api.md](api.md#settings).
+[api.md](api.md#settings). The ones that [Engine options](#engine-options), the search and the
+crawler settings can change in the app are only defaults there: a value saved in the app wins.
+Only these have no place in the app, because the engine needs them before it starts or they
+belong to the computer it runs on: `TINYLM_DATA_DIR`, `TINYLM_HOST` and `TINYLM_PORT`,
+`TINYLM_API_KEY`, `TINYLM_CORS_ORIGINS`, `TINYLM_EMBEDDING_MODEL` (the data folder's index is
+built with it), `TINYLM_CLI_HOME`, `TINYLM_ENABLE_ECHO`, and how the engine is installed
+(`TINYLM_PYTHON`, `TINYLM_VENV`, `TINYLM_TORCH`, `TINYLM_LLAMA`).
 
 ### Proxy
 
-`TINYLM_PROXY` sends crawler traffic, and requests to the hosted search providers (all but
-SearXNG), through a proxy:
+**Proxy** in [Engine options](#engine-options), or `TINYLM_PROXY`, sends crawler traffic, and
+requests to the hosted search providers (all but SearXNG), through a proxy:
 
 ```bash
 TINYLM_PROXY=http://user:password@proxy.example:3128
@@ -964,8 +996,9 @@ For the default, SearXNG (free, no key):
 
 ### Hardware
 
-- `TINYLM_THREADS`: CPU threads for answers (default: physical cores, at most 8; more threads
-  do not help generation and slow it down on CPUs with efficiency cores).
+- **CPU threads** in [Engine options](#engine-options), or `TINYLM_THREADS`: CPU threads for
+  answers (default: physical cores, at most 8; more threads do not help generation and slow it
+  down on CPUs with efficiency cores).
 - `TINYLM_TORCH=auto make setup-engine` installs PyTorch with GPU support, for training on an
   NVIDIA GPU; `TINYLM_LLAMA=source` with `CMAKE_ARGS="-DGGML_CUDA=on"` builds llama.cpp for
   GPU answers (see the [README](../README.md#python-environment)).
@@ -1046,10 +1079,11 @@ The HTTP status tells the two cases apart:
 **401, no token:**
 
 1. Create a token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
-   (type *Read*) and put it into `.env` in the repository: `HF_TOKEN=hf_...`.
-   `TINYLM_HF_TOKEN` works too; a token saved by `hf auth login` is also picked up.
-2. Start the app with `make run` (or the engine with `make run-engine`). Only `make` reads
-   `.env`; when the app is started another way, export `HF_TOKEN` in that shell first.
+   (type *Read*) and paste it under Settings › [Engine options](#engine-options) › **Access
+   token**; it takes effect at once. Or put it into `.env` in the repository (`HF_TOKEN=hf_...`;
+   `TINYLM_HF_TOKEN` works too) and start the app with `make run`: only `make` reads `.env`.
+   A token saved by `hf auth login` is also picked up.
+2. Retry the download.
 3. The Models screen marks gated models in red while the engine finds no token, so you can
    check without downloading.
 

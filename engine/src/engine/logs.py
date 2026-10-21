@@ -16,6 +16,8 @@ from pathlib import Path
 
 FORMAT = "%(asctime)s.%(msecs)03d %(levelname)s %(name)s: %(message)s"
 DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+# The handlers setup() adds, whose level set_level() changes.
+HANDLER_NAME = "tinylm"
 MAX_BYTES = 5_000_000
 BACKUPS = 3
 
@@ -48,9 +50,6 @@ def setup(data_dir: Path, level: str = "INFO") -> Path:
     """Sends all logging (uvicorn's, warnings) to the console and the log file; returns it."""
     path = log_file(data_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
-    level_no = logging.getLevelName(level.upper())
-    if not isinstance(level_no, int):
-        level_no = logging.INFO
 
     file = logging.handlers.RotatingFileHandler(
         path, maxBytes=MAX_BYTES, backupCount=BACKUPS, encoding="utf-8"
@@ -64,7 +63,7 @@ def setup(data_dir: Path, level: str = "INFO") -> Path:
     for handler in list(root.handlers):
         root.removeHandler(handler)
     for handler in (file, console):
-        handler.setLevel(level_no)
+        handler.set_name(HANDLER_NAME)
         root.addHandler(handler)
     # Loggers stay at DEBUG so a demoted access line still reaches the handlers, which decide.
     root.setLevel(logging.DEBUG)
@@ -73,11 +72,22 @@ def setup(data_dir: Path, level: str = "INFO") -> Path:
         logger.handlers.clear()
         logger.propagate = True
     logging.getLogger("uvicorn.access").addFilter(QuietPolling())
+    set_level(level)
+    logging.captureWarnings(True)
+    return path
+
+
+def set_level(level: str) -> None:
+    """DEBUG, INFO, WARNING or ERROR for the console and the log file; also while running."""
+    level_no = logging.getLevelName(level.upper())
+    if not isinstance(level_no, int):
+        level_no = logging.INFO
+    for handler in logging.getLogger().handlers:
+        if handler.get_name() == HANDLER_NAME:
+            handler.setLevel(level_no)
     # Libraries that are chatty at DEBUG.
     for name in ("httpx", "httpcore", "urllib3", "filelock", "huggingface_hub", "asyncio"):
         logging.getLogger(name).setLevel(max(level_no, logging.INFO))
-    logging.captureWarnings(True)
-    return path
 
 
 LINE = re.compile(r"^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d")

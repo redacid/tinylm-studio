@@ -477,6 +477,37 @@ class SearchOutcome(Schema):
     exclude_domains: list[str]
 
 
+class EngineSettingValues(Schema):
+    # The proxy with its password as "****".
+    proxy: str | None
+    llama_cpp_dir: str | None
+    # None: physical cores, at most 8.
+    threads: int | None
+    repetition_penalty: float
+    rag_top_k: int
+    embedding_device: Literal["auto", "cuda", "cpu", "mps"]
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"]
+
+
+class EngineSettingDefaults(EngineSettingValues):
+    """The environment's values (TINYLM_*, HF_TOKEN), used for the settings not saved."""
+
+    hf_token_hint: str | None
+
+
+class PublicEngineSettings(EngineSettingValues):
+    """The engine settings in use; the Hugging Face token is never sent back, only whether one
+    is used, where it comes from and its first and last characters."""
+
+    hf_token_set: bool
+    hf_token_hint: str | None
+    # app: saved in Settings; environment: HF_TOKEN or TINYLM_HF_TOKEN; login: `hf auth login`.
+    hf_token_source: Literal["app", "environment", "login"] | None
+    # The settings saved in the engine, which win over the environment's.
+    saved: list[str]
+    defaults: EngineSettingDefaults
+
+
 class PublicSearchSettings(Schema):
     """The search settings; API keys are never sent back, only whether each is set."""
 

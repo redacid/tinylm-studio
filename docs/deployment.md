@@ -14,7 +14,7 @@ on a [RunPod](#runpod) GPU or CPU pod, which the desktop app can create, start a
 
 | Need | How the engine meets it |
 |---|---|
-| Configuration | Only `TINYLM_*` environment variables (see [api.md](api.md#settings)): a ConfigMap for settings, a Secret for `TINYLM_API_KEY`, `HF_TOKEN` and the search providers' `TINYLM_*_API_KEY`. No config files to mount; search and crawler settings changed in the app are saved in the data folder and win over the variables. |
+| Configuration | Only `TINYLM_*` environment variables (see [api.md](api.md#settings)): a ConfigMap for settings, a Secret for `TINYLM_API_KEY`, `HF_TOKEN` and the search providers' `TINYLM_*_API_KEY`. No config files to mount; the engine options (Hugging Face token, proxy, threads, log level, ...), search and crawler settings changed in the app are saved in the data folder (`workspace/engine-settings.json`, `search-settings.json`, `crawl-settings.json`, holding secrets with mode 0600) and win over the variables. |
 | Listening outside the pod | `TINYLM_HOST=0.0.0.0` (the default `127.0.0.1` only serves the pod itself); `TINYLM_PORT`, 8765 by default. |
 | Authentication | `TINYLM_API_KEY`: every API call then needs `Authorization: Bearer <key>` or `x-api-key: <key>`. Always set it in a cluster. |
 | Probes | `GET /health` answers without an API key; use it for liveness and readiness. Every other path, `/api/system` included, needs the key when one is set, except the API's description (`/openapi.json`, `/docs`, `/redoc`), which holds no data. |
@@ -135,7 +135,8 @@ use, and points the engine at them by name (`http://tinylm-chrome:9222`,
   `/workspace`.
 - The image refuses to start without `TINYLM_API_KEY`, since the port is meant to be reached
   from outside; set `TINYLM_ALLOW_NO_API_KEY=1` to run it without one on a private network.
-- Pass `HF_TOKEN` for gated models. The embedding model and models are downloaded on first use,
+- Pass `HF_TOKEN` for gated models, or paste the token in the app's Settings > Engine options once
+  connected (it is then kept in the volume). The embedding model and models are downloaded on first use,
   into the volume.
 - **Subscription tools.** The engine image has Claude Code, Codex CLI and Gemini CLI, on their
   own Node.js in `/opt/node`, for [subscription teachers](user-guide.md#subscriptions-through-a-command-line-tool).

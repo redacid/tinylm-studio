@@ -118,7 +118,7 @@ export function HubSearch({
                   {m.gated && (
                     <div className={hfToken ? "muted" : "error"}>
                       Gated: accept the license on Hugging Face first
-                      {hfToken ? "." : ", and set HF_TOKEN in .env."}
+                      {hfToken ? "." : ", and add a token in Settings > Engine options."}
                     </div>
                   )}
                   {open === m.repo && (

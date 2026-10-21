@@ -100,12 +100,24 @@ class ModelManager:
             p for p in self.models_dir.iterdir() if p.is_dir() and not p.name.startswith(".")
         )
 
+    @property
+    def token(self) -> str | bool | None:
+        """The token argument for huggingface_hub (False: none, even HF_TOKEN's)."""
+        return hub.hub_token(self.hf_token)
+
     def has_token(self) -> bool:
         """Whether downloads send a Hugging Face token: from the settings, HF_TOKEN or a saved
         `hf auth login`."""
         from huggingface_hub import get_token
 
+        if self.hf_token == "":
+            return False
         return bool(self.hf_token or get_token())
+
+    def unload(self) -> None:
+        """Lets the loaded model go; the next request loads it again with the current options."""
+        with self._lock:
+            self._loaded = None
 
     def catalog(self) -> list[dict]:
         installed = set(self.installed())
@@ -157,14 +169,14 @@ class ModelManager:
         partial = job.folder
         try:
             try:
-                info = HfApi(token=self.hf_token).model_info(job.repo, files_metadata=True)
+                info = HfApi(token=self.token).model_info(job.repo, files_metadata=True)
                 job.total = sum(
                     s.size or 0 for s in info.siblings or [] if hub.wanted(s.rfilename, patterns)
                 )
             except Exception:  # only the progress needs it; the download says what is wrong
                 job.total = None
             snapshot_download(
-                job.repo, local_dir=partial, token=self.hf_token, allow_patterns=patterns
+                job.repo, local_dir=partial, token=self.token, allow_patterns=patterns
             )
             # GGUF files in a subfolder of the repo (Q4_K_M/model.gguf) go to the top.
             for gguf in list(partial.glob("*/**/*.gguf")):
@@ -327,9 +339,8 @@ def download_error(repo: str, error: Exception) -> str:
     response = getattr(error, "response", None)
     if response is not None and response.status_code == 401:
         return (
-            f"{repo} is gated and the engine has no Hugging Face token. Put HF_TOKEN=... into "
-            f".env and start the app with make, or set TINYLM_HF_TOKEN; then accept the "
-            f"license at {page}."
+            f"{repo} is gated and the engine has no Hugging Face token. Add it in the app under "
+            f"Settings > Engine options (or set HF_TOKEN); then accept the license at {page}."
         )
     return (
         f"Hugging Face refused access to {repo}: the token was sent, but its account has no "

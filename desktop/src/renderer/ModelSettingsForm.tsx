@@ -49,7 +49,7 @@ const LOADING: NumberField[] = [
 const THREADS: NumberField = {
   key: "threads",
   label: "CPU threads",
-  hint: "More than the physical cores, or than 8, rarely helps. Empty: the engine's setting (TINYLM_THREADS).",
+  hint: "More than the physical cores, or than 8, rarely helps. Empty: the engine's setting (Settings > Engine options).",
   min: 1,
   max: 256,
   step: 1,
@@ -116,7 +116,7 @@ const ANSWERS: NumberField[] = [
 const SOURCES: NumberField = {
   key: "rag_top_k",
   label: "Sources per answer",
-  hint: "How many pieces of the collection an answer gets. Empty: the engine's setting (TINYLM_RAG_TOP_K).",
+  hint: "How many pieces of the collection an answer gets. Empty: the engine's setting (Settings > Engine options).",
   min: 1,
   max: 20,
   step: 1,

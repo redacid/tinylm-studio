@@ -227,7 +227,8 @@ th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border);
 .provider.active { border-color: var(--accent); }
 .provider > span { display: flex; flex-direction: column; gap: 2px; }
 .provider .badge { align-self: flex-start; }
-.key-row { display: flex; gap: 8px; }
+.key-row { display: flex; gap: 8px; align-items: center; }
+.key-row .badge { white-space: nowrap; }
 .key-row input { flex: 1; max-width: 420px; }
 .buttons-row { display: flex; gap: 8px; }
 .search-summary { margin: 4px 0; }

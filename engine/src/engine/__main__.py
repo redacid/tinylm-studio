@@ -62,12 +62,14 @@ def serve(settings: Settings, args: argparse.Namespace) -> None:
     import uvicorn
 
     from engine import __version__, commit, logs
+    from engine.engine_settings import with_saved
     from engine.main import create_app
 
     if os.environ.get("TINYLM_EXIT_WITH_PARENT"):
         exit_with_parent()
     settings.host, settings.port = args.host, args.port
-    path = logs.setup(settings.data_dir, settings.log_level)
+    # create_app applies the saved engine settings itself; the log starts with their level.
+    path = logs.setup(settings.data_dir, with_saved(settings).log_level)
     log = logging.getLogger("engine")
     log.info(
         "tinylm-studio engine %s, commit %s, Python %s",
@@ -340,7 +342,13 @@ def main() -> None:
     p.set_defaults(func=openapi)
 
     args = parser.parse_args()
-    getattr(args, "func", serve)(settings, args)
+    func = getattr(args, "func", serve)
+    if func not in (serve, openapi):
+        # The commands use what was saved in the app's Settings > Engine options too.
+        from engine.engine_settings import with_saved
+
+        settings = with_saved(settings)
+    func(settings, args)
 
 
 if __name__ == "__main__":

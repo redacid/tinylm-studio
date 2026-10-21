@@ -346,7 +346,7 @@ export function Models({ client }: { client: EngineClient }) {
                   <div className={hfToken ? "muted" : "error"}>
                     {hfToken
                       ? "Gated: accept the license on Hugging Face first."
-                      : "Gated: needs a Hugging Face token (HF_TOKEN in .env) and an accepted license."}{" "}
+                      : "Gated: needs a Hugging Face token (Settings > Engine options) and an accepted license."}{" "}
                     <a href={`https://huggingface.co/${m.repo}`} target="_blank" rel="noreferrer">
                       Model page
                     </a>

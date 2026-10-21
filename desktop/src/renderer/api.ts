@@ -54,6 +54,13 @@ export type SearchSettingsChanges = Partial<
 >;
 export type SearchOutcome = Schemas["SearchOutcome"];
 
+/** Engine settings that otherwise come from TINYLM_* variables (Settings > Engine options); the
+ * Hugging Face token is never sent back, only a hint and where it comes from. */
+export type EngineOptions = Schemas["PublicEngineSettings"];
+/** Fields to change; null goes back to the engine's environment, "" is none for the token,
+ * proxy and llama.cpp folder. */
+export type EngineOptionsChanges = Schemas["EngineSettingsChanges"];
+
 export type Dataset = Schemas["Dataset"];
 export type Example = Schemas["Example"];
 export type ExampleOrigin = Example["origin"];
@@ -595,6 +602,18 @@ export class EngineClient {
 
   async saveCrawlerSettings(changes: Partial<CrawlerSettings>): Promise<CrawlerSettings> {
     return this.json<CrawlerSettings>("/api/crawl/settings", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(changes),
+    });
+  }
+
+  async engineOptions(): Promise<EngineOptions> {
+    return this.json<EngineOptions>("/api/settings");
+  }
+
+  async saveEngineOptions(changes: EngineOptionsChanges): Promise<EngineOptions> {
+    return this.json<EngineOptions>("/api/settings", {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(changes),

@@ -192,7 +192,8 @@ export function Logs({
         What the engine and this app did, newest last. The engine's log is read
         from the engine itself, so it is the pod's when the engine runs on
         RunPod. Successful reads (the app checks status every few seconds) are
-        left out; set <code>TINYLM_LOG_LEVEL=DEBUG</code> to see them.
+        left out; set the log level to DEBUG under Engine options to see the
+        engine's (<code>TINYLM_LOG_LEVEL=DEBUG</code> also shows this app's).
       </p>
       <div className="logs-toolbar">
         <div className="segmented">

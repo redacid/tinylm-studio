@@ -30,6 +30,12 @@ def pick_device(device: str) -> str:
 class Embedder(Protocol):
     name: str
 
+    def move_to(self, device: str) -> None:
+        """Loads the model again on this device ("auto", "cuda", "cpu" or "mps") when next used."""
+        with self._lock:
+            self.device = device
+            self._model = None
+
     @property
     def dim(self) -> int: ...
 
@@ -63,6 +69,8 @@ class SentenceTransformerEmbedder:
             if self._model is None:
                 from sentence_transformers import SentenceTransformer
 
+                from engine.models.hub import hub_token
+
                 device = pick_device(self.device)
                 options = {
                     "device": device,
@@ -73,9 +81,16 @@ class SentenceTransformerEmbedder:
                     # offline and avoids the "unauthenticated requests" warning.
                     self._model = SentenceTransformer(self.name, local_files_only=True, **options)
                 except OSError:
-                    self._model = SentenceTransformer(self.name, token=self.hf_token, **options)
+                    token = hub_token(self.hf_token)
+                    self._model = SentenceTransformer(self.name, token=token, **options)
                 log.info("Embedding model %s loaded on %s", self.name, device)
             return self._model
+
+    def move_to(self, device: str) -> None:
+        """Loads the model again on this device ("auto", "cuda", "cpu" or "mps") when next used."""
+        with self._lock:
+            self.device = device
+            self._model = None
 
     @property
     def dim(self) -> int:

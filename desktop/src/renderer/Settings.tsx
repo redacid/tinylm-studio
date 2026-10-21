@@ -2,6 +2,7 @@ import { ReactNode, useState } from "react";
 import { EngineClient } from "./api";
 import { CHAT_DEFAULTS, ChatSettings } from "./chatSettings";
 import { CrawlerSettingsForm } from "./CrawlerSettings";
+import { EngineOptionsForm } from "./EngineOptions";
 import { EngineSettingsForm } from "./EngineSettings";
 import { Logs } from "./Logs";
 import { SearchSettingsForm } from "./SearchSettings";
@@ -9,10 +10,11 @@ import { SubscriptionsForm } from "./Subscriptions";
 import type { EngineState } from "./types";
 import { Icon, type IconName } from "./Icon";
 
-type Section = "engine" | "chat" | "search" | "crawler" | "subscriptions" | "logs";
+type Section = "engine" | "options" | "chat" | "search" | "crawler" | "subscriptions" | "logs";
 
 const SECTIONS: Record<Section, string> = {
   engine: "Engine",
+  options: "Engine options",
   chat: "Chat settings",
   search: "Search settings",
   crawler: "Crawler settings",
@@ -22,6 +24,7 @@ const SECTIONS: Record<Section, string> = {
 
 const SECTION_ICONS: Record<Section, IconName> = {
   engine: "server",
+  options: "settings",
   chat: "message",
   search: "search",
   crawler: "spider",
@@ -29,7 +32,7 @@ const SECTION_ICONS: Record<Section, IconName> = {
   logs: "list",
 };
 
-/** App settings, saved as they are changed. Engine settings stay in .env. */
+/** App settings, and the settings the engine keeps. */
 export function Settings({
   client,
   engine,
@@ -53,13 +56,14 @@ export function Settings({
           </button>
         ))}
         <p className="muted">
-          Engine and chat settings are kept by this app; search and crawler settings and the subscriptions' logins by
-          the engine. Other engine settings (proxy,
-          hardware, models folder) are in <code>.env</code>; see the user guide.
+          Engine and chat settings are kept by this app; engine options, search and crawler settings and the
+          subscriptions' logins by the engine. Only where the engine keeps its data, its address and its API key stay
+          in <code>.env</code>; see the user guide.
         </p>
       </aside>
       <section className="settings-page">
         {section === "engine" && <EngineSettingsForm engine={engine} />}
+        {section === "options" && <EngineOptionsForm client={client} />}
         {section === "chat" && <ChatSettingsForm value={chat} onChange={onChat} />}
         {section === "search" && <SearchSettingsForm client={client} />}
         {section === "crawler" && <CrawlerSettingsForm client={client} />}

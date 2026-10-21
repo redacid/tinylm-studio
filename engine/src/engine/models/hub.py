@@ -25,6 +25,12 @@ class HubError(Exception):
     pass
 
 
+def hub_token(token: str | None) -> str | bool | None:
+    """The token argument for huggingface_hub: "" (switched off in the app's settings) sends
+    none, not even HF_TOKEN's or a saved login's."""
+    return False if token == "" else token
+
+
 def search(query: str, kind: Kind, token: str | None, limit: int = 30) -> list[dict]:
     """The most downloaded matching models, GGUF or Hugging Face format."""
     try:
