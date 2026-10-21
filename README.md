@@ -10,6 +10,11 @@ see [docs/demo.md](docs/demo.md)).
 A tour of every tab: what can be added where and what each option is for
 ([in Ukrainian](docs/images/tour-uk.gif)).
 
+![The engine's public API tried in Swagger UI](docs/images/api-en.gif)
+
+The engine's OpenAI- and Anthropic-compatible API, tried in Swagger UI
+([in Ukrainian](docs/images/api-uk.gif)).
+
 A desktop studio for building small, narrowly specialized language models that run without a powerful GPU.
 
 ![Fine-tuning a model on the Training screen](docs/images/training.png)
