@@ -28,7 +28,7 @@ any llama.cpp model. The
   ([deployment.md](docs/deployment.md)).
 - **docs/** – the [user guide](docs/user-guide.md), the [API reference](docs/api.md), the
   [implementation plan](docs/implementation-plan.md) and how the
-  [walkthrough and tour GIFs](docs/demo.md) are made.
+  [walkthrough, tour and API GIFs](docs/demo.md) are made.
 
 ## Requirements
 
@@ -180,7 +180,8 @@ Documentation screenshots in `docs/images/` are taken from the running app with 
 and sample data; retake them when a screen changes. `make demo-gif` records the walkthrough GIFs
 (`docs/images/walkthrough-en.gif`, `walkthrough-uk.gif`) from a scenario, from crawling a website
 to chatting with the model trained on it, and `make demo-tour` the tour of every tab
-(`tour-en.gif`, `tour-uk.gif`); see [docs/demo.md](docs/demo.md).
+(`tour-en.gif`, `tour-uk.gif`), and `make demo-api` the public API in Swagger UI (`api-en.gif`,
+`api-uk.gif`); see [docs/demo.md](docs/demo.md).
 
 ## License
 

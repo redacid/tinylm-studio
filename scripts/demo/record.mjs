@@ -168,6 +168,8 @@ class Recorder {
     this.step = 0;
     this.count = 0;
     this.cursor = { x: 40, y: 40 };
+    // Off for steps that only prepare something (record: false): they leave no frames.
+    this.recording = true;
   }
 
   /** The fake mouse pointer: Playwright's clicks do not move the real one. */
@@ -197,6 +199,7 @@ class Recorder {
   }
 
   async shot(ms, extra = {}) {
+    if (!this.recording) return { file: null, ms, step: this.step, ...extra };
     const file = path.join(this.frameDir, `raw-${String(++this.count).padStart(5, "0")}.png`);
     await this.page.screenshot({ path: file });
     const frame = { file, ms, step: this.step, ...extra };
@@ -205,6 +208,7 @@ class Recorder {
   }
 
   async hold(ms) {
+    if (!this.recording) return;
     if (this.frames.length === 0) await this.shot(0);
     this.frames[this.frames.length - 1].ms += ms;
   }
@@ -294,9 +298,11 @@ class Recorder {
     await this.shot(AFTER_ACTION_MS);
   }
 
-  async fill({ text, ...spec }) {
+  async fill({ text, secret = false, ...spec }) {
     const locator = this.locate(spec);
     await this.moveTo(locator);
+    // A key typed into a GIF would be published with it: show dots instead.
+    if (secret) await locator.evaluate((el) => (el.type = "password"));
     // Typing over the selected text: a cleared number field would show 0 in front of the digits.
     await locator.click();
     await locator.press("ControlOrMeta+a");
@@ -357,6 +363,7 @@ class Recorder {
    * of training takes a few seconds of the GIF.
    */
   async wait({ for: shown, gone, timeout = 60, timelapse = false, frames = TIMELAPSE_MAX_FRAMES }) {
+    timelapse &&= this.recording;
     if (!shown && !gone) throw new Error("wait needs for or gone");
     const locator = this.locate(shown ?? gone);
     // What should go away may not have appeared yet.
@@ -386,7 +393,8 @@ class Recorder {
       }
     }
     const elapsed = Date.now() - start;
-    const speed = Math.round(elapsed / (snaps.length * TIMELAPSE_FRAME_MS));
+    // A wait of a few seconds is shown as it was.
+    const speed = elapsed > 5000 ? Math.round(elapsed / (snaps.length * TIMELAPSE_FRAME_MS)) : 1;
     for (const frame of snaps) {
       frame.ms = speed >= 2 ? TIMELAPSE_FRAME_MS : interval;
       if (speed >= 2) frame.speed = speed;
@@ -395,6 +403,20 @@ class Recorder {
     snaps[snaps.length - 1].speed = undefined;
     await this.hold(AFTER_ACTION_MS);
     console.log(`  waited ${Math.round(elapsed / 1000)} s${speed >= 2 ? `, shown ${speed}× faster` : ""}`);
+  }
+
+  /** Opens an address in the app's window, e.g. the engine's Swagger UI. */
+  async open(url) {
+    await this.page.goto(url);
+    await this.page.waitForLoadState("networkidle").catch(() => {});
+    await this.injectCursor();
+    await this.shot(AFTER_ACTION_MS);
+  }
+
+  /** Adds CSS to the page, e.g. to hide what the scenario is not about. */
+  async style(css) {
+    await this.page.addStyleTag({ content: css });
+    await sleep(200);
   }
 
   async run(action, baseDir) {
@@ -418,6 +440,10 @@ class Recorder {
         return this.scroll(arg);
       case "wait":
         return this.wait(arg);
+      case "style":
+        return this.style(arg);
+      case "open":
+        return this.open(arg);
       case "pause":
         return this.hold(Number(arg) * 1000);
       default:
@@ -550,7 +576,8 @@ async function main() {
   const models = interpolate(scenario.models ?? [], vars);
   if (vars.teacher && !apiTeacher) models.push(vars.teacher);
   console.log(`Data: ${demoDir} (models from ${realDir})`);
-  console.log(vars.teacher ? `Teacher: ${vars.teacher_name}` : `No teacher: examples come from ${vars.examples}`);
+  if ("teacher" in (scenario.vars ?? {}))
+    console.log(vars.teacher ? `Teacher: ${vars.teacher_name}` : `No teacher: examples come from ${vars.examples}`);
   prepareDataDir(demoDir, realDir, [...new Set(models)], opts.keep);
   const frameDir = path.join(demoDir, "frames");
   fs.rmSync(frameDir, { recursive: true, force: true });
@@ -595,6 +622,9 @@ async function main() {
       });
       if (!response.ok) throw new Error(`Could not add the teacher: ${response.status} ${await response.text()}`);
     }
+    // The engine's address and API key, for scenarios that call it (Swagger UI, say).
+    vars.engine_url = engine.url;
+    vars.api_key = engine.apiKey ?? "";
     await sleep(1000);
     await recorder.injectCursor();
 
@@ -603,6 +633,13 @@ async function main() {
       if (raw.when && !vars[raw.when]) continue;
       if (raw.unless && vars[raw.unless]) continue;
       const step = interpolate(raw, vars);
+      if (step.record === false) {
+        console.log(`(preparing) ${step.caption?.en ?? ""}`);
+        recorder.recording = false;
+        for (const action of step.actions ?? []) await recorder.run(action, baseDir);
+        recorder.recording = true;
+        continue;
+      }
       recorder.step = captions.length;
       captions.push(step.caption ?? {});
       console.log(`${captions.length}. ${step.caption?.en ?? Object.values(step.caption ?? {})[0] ?? ""}`);

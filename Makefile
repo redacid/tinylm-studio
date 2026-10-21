@@ -329,7 +329,7 @@ release-notes: ## Print a release's notes from CHANGELOG.md [VERSION=0.1.0]
 
 ##@ Docs
 
-# The walkthrough GIFs: scripts/demo/scenario.yaml (demo-tour: tour.yaml), recorded by
+# The walkthrough GIFs: scripts/demo/scenario.yaml (demo-tour: tour.yaml, demo-api: api.yaml), recorded by
 # scripts/demo/record.mjs (see docs/demo.md). VARS="name=value …" overrides scenario variables; without a display it runs in
 # xvfb-run.
 DEMO_SCENARIO ?= scripts/demo/scenario.yaml
@@ -347,6 +347,10 @@ demo-gif: build-desktop ## Record the walkthrough GIFs, site to trained model, w
 .PHONY: demo-tour
 demo-tour: ## Record the tour GIFs: every tab, what can be added where and what the options are for
 	$(MAKE) demo-gif DEMO_SCENARIO=scripts/demo/tour.yaml
+
+.PHONY: demo-api
+demo-api: ## Record the API GIFs: the public endpoints (/health, /v1/...) tried in Swagger UI
+	$(MAKE) demo-gif DEMO_SCENARIO=scripts/demo/api.yaml
 
 ##@ Cleanup
 

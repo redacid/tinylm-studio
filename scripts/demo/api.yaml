@@ -1,0 +1,173 @@
+# The engine's public API in Swagger UI: health, the models, OpenAI-compatible chat completions
+# (also answering from a collection) and Anthropic-compatible messages. Recorded by
+# `make demo-api` (see docs/demo.md). The management API (/api/...) that the desktop app uses is
+# left out.
+
+# The GIFs are api-<lang>.gif.
+name: api
+
+vars:
+  collection: tea-notes
+  notes: sample-notes.md
+  model: qwen3-0.6b
+  question: How hot should the water be for green tea?
+  max_tokens: 120
+
+models:
+  - ${model}
+
+labels:
+  fast_forward:
+    en: "Fast-forward ×{speed}"
+    uk: "Прискорено ×{speed}"
+
+steps:
+  # Not recorded: a collection for the answer from data.
+  - record: false
+    caption:
+      en: Adding a collection to answer from
+    actions:
+      - click: { tab: Data }
+      - fill: { placeholder: New collection, text: "${collection}" }
+      - click: { button: Add, within: .data aside }
+      - wait: { for: { text: "${collection}", within: .data aside } }
+      - upload: { css: ".data .actions input[type=file][multiple]:not([webkitdirectory])", file: "${notes}" }
+      - wait: { for: { text: chunks, within: .data .actions ~ pre } }
+
+  - caption:
+      en: "The engine has an HTTP API: the same models for any program, OpenAI- and Anthropic-compatible"
+      uk: "Рушій має HTTP API: ті самі моделі для будь-якої програми, сумісні з OpenAI та Anthropic"
+    actions:
+      - open: "${engine_url}/docs"
+      # Only the public API: the management endpoints (/api/...) and their sections are hidden.
+      - style: |-
+          .opblock[id*="_api_"],
+          .opblock-tag-section:not(:has(.opblock:not([id*="_api_"]))) { display: none !important; }
+      - point: { css: .information-container }
+
+  - caption:
+      en: "Swagger UI at /docs describes every endpoint and lets you try it right in the browser"
+      uk: "Swagger UI на /docs описує кожен ендпоінт і дає спробувати його просто в браузері"
+    actions:
+      - point: { css: "#operations-tag-openai" }
+      - point: { css: "#operations-tag-anthropic" }
+
+  - when: api_key
+    caption:
+      en: "With TINYLM_API_KEY set, Authorize sends the key with every request"
+      uk: "Якщо задано TINYLM_API_KEY, Authorize додає ключ до кожного запиту"
+    actions:
+      - click: { css: .auth-wrapper .authorize }
+      - fill: { css: ".modal-ux .auth-container input", text: "${api_key}", secret: true }
+      - click: { css: ".modal-ux .auth-container .authorize" }
+      - click: { css: ".modal-ux .btn-done" }
+
+  - caption:
+      en: "GET /health: is the engine up, and which version and commit it runs"
+      uk: "GET /health: чи працює рушій, яка в нього версія і коміт"
+    actions:
+      - click: { css: "#operations-system-health_health_get .opblock-summary-control" }
+      - click: { button: Try it out, within: "#operations-system-health_health_get" }
+      - click: { button: Execute, within: "#operations-system-health_health_get" }
+      - wait: { for: { css: "#operations-system-health_health_get .live-responses-table" } }
+      - point: { css: "#operations-system-health_health_get .live-responses-table .highlight-code" }
+      - click: { css: "#operations-system-health_health_get .opblock-summary-control" }
+
+  - caption:
+      en: "GET /v1/models: the installed and fine-tuned models, in OpenAI's format"
+      uk: "GET /v1/models: встановлені й донавчені моделі у форматі OpenAI"
+    actions:
+      - click: { css: "#operations-openai-list_models_v1_models_get .opblock-summary-control" }
+      - click: { button: Try it out, within: "#operations-openai-list_models_v1_models_get" }
+      - click: { button: Execute, within: "#operations-openai-list_models_v1_models_get" }
+      - wait: { for: { css: "#operations-openai-list_models_v1_models_get .live-responses-table" } }
+      - point: { css: "#operations-openai-list_models_v1_models_get .live-responses-table .highlight-code" }
+      - click: { css: "#operations-openai-list_models_v1_models_get .opblock-summary-control" }
+
+  - caption:
+      en: "POST /v1/chat/completions: a question to a model, as with the OpenAI SDK or any OpenAI client"
+      uk: "POST /v1/chat/completions: питання до моделі, як через OpenAI SDK чи будь-який клієнт OpenAI"
+    actions:
+      - click: { css: "#operations-openai-chat_completions_v1_chat_completions_post .opblock-summary-control" }
+      - click: { button: Try it out, within: "#operations-openai-chat_completions_v1_chat_completions_post" }
+      - fill:
+          css: "#operations-openai-chat_completions_v1_chat_completions_post textarea.body-param__text"
+          text: |-
+            {
+              "model": "${model}",
+              "messages": [{"role": "user", "content": "${question}"}],
+              "max_tokens": ${max_tokens}
+            }
+
+  - caption:
+      en: "The answer comes in OpenAI's format, with token usage and the time each part took (timings)"
+      uk: "Відповідь приходить у форматі OpenAI, з кількістю токенів і часом кожного етапу (timings)"
+    actions:
+      - click: { button: Execute, within: "#operations-openai-chat_completions_v1_chat_completions_post" }
+      - wait:
+          for: { css: "#operations-openai-chat_completions_v1_chat_completions_post .live-responses-table" }
+          timeout: 600
+          timelapse: true
+      - point: { css: "#operations-openai-chat_completions_v1_chat_completions_post .live-responses-table .highlight-code" }
+
+  - caption:
+      en: "\"collection\" answers from your data: the engine finds the matching chunks and adds them as sources"
+      uk: "\"collection\" — відповідь з ваших даних: рушій знаходить потрібні фрагменти й додає їх як джерела"
+    actions:
+      - fill:
+          css: "#operations-openai-chat_completions_v1_chat_completions_post textarea.body-param__text"
+          text: |-
+            {
+              "model": "${model}",
+              "messages": [{"role": "user", "content": "${question}"}],
+              "max_tokens": ${max_tokens},
+              "collection": "${collection}"
+            }
+
+  - caption:
+      en: "The response lists the sources it was given, so a client can show where each citation comes from"
+      uk: "У відповіді є список джерел, тож клієнт може показати, звідки кожне посилання"
+    actions:
+      - click: { button: Clear, within: "#operations-openai-chat_completions_v1_chat_completions_post" }
+      - click: { button: Execute, within: "#operations-openai-chat_completions_v1_chat_completions_post" }
+      - wait:
+          for: { css: "#operations-openai-chat_completions_v1_chat_completions_post .live-responses-table" }
+          timeout: 600
+          timelapse: true
+      - point: { css: "#operations-openai-chat_completions_v1_chat_completions_post .live-responses-table .highlight-code" }
+      - click: { css: "#operations-openai-chat_completions_v1_chat_completions_post .opblock-summary-control" }
+
+  - caption:
+      en: "POST /v1/messages: the same models for Anthropic's SDK and Claude clients"
+      uk: "POST /v1/messages: ті самі моделі для Anthropic SDK і клієнтів Claude"
+    actions:
+      - click: { css: "#operations-anthropic-create_message_v1_messages_post .opblock-summary-control" }
+      - click: { button: Try it out, within: "#operations-anthropic-create_message_v1_messages_post" }
+      - fill:
+          css: "#operations-anthropic-create_message_v1_messages_post textarea.body-param__text"
+          text: |-
+            {
+              "model": "${model}",
+              "system": "Answer briefly.",
+              "messages": [{"role": "user", "content": "${question}"}],
+              "max_tokens": ${max_tokens}
+            }
+
+  - caption:
+      en: "The answer in Anthropic's format: content blocks, stop reason and usage"
+      uk: "Відповідь у форматі Anthropic: блоки content, причина зупинки й usage"
+    actions:
+      - click: { button: Execute, within: "#operations-anthropic-create_message_v1_messages_post" }
+      - wait:
+          for: { css: "#operations-anthropic-create_message_v1_messages_post .live-responses-table" }
+          timeout: 600
+          timelapse: true
+      - point: { css: "#operations-anthropic-create_message_v1_messages_post .live-responses-table .highlight-code" }
+
+  - caption:
+      en: "/openapi.json is the whole schema: import it into Postman or generate a client from it"
+      uk: "/openapi.json — уся схема: імпортуйте її в Postman або згенеруйте з неї клієнт"
+    actions:
+      - scroll: { css: .information-container }
+      - point: { css: ".information-container a[href$='openapi.json']" }
+      - pause: 1

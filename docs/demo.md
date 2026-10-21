@@ -1,10 +1,11 @@
-# Walkthrough and tour GIFs
+# Walkthrough, tour and API GIFs
 
-Two animated GIFs show the app, each recorded by a script from a scenario, with one GIF per
+Three animated GIFs show the app, each recorded by a script from a scenario, with one GIF per
 caption language (English and Ukrainian):
 
 - **Walkthrough** (`make demo-gif`): from a website to a trained model.
 - **Tour** (`make demo-tour`): every tab, what can be added where and what the options are for.
+- **API** (`make demo-api`): the engine's public API tried in Swagger UI.
 
 Nobody has to click through the app: the script drives the real desktop app, so the GIFs are
 remade whenever the screens change.
@@ -34,6 +35,21 @@ question in the chat, and takes a few minutes. The GIFs (about four minutes long
 `docs/images/tour-en.gif` and `tour-uk.gif`; the scenario is
 [scripts/demo/tour.yaml](../scripts/demo/tour.yaml).
 
+## The API
+
+`make demo-api` opens the engine's Swagger UI (`/docs`, see [api.md](api.md#openapi-schema)) in
+the app's window and tries the public endpoints: `GET /health`, `GET /v1/models`,
+`POST /v1/chat/completions` (once plainly, once with `collection`, so the answer comes with its
+sources) and `POST /v1/messages`, ending at `/openapi.json`. The management API (`/api/...`)
+that the desktop app uses is hidden on the page. When the engine has a `TINYLM_API_KEY` (from
+`.env`), the scenario enters it with **Authorize** first, shown as dots.
+
+It adds a collection from `scripts/demo/sample-notes.md` without recording it, asks
+`qwen3-0.6b` (`VARS="model=<id>"` for another installed model), and takes a few minutes. Swagger
+UI loads its scripts from cdn.jsdelivr.net, so it needs the internet. The GIFs are
+`docs/images/api-en.gif` and `api-uk.gif`; the scenario is
+[scripts/demo/api.yaml](../scripts/demo/api.yaml).
+
 ## Running it
 
 ```bash
@@ -41,6 +57,7 @@ make setup                       # once: the app and its engine
 make download MODEL=qwen3-0.6b   # once: the base model the scenario trains
 make demo-gif                    # minutes to half an hour on a CPU, mostly the teacher and training
 make demo-tour                   # a few minutes
+make demo-api                    # a few minutes
 ```
 
 Requirements: `ffmpeg` (it makes the GIFs). On a computer without a display (a server, a
@@ -59,7 +76,7 @@ Options:
 | `TEACHER=<model id>` | the smallest installed GGUF model | The model that writes the examples; `TEACHER=` (empty) imports `scripts/demo/examples.jsonl` instead |
 | `VARS="pages=4 epochs=2"` | | Any other [scenario variable](#variables) |
 | `DEMO_OUT=dir` | `docs/images` | Where the GIFs go |
-| `DEMO_SCENARIO=file` | `scripts/demo/scenario.yaml` | Another scenario (`make demo-tour` is `DEMO_SCENARIO=scripts/demo/tour.yaml`) |
+| `DEMO_SCENARIO=file` | `scripts/demo/scenario.yaml` | Another scenario (`make demo-tour` and `make demo-api` are `DEMO_SCENARIO=scripts/demo/tour.yaml` and `api.yaml`) |
 
 An API teacher such as OpenRouter writes examples much faster than a local model on a CPU. Give
 it in the environment; it is then used instead of an installed model:
@@ -114,7 +131,7 @@ steps:
 ```
 
 A step has a `caption` (one text per language; a new language is just a new key) and
-`actions`. `when: <variable>` runs a step only when the variable is not empty, `unless:` only when
+`actions`. `record: false` runs a step without recording it, to prepare something. `when: <variable>` runs a step only when the variable is not empty, `unless:` only when
 it is; the default scenario uses them to either generate examples with a teacher or import them.
 
 ### Variables
@@ -144,7 +161,9 @@ label on a hidden tab does not get in the way.
 |---|---|---|
 | `click` | `click: { button: Save and crawl }` | Moves the pointer there and clicks |
 | `point` | `point: { label: Epochs, hold: 1 }` | Moves the pointer there and frames it, to explain it; `hold` keeps it longer |
-| `fill` | `fill: { label: Epochs, text: "1" }` | Types the text over what the field holds |
+| `open` | `open: "${engine_url}/docs"` | Opens an address in the app's window (`${engine_url}` is the engine's address, `${api_key}` its key or empty) |
+| `style` | `style: ".opblock[id*=_api_] { display: none }"` | Adds CSS to the page, e.g. to hide what the scenario is not about |
+| `fill` | `fill: { label: Epochs, text: "1" }` | Types the text over what the field holds; `secret: true` shows it as dots |
 | `check` | `check: { label: Only under these addresses }` | Ticks a checkbox |
 | `select` | `select: { label: Dataset, option: python-qa, partial: true }` | Picks an option by its text (`partial`: one that contains it), waiting for the list to have it |
 | `upload` | `upload: { css: "input[type=file]", file: examples.jsonl }` | Gives a file to a file input |

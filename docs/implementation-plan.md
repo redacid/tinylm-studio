@@ -282,7 +282,7 @@ qwen3-0.6b on ~1,000 examples on the target machine, and a GPU run.
   [deployment.md](deployment.md#not-done-yet)).
 - **Done (2026-10-20):** `make demo-gif` records a walkthrough GIF of the app (website to trained
   model, captions in English and Ukrainian) from a YAML scenario, driving the real app with
-  Playwright ([demo.md](demo.md)); `make demo-tour` records a tour of every tab and its options.
+  Playwright ([demo.md](demo.md)); `make demo-tour` records a tour of every tab and its options, `make demo-api` the public API in Swagger UI.
 - **Done when:** a non-developer installs the app from a release and completes the full flow.
 
 ## 6. Risks
