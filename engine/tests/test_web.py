@@ -345,17 +345,25 @@ def browser(tmp_path):
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )  # fmt: skip
     endpoint = f"http://127.0.0.1:{port}"
-    for _ in range(100):
-        try:
-            urllib.request.build_opener(urllib.request.ProxyHandler({})).open(
-                f"{endpoint}/json/version", timeout=1
-            )
-            break
-        except OSError:
-            time.sleep(0.1)
-    yield endpoint
-    process.terminate()
-    process.wait(timeout=10)
+    try:
+        # A cold start on a CI runner can take well over ten seconds.
+        deadline = time.monotonic() + 60
+        while True:
+            try:
+                urllib.request.build_opener(urllib.request.ProxyHandler({})).open(
+                    f"{endpoint}/json/version", timeout=1
+                )
+                break
+            except OSError:
+                if process.poll() is not None:
+                    pytest.fail(f"{binary} exited with code {process.returncode}")
+                if time.monotonic() > deadline:
+                    pytest.fail(f"{binary} did not open its DevTools port within 60 s")
+                time.sleep(0.1)
+        yield endpoint
+    finally:
+        process.terminate()
+        process.wait(timeout=10)
 
 
 def test_browser_renders_javascript_pages(games, site, browser):
